@@ -1,0 +1,39 @@
+# Python
+__pycache__/
+*.py[cod]
+*.pyo
+*.pyd
+.Python
+*.egg-info/
+dist/
+build/
+.eggs/
+*.egg
+
+# Environment variables
+.env
+.env.*
+
+# Virtual environments
+.venv/
+venv/
+env/
+
+# IDE
+.DS_Store
+.idea/
+.vscode/
+*.swp
+*.swo
+
+# Data files
+*.npz
+*.bdf
+*.edf
+*.json.bak
+frontend/runtime-config.js
+
+# Test artifacts
+.pytest_cache/
+.coverage
+htmlcov/
