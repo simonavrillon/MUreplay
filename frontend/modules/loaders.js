@@ -118,6 +118,7 @@ export function createLoaders({
     const viewEnd = toOptionalInt(entry.view_end ?? entry.end);
     const spikesAdded = asNumberArray(entry.spikes_added);
     const spikesRemoved = asNumberArray(entry.spikes_removed);
+    const usePeeloff = !!entry.use_peeloff;
 
     return {
       idx,
@@ -129,6 +130,7 @@ export function createLoaders({
       viewEnd,
       spikesAdded,
       spikesRemoved,
+      usePeeloff,
       raw: entry,
     };
   }

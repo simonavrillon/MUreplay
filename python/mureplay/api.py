@@ -49,6 +49,14 @@ def api_update_filter(payload: dict[str, Any]) -> dict[str, Any]:
 
     nbextchan = int(payload.get("nbextchan") or 1000)
     pulse_train = np.asarray(payload.get("pulse_train") or [], dtype=float)
+    use_peeloff = bool(payload.get("use_peeloff", False))
+    peeloff_win = float(payload.get("peeloff_win") or 0.025)
+    mu_grid_index = [int(v) for v in (payload.get("mu_grid_index") or [])]
+    peeloff_spike_times = [
+        distimes[i]
+        for i in range(len(distimes))
+        if i != mu_index and (mu_grid_index[i] if i < len(mu_grid_index) else 0) == grid_index
+    ]
 
     emg, fsamp, emg_mask = load_bids_emg_grid(
         Path(bids_root),
@@ -67,6 +75,9 @@ def api_update_filter(payload: dict[str, Any]) -> dict[str, Any]:
         view_end,
         nbextchan=nbextchan,
         emg_offset=view_start,
+        peeloff_spike_times=peeloff_spike_times,
+        peeloff_win=peeloff_win,
+        use_peeloff=use_peeloff,
     )
     updated_pulse = None
     if pulse_train.size and pt is not None:

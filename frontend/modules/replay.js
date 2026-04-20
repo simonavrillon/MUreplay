@@ -216,6 +216,7 @@ export function createReplayController({ state, els, postJson, setEditStatus, ge
         view_start: step.viewStart ?? 0,
         view_end: step.viewEnd ?? pulse.length,
         nbextchan: getNbextchan(),
+        use_peeloff: step.usePeeloff ?? false,
       };
       try {
         const out = await postJson("/api/edit/update-filter", payload);

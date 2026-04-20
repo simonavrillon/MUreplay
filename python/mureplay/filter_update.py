@@ -3,7 +3,7 @@ from __future__ import annotations
 import numpy as np
 from scipy.cluster.vq import kmeans2
 from scipy.linalg import eigh, inv
-from scipy.signal import butter, filtfilt, find_peaks
+from scipy.signal import butter, filtfilt, find_peaks, fftconvolve
 
 
 def bandpass_signals(signal: np.ndarray, fsamp: float, emg_type: int = 1) -> np.ndarray:
@@ -49,6 +49,29 @@ def whiten_extended_signal(
     return w @ signal, w, v
 
 
+def _extract_muap_segments(spikes: np.ndarray, radius: int, channel: np.ndarray) -> np.ndarray:
+    win = 2 * radius + 1
+    valid = spikes[(spikes >= radius) & (spikes < len(channel) - radius)]
+    if valid.size == 0:
+        return np.zeros((0, win))
+    offsets = np.arange(-radius, radius + 1, dtype=int)
+    return np.asarray(channel, dtype=float)[valid[:, None] + offsets[None, :]]
+
+
+def _subtract_mu_waveforms(x: np.ndarray, spikes: np.ndarray, fsamp: float, win: float) -> np.ndarray:
+    """Subtract the averaged MUAP waveform of one MU from a multichannel signal."""
+    radius = int(round(win * fsamp))
+    firings = np.zeros(x.shape[1])
+    firings[spikes] = 1
+    result = np.copy(x)
+    for ch in range(x.shape[0]):
+        segments = _extract_muap_segments(spikes, radius, x[ch])
+        if len(segments) > 0:
+            waveform = np.mean(segments, axis=0)
+            result[ch] -= fftconvolve(firings, waveform, mode="same")
+    return result
+
+
 def _remove_high_amplitude_outliers(pulse_train: np.ndarray, spike_indices: np.ndarray) -> np.ndarray:
     if spike_indices.size == 0:
         return spike_indices
@@ -65,6 +88,9 @@ def update_motor_unit_filter_window(
     end: int,
     nbextchan: int = 1000,
     emg_offset: int = 0,
+    peeloff_spike_times: list[list[int]] | None = None,
+    peeloff_win: float = 0.025,
+    use_peeloff: bool = False,
 ) -> tuple[np.ndarray | None, list[int]]:
     emg_sel = emg[emg_mask == 0, :] if emg_mask.size else emg
     if emg_sel.size == 0 or start >= end:
@@ -89,6 +115,13 @@ def update_motor_unit_filter_window(
     e_sig = extend_signal(window_emg, ex_factor)
     eigenvectors, eigenvalues_diag = pca_extended_signal(e_sig)
     w_sig, _, _ = whiten_extended_signal(e_sig, eigenvectors, eigenvalues_diag)
+
+    if use_peeloff and peeloff_spike_times:
+        for other_spikes in peeloff_spike_times:
+            local_spikes = np.asarray(other_spikes, dtype=int) - start
+            local_spikes = local_spikes[(local_spikes >= 0) & (local_spikes < w_sig.shape[1])]
+            if local_spikes.size > 0:
+                w_sig = _subtract_mu_waveforms(w_sig, local_spikes, fsamp, peeloff_win)
 
     mu_filters = np.sum(w_sig[:, spikes2], axis=1)
     norm = float(np.linalg.norm(mu_filters))
