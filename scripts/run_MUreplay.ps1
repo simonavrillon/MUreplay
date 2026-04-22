@@ -24,32 +24,45 @@ $BackendJob = Start-Job -ScriptBlock {
     param($dir, $host, $port, $bidsRoot)
     Set-Location $dir
     if ($bidsRoot) {
-        python server.py --host $host --port $port --bids-root $bidsRoot
+        python server.py --host $host --port $port --bids-root $bidsRoot 2>&1
     } else {
-        python server.py --host $host --port $port
+        python server.py --host $host --port $port 2>&1
     }
 } -ArgumentList $BackendDir, $env:MUREPLAY_HOST, $env:MUREPLAY_BACKEND_PORT, $MureplayBidsRoot
 
 $FrontendJob = Start-Job -ScriptBlock {
     param($dir, $port)
     Set-Location $dir
-    python -m http.server $port
+    python -m http.server $port 2>&1
 } -ArgumentList $FrontendDir, $env:MUREPLAY_FRONTEND_PORT
 
-Write-Host "Backend started (Job $($BackendJob.Id)) on :$($env:MUREPLAY_BACKEND_PORT)"
-Write-Host "Frontend started (Job $($FrontendJob.Id)) on :$($env:MUREPLAY_FRONTEND_PORT)"
+Write-Host "Backend starting on :$($env:MUREPLAY_BACKEND_PORT)"
+Write-Host "Frontend starting on :$($env:MUREPLAY_FRONTEND_PORT)"
+
+Start-Sleep -Seconds 2
+if ($BackendJob.State -ne 'Running') {
+    Write-Host "ERROR: Backend failed to start:" -ForegroundColor Red
+    Receive-Job $BackendJob | ForEach-Object { Write-Host $_ -ForegroundColor Red }
+    Stop-Job $FrontendJob -ErrorAction SilentlyContinue
+    Remove-Job $BackendJob, $FrontendJob -ErrorAction SilentlyContinue
+    exit 1
+}
+Write-Host "Backend running."
 
 if ($env:MUREPLAY_OPEN_BROWSER -eq '1') {
-    Start-Sleep -Seconds 1
     $hostForBrowser = if ($env:MUREPLAY_HOST -in @('0.0.0.0', '::')) { '127.0.0.1' } else { $env:MUREPLAY_HOST }
     try { Start-Process "http://$hostForBrowser`:$($env:MUREPLAY_FRONTEND_PORT)/" }
     catch { Write-Warning "Could not open browser automatically: $_" }
 }
 
 try {
-    while ($BackendJob.State -eq 'Running' -or $FrontendJob.State -eq 'Running') {
-        Receive-Job $BackendJob, $FrontendJob -ErrorAction SilentlyContinue
+    while ($BackendJob.State -eq 'Running' -and $FrontendJob.State -eq 'Running') {
+        Receive-Job $BackendJob, $FrontendJob | ForEach-Object { Write-Host $_ }
         Start-Sleep -Milliseconds 500
+    }
+    if ($BackendJob.State -ne 'Running') {
+        Write-Host "Backend stopped unexpectedly:" -ForegroundColor Red
+        Receive-Job $BackendJob | ForEach-Object { Write-Host $_ -ForegroundColor Red }
     }
 } finally {
     Write-Host "Stopping MUreplay..."
