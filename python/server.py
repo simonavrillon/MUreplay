@@ -122,6 +122,9 @@ class MUReplayHandler(SimpleHTTPRequestHandler):
         self.end_headers()
 
     def do_GET(self) -> None:  # noqa: N802
+        if self.path == "/api/health":
+            self._json_response(HTTPStatus.OK, {"status": "ok"})
+            return
         if self.path == "/api/config":
             self._json_response(HTTPStatus.OK, {"bids_root": self.bids_root})
             return

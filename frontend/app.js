@@ -1,12 +1,13 @@
 import { createCharts } from "./modules/charts.js";
 import { createLoaders } from "./modules/loaders.js";
-import { postJson, fetchConfig, openDialogPath } from "./modules/api.js";
+import { postJson, fetchConfig, openDialogPath, waitForBackend, apiUrl } from "./modules/api.js";
 import { createReplayController } from "./modules/replay.js";
 import { COLORS, UNIFORM_PULSE_COLOR, els, state } from "./modules/state.js";
 import { asNumberArray, buildMuUids, clamp, inferEntityLabel, toOptionalInt } from "./modules/utils.js";
 
 function setStatus(text) {
   els.status.textContent = text;
+  els.status.classList.toggle("hidden", !text);
 }
 
 function setEditStatus(text) {
@@ -119,14 +120,24 @@ els.playPauseBtn.addEventListener("click", replay.togglePlay);
 window.addEventListener("keydown", onWindowKeydown);
 window.addEventListener("resize", renderAll);
 
-setStatus("Open a decomp NPZ or edited JSON file");
 replay.updateTimelineUi();
 renderAll();
 
-if (!window.MUREPLAY_BIDS_ROOT) {
-  fetchConfig()
-    .then((cfg) => {
-      if (cfg?.bids_root) window.MUREPLAY_BIDS_ROOT = cfg.bids_root;
-    })
-    .catch(() => {});
-}
+(async () => {
+  if (els.loadMenuBtn) els.loadMenuBtn.disabled = true;
+  setStatus("Connecting to backend…");
+  const ready = await waitForBackend(apiUrl("/api/health"));
+  if (ready) {
+    if (els.loadMenuBtn) els.loadMenuBtn.disabled = false;
+    setStatus("");
+  } else {
+    setStatus("Backend unreachable — please restart the app");
+  }
+  if (!window.MUREPLAY_BIDS_ROOT) {
+    fetchConfig()
+      .then((cfg) => {
+        if (cfg?.bids_root) window.MUREPLAY_BIDS_ROOT = cfg.bids_root;
+      })
+      .catch(() => {});
+  }
+})();
