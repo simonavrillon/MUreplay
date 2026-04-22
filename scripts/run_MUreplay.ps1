@@ -21,12 +21,12 @@ $rendered = $template.Replace('__MUREPLAY_API_BASE__', "http://$hostForApi`:$($e
 Set-Content -Path $runtimeConfigPath -Value $rendered
 
 $BackendJob = Start-Job -ScriptBlock {
-    param($dir, $host, $port, $bidsRoot)
+    param($dir, $bindHost, $port, $bidsRoot)
     Set-Location $dir
     if ($bidsRoot) {
-        python server.py --host $host --port $port --bids-root $bidsRoot 2>&1
+        python server.py --host $bindHost --port $port --bids-root $bidsRoot 2>&1
     } else {
-        python server.py --host $host --port $port 2>&1
+        python server.py --host $bindHost --port $port 2>&1
     }
 } -ArgumentList $BackendDir, $env:MUREPLAY_HOST, $env:MUREPLAY_BACKEND_PORT, $MureplayBidsRoot
 
