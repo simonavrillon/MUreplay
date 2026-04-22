@@ -40,10 +40,10 @@ powershell -ExecutionPolicy Bypass -File .\scripts\run_MUreplay.ps1
 
 Or run manually (split terminals):
 ```bash
-cd python && python3 server.py --host 0.0.0.0 --port 8000
+cd python && python server.py --host 0.0.0.0 --port 8000
 ```
 ```bash
-cd frontend && python3 -m http.server 8080
+cd frontend && python -m http.server 8080
 ```
 
 Then open `http://localhost:8080`.
