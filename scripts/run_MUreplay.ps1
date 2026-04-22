@@ -17,7 +17,8 @@ $hostForApi = if ($env:MUREPLAY_HOST -in @('0.0.0.0', '::')) { '127.0.0.1' } els
 $templatePath = Join-Path $FrontendDir 'runtime-config.template.js'
 $runtimeConfigPath = Join-Path $FrontendDir 'runtime-config.js'
 $template = Get-Content -Path $templatePath -Raw
-$rendered = $template.Replace('__MUREPLAY_API_BASE__', "http://$hostForApi`:$($env:MUREPLAY_BACKEND_PORT)").Replace('__MUREPLAY_BIDS_ROOT__', $MureplayBidsRoot)
+$JsBidsRoot = $MureplayBidsRoot.Replace('\', '\\')
+$rendered = $template.Replace('__MUREPLAY_API_BASE__', "http://$hostForApi`:$($env:MUREPLAY_BACKEND_PORT)").Replace('__MUREPLAY_BIDS_ROOT__', $JsBidsRoot)
 Set-Content -Path $runtimeConfigPath -Value $rendered
 
 $BackendJob = Start-Job -ScriptBlock {
