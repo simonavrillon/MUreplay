@@ -65,7 +65,6 @@ def api_update_filter(payload: dict[str, Any]) -> dict[str, Any]:
         read_start=view_start,
         read_n=view_end - view_start,
     )
-
     pt, updated = update_motor_unit_filter_window(
         emg,
         emg_mask,

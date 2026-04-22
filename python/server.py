@@ -7,6 +7,7 @@ import argparse
 import json
 import traceback
 from collections.abc import Callable
+from concurrent.futures import ThreadPoolExecutor
 from http import HTTPStatus
 from http.server import SimpleHTTPRequestHandler, ThreadingHTTPServer
 from pathlib import Path
@@ -27,6 +28,10 @@ from mureplay.api import (
 from mureplay.dialog import open_native_dialog
 
 JsonApi = Callable[[dict[str, Any]], dict[str, Any]]
+
+# Single persistent worker thread so BLAS can use all cores without conflicts
+# across ephemeral HTTP-request threads on Windows.
+_compute_pool = ThreadPoolExecutor(max_workers=1)
 
 
 class MUReplayHandler(SimpleHTTPRequestHandler):
@@ -160,7 +165,9 @@ class MUReplayHandler(SimpleHTTPRequestHandler):
 
             handler = json_routes.get(self.path)
             if handler is not None:
-                self._json_response(HTTPStatus.OK, handler(self._parse_json_body()))
+                body = self._parse_json_body()
+                result = _compute_pool.submit(handler, body).result()
+                self._json_response(HTTPStatus.OK, result)
                 return
 
             self._text_response(HTTPStatus.NOT_FOUND, "Unknown API endpoint.")
