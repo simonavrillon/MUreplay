@@ -9,17 +9,13 @@ export function createReplayController({ state, els, postJson, setEditStatus, ge
     state.currentGrid = Number(event.target.value) || 0;
     fillMuSelect();
     rebuildFilteredReplayGroups();
-    state.replayPosition = state.filteredReplayGroups.length;
-    state.replayView = null;
-    renderAll();
+    resetReplayForCurrentMu();
   }
 
   function onMuChange(event) {
     state.currentMu = Number(event.target.value) || 0;
     rebuildFilteredReplayGroups();
-    state.replayPosition = state.filteredReplayGroups.length;
-    state.replayView = null;
-    renderAll();
+    resetReplayForCurrentMu();
   }
 
   function goToMu(direction) {
@@ -32,9 +28,7 @@ export function createReplayController({ state, els, postJson, setEditStatus, ge
     state.currentMu = next;
     fillMuSelect(next);
     rebuildFilteredReplayGroups();
-    state.replayPosition = state.filteredReplayGroups.length;
-    state.replayView = null;
-    renderAll();
+    resetReplayForCurrentMu();
   }
 
   function adjustReplayView(action) {

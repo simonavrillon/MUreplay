@@ -68,7 +68,7 @@ export function createLoaders({
       replay.updateTimelineUi();
       replay.applyTimelineStep();
       renderAll();
-      setStatus(`Loaded from selected path (${replay.getActiveReplayGroups().length} replay steps)`);
+      setStatus("");
       setEditStatus(`Loaded ${state.distimes.length} MUs + ${replay.getActiveReplayGroups().length} replay steps`);
     } catch (err) {
       setEditStatus(`Path load error: ${err.message}`);
