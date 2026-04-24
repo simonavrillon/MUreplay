@@ -24,7 +24,14 @@ export function createReplayController({ state, els, postJson, setEditStatus, ge
     const current = state.currentMu ?? mus[0];
     const idx = mus.indexOf(current);
     const offset = direction === "prev" ? -1 : 1;
-    const next = mus[(idx + offset + mus.length) % mus.length];
+    let next = current;
+    for (let i = 1; i <= mus.length; i++) {
+      const candidate = mus[(idx + offset * i + mus.length * i) % mus.length];
+      const uid = state.muUids[candidate] || "";
+      const mark = state.muMarks?.[uid];
+      if (!mark || mark === "flagged") { next = candidate; break; }
+    }
+    if (next === current) return;
     state.currentMu = next;
     fillMuSelect(next);
     rebuildFilteredReplayGroups();
@@ -315,6 +322,28 @@ export function createReplayController({ state, els, postJson, setEditStatus, ge
     };
   }
 
+  function rebuildMuMarks() {
+    const marks = {};
+    for (const step of state.history) {
+      const type = String(step?.type || "").toLowerCase();
+      if (type === "flag_mu" && step.muUid) {
+        marks[step.muUid] = "flagged";
+      } else if (type === "duplicate_mu") {
+        if (step.muUid) marks[step.muUid] = marks[step.muUid] || "duplicate";
+        const sourceUid = step.raw?.source_mu_uid;
+        if (sourceUid) marks[sourceUid] = marks[sourceUid] || "duplicate";
+      } else if (type === "remove_duplicates") {
+        const removedUids = step.raw?.removed_mu_uids;
+        if (Array.isArray(removedUids)) {
+          removedUids.forEach((uid) => { marks[String(uid)] = "removed"; });
+        }
+      }
+    }
+    state.muMarks = marks;
+    const liveUidSet = new Set(state.muUids);
+    state.muGhostUids = Object.keys(marks).filter((uid) => !liveUidSet.has(uid));
+  }
+
   function rebuildReplayGroups() {
     // Collapse contiguous spike edits on the same MU to keep timeline navigation usable.
     const groups = [];
@@ -349,13 +378,17 @@ export function createReplayController({ state, els, postJson, setEditStatus, ge
       i = j;
     }
     state.replayGroups = groups;
+    rebuildMuMarks();
     rebuildFilteredReplayGroups();
   }
 
   function rebuildFilteredReplayGroups() {
-    state.filteredReplayGroups = state.replayGroups.filter((group) =>
-      group.indices.some((idx) => resolveStepMuIndex(state.history[idx]) === state.currentMu),
-    );
+    const ghostUidSet = new Set(state.muGhostUids || []);
+    state.filteredReplayGroups = state.replayGroups.filter((group) => {
+      const uid = group.displayStep?.muUid || "";
+      if (uid && ghostUidSet.has(uid)) return false;
+      return group.indices.some((idx) => resolveStepMuIndex(state.history[idx]) === state.currentMu);
+    });
   }
 
   function getActiveReplayGroups() {
@@ -434,13 +467,35 @@ export function createReplayController({ state, els, postJson, setEditStatus, ge
     mus.forEach((muIdx) => {
       const option = document.createElement("option");
       option.value = String(muIdx);
-      option.textContent = `MU ${muIdx + 1}`;
+      const uid = state.muUids[muIdx] || "";
+      const mark = state.muMarks?.[uid];
+      const prefix = mark === "flagged" ? "✕ " : mark === "duplicate" ? "⊕ " : mark === "removed" ? "⊗ " : "";
+      option.textContent = `${prefix}MU ${muIdx + 1}`;
+      if (mark && mark !== "flagged") option.disabled = true;
+      els.editMuSelect.appendChild(option);
+    });
+    const ghostsForGrid = (state.muGhostUids || []).filter((uid) => {
+      const m = uid.match(/^g(\d+)_/);
+      return m && Number(m[1]) === state.currentGrid;
+    });
+    ghostsForGrid.forEach((uid) => {
+      const option = document.createElement("option");
+      option.disabled = true;
+      option.value = "";
+      const mark = state.muMarks[uid];
+      const prefix = mark === "flagged" ? "✕" : mark === "duplicate" ? "⊕" : mark === "removed" ? "⊗" : "—";
+      option.textContent = `${prefix} ${uid} (removed)`;
       els.editMuSelect.appendChild(option);
     });
     if (forceMu != null && mus.includes(forceMu)) {
       state.currentMu = forceMu;
     } else if (!mus.includes(state.currentMu)) {
       state.currentMu = mus[0];
+    }
+    const currentUid = state.muUids[state.currentMu] || "";
+    if (currentUid && state.muMarks?.[currentUid] && state.muMarks[currentUid] !== "flagged") {
+      const first = mus.find((m) => { const u = state.muUids[m] || ""; const mk = state.muMarks?.[u]; return !mk || mk === "flagged"; });
+      if (first != null) state.currentMu = first;
     }
     els.editMuSelect.value = String(state.currentMu);
   }

@@ -2,6 +2,10 @@
 
 Lightweight replay app for MUedit editing sessions. Useful for inspecting the editing work of students or colleagues in collaborative projects, or for reviewing decomposition edits from other groups when assessing a paper.
 
+## Status
+
+We continue to actively maintain and update these tools in line with the advancements of our research projects, and we welcome any contributions to make them useful for the wider community.
+
 ## Features
 
 - Replays MUedit2 edit steps on an interactive timeline

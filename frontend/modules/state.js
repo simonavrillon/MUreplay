@@ -36,6 +36,7 @@ export const state = {
   replayBackups: [],
   replayView: null,
   loadedFromDecomp: false,
+  muMarks: {},
   bidsRoot: "",
   entityLabel: "",
   bidsEntityLabel: "",

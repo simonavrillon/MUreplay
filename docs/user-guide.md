@@ -38,12 +38,26 @@ Load data  →  Select motor unit  →  Navigate timeline
 
 Use the **Grid** and **Motor Unit** dropdowns to focus on a specific MU. Both charts update immediately.
 
+### Motor unit status indicators
+
+When the loaded edit history contains `flag_mu`, `duplicate_mu`, or `remove_duplicates` entries, the Motor Unit dropdown annotates affected MUs with a prefix symbol:
+
+| Prefix | Meaning | Selectable |
+|---|---|---|
+| `✕ MU N` | Flagged for deletion | Yes — pulse train still visible for inspection |
+| `⊕ MU N` | Created as a duplicate of another MU | No — greyed out |
+| `⊗ MU N` | Removed by deduplication | No — greyed out |
+
+MUs that were removed and are no longer present in the final file appear at the bottom of the list as disabled entries in the form `⊕ g0_mu34 (removed)`.
+
+On load, if the first MU in the grid would be greyed out, MUreplay automatically selects the first non-disabled MU. The `<` / `>` keyboard shortcuts also skip disabled MUs.
+
 **Keyboard shortcuts** (click on the canvas first to activate):
 
 | Key | Action |
 |---|---|
-| `<` | Previous motor unit |
-| `>` | Next motor unit |
+| `<` | Previous motor unit (skips disabled MUs) |
+| `>` | Next motor unit (skips disabled MUs) |
 
 ---
 
@@ -80,6 +94,8 @@ The **step counter** (e.g. `Step 3 / 12`) and the status bar show the current ac
 | `delete_dr` | Removes spikes whose discharge rate exceeds a threshold within the ROI. |
 | `remove_outliers` | Removes spikes whose discharge rate exceeds mean + 3 SD across the full spike train. |
 | `flag_mu` | Marks or unmarks the MU as flagged (visual indicator only, no discharge time change). |
+| `duplicate_mu` | Records that a new MU was created as a copy of an existing one. No discharge time change is replayed; the entry is used to annotate the dropdown. |
+| `remove_duplicates` | Records that deduplication was run and lists the UIDs that were removed. Removed UIDs are annotated in the dropdown; their edit steps are excluded from all timelines. |
 
 If `update_filter` cannot reach the BIDS source, the step is skipped and discharge times remain as-is.
 
