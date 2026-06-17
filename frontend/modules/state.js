@@ -40,12 +40,15 @@ export const state = {
   bidsRoot: "",
   entityLabel: "",
   bidsEntityLabel: "",
+  artifactTimes: [],
+  replayBaseArtifactTimes: [],
 };
 
 export const COLORS = {
   primary: "#ffffff",
   warning: "#ffd43b",
   muted: "#b7b7b7",
+  artifact: "#ff8c66",
 };
 
 export const UNIFORM_PULSE_COLOR = "#f5f5f5";

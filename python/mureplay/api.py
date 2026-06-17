@@ -14,6 +14,7 @@ from .bids import load_bids_emg_grid, parse_entity_label
 from .filter_update import update_motor_unit_filter_window
 from .loaders import api_load_paired_decomp, api_load_paired_from_path, load_npz_payload
 from .replay_ops import (
+    add_artifact_in_roi,
     add_spikes_in_roi,
     build_pulse_trains_from_distimes,
     delete_high_discharge_rate_spikes_in_roi,
@@ -57,6 +58,9 @@ def api_update_filter(payload: dict[str, Any]) -> dict[str, Any]:
         for i in range(len(distimes))
         if i != mu_index and (mu_grid_index[i] if i < len(mu_grid_index) else 0) == grid_index
     ]
+    artifact_times_raw = payload.get("artifact_times") or []
+    artifact_times = [int(x) for x in artifact_times_raw if isinstance(x, (int, float))]
+    lock_spikes = bool(payload.get("lock_spikes", False))
 
     emg, fsamp, emg_mask = load_bids_emg_grid(
         Path(bids_root),
@@ -77,6 +81,8 @@ def api_update_filter(payload: dict[str, Any]) -> dict[str, Any]:
         peeloff_spike_times=peeloff_spike_times,
         peeloff_win=peeloff_win,
         use_peeloff=use_peeloff,
+        artifact_times=artifact_times or None,
+        lock_spikes=lock_spikes,
     )
     updated_pulse = None
     if pulse_train.size and pt is not None:
@@ -113,6 +119,25 @@ def api_add_spikes(payload: dict[str, Any]) -> dict[str, Any]:
         float(payload.get("y_min") or 0),
     )
     return {"distimes": out}
+
+
+def api_add_artifact(payload: dict[str, Any]) -> dict[str, Any]:
+    """Mark peaks within a ROI as artifacts; they will be excluded from filter updates."""
+    artifact_times_raw = payload.get("artifact_times") or []
+    artifact_times = [int(x) for x in artifact_times_raw if isinstance(x, (int, float))]
+    pulse = np.asarray(payload.get("pulse_train") or [], dtype=float)
+    fsamp = float(payload.get("fsamp") or 0)
+    if fsamp <= 0:
+        raise ValueError("Sampling rate (fsamp) is required.")
+    out = add_artifact_in_roi(
+        pulse,
+        artifact_times,
+        fsamp,
+        int(payload.get("x_start") or 0),
+        int(payload.get("x_end") or 0),
+        float(payload.get("y_min") or 0),
+    )
+    return {"artifact_times": out}
 
 
 def api_delete_spikes(payload: dict[str, Any]) -> dict[str, Any]:
@@ -223,8 +248,13 @@ def api_save_edits(payload: dict[str, Any]) -> dict[str, Any]:
     if not isinstance(edit_history, list):
         edit_history = []
 
+    artifact_times_all = payload.get("artifact_times") or []
+    if not isinstance(artifact_times_all, list):
+        artifact_times_all = []
+
     subject, session = parse_entity_label(entity_label)
-    base_dir = Path(bids_root) / f"sub-{subject}"
+    # Mirror MUedit2: edited NPZ + sidecar live under derivatives/muedit/.
+    base_dir = Path(bids_root) / "derivatives" / "muedit" / f"sub-{subject}"
     if session:
         base_dir = base_dir / f"ses-{session}"
     decomp_dir = base_dir / "decomp"
@@ -241,11 +271,12 @@ def api_save_edits(payload: dict[str, Any]) -> dict[str, Any]:
         parameters,
         total_samples,
     )
-    save_editlog(out_path.with_suffix(".json"), mu_uids, edit_history)
+    save_editlog(out_path.with_suffix(".json"), mu_uids, edit_history, artifact_times=artifact_times_all or None)
     return {"saved": True, "path": str(out_path)}
 
 
 __all__ = [
+    "api_add_artifact",
     "api_add_spikes",
     "api_delete_dr",
     "api_delete_spikes",

@@ -33,9 +33,12 @@ def resolve_bids_emg_path(bids_root: Path, entity_label: str) -> Path:
 
 
 def resolve_bids_channels_tsv(emg_path: Path, entity_label: str) -> Path:
-    channels_path = emg_path.with_name(f"{entity_label}_emg_channels.tsv")
-    if channels_path.exists():
-        return channels_path
+    # MUedit2 now writes the BIDS-standard `{entity}_channels.tsv`; the older
+    # `{entity}_emg_channels.tsv` is kept as a backward-compat fallback.
+    for name in (f"{entity_label}_channels.tsv", f"{entity_label}_emg_channels.tsv"):
+        candidate = emg_path.with_name(name)
+        if candidate.exists():
+            return candidate
     raise FileNotFoundError(f"Cannot find channels TSV for {entity_label}.")
 
 

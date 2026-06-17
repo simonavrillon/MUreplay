@@ -200,6 +200,7 @@ export function createReplayController({ state, els, postJson, setEditStatus, ge
       muIdx,
       distimes: [...(state.distimes[muIdx] || [])],
       pulseTrain: [...(state.pulseTrains[muIdx] || [])],
+      artifactTimes: [...(state.artifactTimes?.[muIdx] || [])],
     };
     state.replayBackups.push(backup);
 
@@ -218,6 +219,8 @@ export function createReplayController({ state, els, postJson, setEditStatus, ge
         view_end: step.viewEnd ?? pulse.length,
         nbextchan: getNbextchan(),
         use_peeloff: step.usePeeloff ?? false,
+        lock_spikes: step.lockSpikes ?? false,
+        artifact_times: state.artifactTimes?.[muIdx] || [],
       };
       try {
         const out = await postJson("/api/edit/update-filter", payload);
@@ -231,6 +234,18 @@ export function createReplayController({ state, els, postJson, setEditStatus, ge
         setEditStatus(`update_filter step fallback (${err.message})`);
         applyLoggedDiffForward(muIdx, step);
       }
+    } else if (stepType === "add_artifact") {
+      const added = Array.isArray(step.artifactsAdded) ? step.artifactsAdded : [];
+      if (!state.artifactTimes) state.artifactTimes = [];
+      const set = new Set((state.artifactTimes[muIdx] || []).map(Number));
+      added.forEach((n) => set.add(Number(n)));
+      state.artifactTimes[muIdx] = [...set].filter((n) => Number.isFinite(n) && n >= 0).sort((a, b) => a - b);
+    } else if (stepType === "delete_artifact") {
+      const removed = Array.isArray(step.artifactsRemoved) ? step.artifactsRemoved : [];
+      if (!state.artifactTimes) state.artifactTimes = [];
+      const set = new Set((state.artifactTimes[muIdx] || []).map(Number));
+      removed.forEach((n) => set.delete(Number(n)));
+      state.artifactTimes[muIdx] = [...set].filter((n) => Number.isFinite(n) && n >= 0).sort((a, b) => a - b);
     } else {
       applyLoggedDiffForward(muIdx, step);
     }
@@ -248,12 +263,31 @@ export function createReplayController({ state, els, postJson, setEditStatus, ge
     if (!backup || backup.stepIdx !== stepIdx) {
       const muIdx = resolveStepMuIndex(step);
       if (muIdx >= 0 && muIdx < state.distimes.length) {
-        applyLoggedDiffBackward(muIdx, step);
+        const stepType = String(step?.type || "").toLowerCase();
+        if (stepType === "add_artifact") {
+          const added = Array.isArray(step.artifactsAdded) ? step.artifactsAdded : [];
+          if (!state.artifactTimes) state.artifactTimes = [];
+          const set = new Set((state.artifactTimes[muIdx] || []).map(Number));
+          added.forEach((n) => set.delete(Number(n)));
+          state.artifactTimes[muIdx] = [...set].filter((n) => Number.isFinite(n) && n >= 0).sort((a, b) => a - b);
+        } else if (stepType === "delete_artifact") {
+          const removed = Array.isArray(step.artifactsRemoved) ? step.artifactsRemoved : [];
+          if (!state.artifactTimes) state.artifactTimes = [];
+          const set = new Set((state.artifactTimes[muIdx] || []).map(Number));
+          removed.forEach((n) => set.add(Number(n)));
+          state.artifactTimes[muIdx] = [...set].filter((n) => Number.isFinite(n) && n >= 0).sort((a, b) => a - b);
+        } else {
+          applyLoggedDiffBackward(muIdx, step);
+        }
       }
       return;
     }
     state.distimes[backup.muIdx] = backup.distimes;
     state.pulseTrains[backup.muIdx] = backup.pulseTrain;
+    if (Array.isArray(backup.artifactTimes)) {
+      if (!state.artifactTimes) state.artifactTimes = [];
+      state.artifactTimes[backup.muIdx] = backup.artifactTimes;
+    }
     const grid = state.muGridIndex[backup.muIdx] || 0;
     state.currentGrid = grid;
     fillGridSelect();
@@ -403,8 +437,10 @@ export function createReplayController({ state, els, postJson, setEditStatus, ge
       // Decomp sources are already pre-edit baseline.
       state.replayBaseDistimes = state.distimes.map((row) => [...row]);
       state.replayBasePulseTrains = state.pulseTrains.map((row) => [...row]);
+      state.replayBaseArtifactTimes = (state.artifactTimes || []).map((row) => [...(row || [])]);
       state.distimes = state.replayBaseDistimes.map((row) => [...row]);
       state.pulseTrains = state.replayBasePulseTrains.map((row) => [...row]);
+      state.artifactTimes = state.replayBaseArtifactTimes.map((row) => [...row]);
       return;
     }
     // Edited sources are end-state; rewind log diffs to reconstruct baseline.
@@ -423,8 +459,28 @@ export function createReplayController({ state, els, postJson, setEditStatus, ge
         .sort((a, b) => a - b);
     }
     state.replayBasePulseTrains = state.pulseTrains.map((row) => [...row]);
+    state.replayBaseArtifactTimes = (state.artifactTimes || []).map((row) => [...(row || [])]);
+    for (let i = state.history.length - 1; i >= 0; i -= 1) {
+      const step = state.history[i];
+      const artType = String(step?.type || "").toLowerCase();
+      if (artType !== "add_artifact" && artType !== "delete_artifact") continue;
+      const muIdx = resolveStepMuIndex(step);
+      if (muIdx < 0 || muIdx >= state.replayBaseArtifactTimes.length) continue;
+      const set = new Set((state.replayBaseArtifactTimes[muIdx] || []).map(Number));
+      if (artType === "add_artifact") {
+        const artAdded = Array.isArray(step.artifactsAdded) ? step.artifactsAdded : [];
+        artAdded.forEach((n) => set.delete(Number(n)));
+      } else {
+        const artRemoved = Array.isArray(step.artifactsRemoved) ? step.artifactsRemoved : [];
+        artRemoved.forEach((n) => set.add(Number(n)));
+      }
+      state.replayBaseArtifactTimes[muIdx] = [...set]
+        .filter((n) => Number.isFinite(n) && n >= 0)
+        .sort((a, b) => a - b);
+    }
     state.distimes = state.replayBaseDistimes.map((row) => [...row]);
     state.pulseTrains = state.replayBasePulseTrains.map((row) => [...row]);
+    state.artifactTimes = state.replayBaseArtifactTimes.map((row) => [...row]);
   }
 
   function resetReplayForCurrentMu() {
@@ -436,6 +492,9 @@ export function createReplayController({ state, els, postJson, setEditStatus, ge
     }
     if (state.replayBasePulseTrains.length) {
       state.pulseTrains = state.replayBasePulseTrains.map((row) => [...row]);
+    }
+    if (state.replayBaseArtifactTimes?.length) {
+      state.artifactTimes = state.replayBaseArtifactTimes.map((row) => [...row]);
     }
     updateTimelineUi();
     applyTimelineStep();
@@ -536,6 +595,8 @@ export function createReplayController({ state, els, postJson, setEditStatus, ge
         parts.push(`#ff7a7a ${start}%`, `#ff7a7a ${end}%`);
       } else if (colorKind === "update_filter") {
         parts.push(`#3776ab ${start}%`, `#3776ab ${end}%`);
+      } else if (colorKind === "artifact") {
+        parts.push(`#ff8c66 ${start}%`, `#ff8c66 ${end}%`);
       } else {
         parts.push(`#3a3a3a ${start}%`, `#3a3a3a ${end}%`);
       }
@@ -554,6 +615,12 @@ export function createReplayController({ state, els, postJson, setEditStatus, ge
 
     const hasUpdate = relevant.some((step) => String(step?.type || "").toLowerCase() === "update_filter");
     if (hasUpdate) return "update_filter";
+
+    const hasArtifact = relevant.some((step) => {
+      const t = String(step?.type || "").toLowerCase();
+      return t === "add_artifact" || t === "delete_artifact";
+    });
+    if (hasArtifact) return "artifact";
 
     const hasAdd = relevant.some((step) => String(step?.type || "").toLowerCase() === "add_spikes");
     const hasRemove = relevant.some((step) => {

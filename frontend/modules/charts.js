@@ -1,4 +1,4 @@
-export function createCharts({ els, state, COLORS, UNIFORM_PULSE_COLOR, currentStep, isCurrentMuStep, pulseForCurrentMu, distimesForCurrentMu }) {
+export function createCharts({ els, state, COLORS, UNIFORM_PULSE_COLOR, currentStep, isCurrentMuStep, pulseForCurrentMu, distimesForCurrentMu, artifactTimesForCurrentMu }) {
   function getViewRange(total) {
     const view = state.replayView;
     if (!view || total <= 0) return null;
@@ -261,6 +261,35 @@ export function createCharts({ els, state, COLORS, UNIFORM_PULSE_COLOR, currentS
         drawSpikeROI(removed, "rgba(255, 80, 80, 0.18)", "rgba(255, 80, 80, 0.75)");
         drawSpikeROI(added, "rgba(80, 220, 120, 0.18)", "rgba(80, 220, 120, 0.75)");
       }
+    }
+
+    const artifacts = typeof artifactTimesForCurrentMu === "function" ? artifactTimesForCurrentMu() : [];
+    if (artifacts.length && pulse && pulse.length > 0) {
+      const canvasEl = els.editPulseCanvas;
+      const ctx = canvasEl.getContext("2d");
+      const padding = { left: 38, right: 8, top: 8, bottom: 20 };
+      const plotWidth = Math.max(1, (canvasEl.width || canvasEl.clientWidth || 1) - padding.left - padding.right);
+      const plotHeight = Math.max(1, (canvasEl.height || canvasEl.clientHeight || 220) - padding.top - padding.bottom);
+      const total = pulse.length;
+      const vStart = viewRange?.start ?? 0;
+      const vEnd = viewRange?.end ?? total;
+      const vSpan = Math.max(1, vEnd - vStart);
+      const pMax = Math.max(...pulse.slice(vStart, vEnd));
+      const pMin = Math.min(...pulse.slice(vStart, vEnd));
+      const pSpan = pMax - pMin || 1;
+      ctx.fillStyle = COLORS.artifact || "#ff8c66";
+      artifacts.forEach((s) => {
+        if (s < vStart || s >= vEnd) return;
+        const x = padding.left + ((s - vStart) / Math.max(1, vSpan - 1)) * plotWidth;
+        const val = pulse[s] ?? 0;
+        const y = padding.top + plotHeight - ((val - pMin) / pSpan) * plotHeight;
+        ctx.beginPath();
+        ctx.arc(x, y, 4, 0, Math.PI * 2);
+        ctx.fill();
+        ctx.strokeStyle = "rgba(0,0,0,0.4)";
+        ctx.lineWidth = 1;
+        ctx.stroke();
+      });
     }
   }
 

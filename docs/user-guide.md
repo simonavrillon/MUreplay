@@ -29,8 +29,8 @@ Load data  →  Select motor unit  →  Navigate timeline
 
 ### Path B — Paired autoload
 
-1. Click **Load** and select the `<entity>_edited.npz` or `<entity>_decomp.npz` file.
-2. MUreplay infers the entity label from the filename, locates the paired `_decomp.npz` and `_edited.json` in the same folder, and merges the edit history from the JSON sidecar.
+1. Click **Load** and select the `<entity>_edited.npz` or `<entity>_decomp.npz` file. In recent MUedit2 versions these live under `<bids_root>/derivatives/muedit/sub-XX/[ses-YY]/decomp/` (the raw EMG stays at `<bids_root>/sub-XX/[ses-YY]/emg/`); older flat layouts (`<bids_root>/sub-XX/decomp/`) are still supported.
+2. MUreplay infers the entity label from the filename, locates the paired `_decomp.npz` and `_edited.json` in the same folder, and merges the edit history from the JSON sidecar. The BIDS dataset root is inferred automatically (stepping above any `derivatives/muedit` segment) so `update_filter` replay can find the raw EMG. Files saved from MUreplay are written back to the same `derivatives/muedit/.../decomp/` location.
 
 ---
 
@@ -83,21 +83,41 @@ The **step counter** (e.g. `Step 3 / 12`) and the status bar show the current ac
 | Green | `add_spikes` |
 | Red | `delete_spikes`, `delete_dr`, `remove_outliers` |
 | Blue | `update_filter` |
+| Orange | `add_artifact`, `delete_artifact` |
 
 ### What each step type does
 
 | Step type | What MUreplay replays |
 |---|---|
-| `update_filter` | Reads the matching BIDS EMG file and runs the filter pipeline to recompute discharge times and the pulse train. Requires `bids_root`, `entity_label`, `scipy`, and `pyedflib`. |
+| `update_filter` | Reads the matching BIDS EMG file and runs the filter pipeline to recompute discharge times and the pulse train. The `use_peeloff` flag recorded in the history entry is honoured: when true, the waveform contributions of all other MUs on the same grid are subtracted from the whitened signal before the filter is recomputed. The `lock_spikes` flag is also honoured: when true, the original spikes in the window are realigned to their nearest detected peak (within ±10 samples) and merged with the newly detected spikes, so existing spikes are preserved rather than replaced. Any artifact markers present at that point in the session are also subtracted unconditionally. Requires `bids_root`, `entity_label`, `scipy`, and `pyedflib`. |
 | `add_spikes` | Finds peaks in the pulse train above a threshold within the ROI and adds them to the discharge times. |
-| `delete_spikes` | Removes discharge times that fall within a rectangular ROI. |
+| `delete_spikes` | Removes discharge times that fall within a rectangular ROI. In MUedit2 this action also clears any artifact markers inside the same ROI; those are logged as a separate `delete_artifact` entry. |
 | `delete_dr` | Removes spikes whose discharge rate exceeds a threshold within the ROI. |
 | `remove_outliers` | Removes spikes whose discharge rate exceeds mean + 3 SD across the full spike train. |
+| `add_artifact` | Records that a peak was marked as an artifact. The artifact is shown as an orange dot on the pulse train canvas. It does not affect discharge times; it is subtracted from the whitened signal whenever `update_filter` is run for the same MU. |
+| `delete_artifact` | Removes the listed artifact markers from the per-MU artifact set (emitted by MUedit2 when a `delete_spikes` ROI also covered artifacts). Stepping backward restores them. |
 | `flag_mu` | Marks or unmarks the MU as flagged (visual indicator only, no discharge time change). |
 | `duplicate_mu` | Records that a new MU was created as a copy of an existing one. No discharge time change is replayed; the entry is used to annotate the dropdown. |
 | `remove_duplicates` | Records that deduplication was run and lists the UIDs that were removed. Removed UIDs are annotated in the dropdown; their edit steps are excluded from all timelines. |
 
 If `update_filter` cannot reach the BIDS source, the step is skipped and discharge times remain as-is.
+
+### Peel-off during filter replay
+
+When a `update_filter` history entry has `use_peeloff: true`, MUreplay subtracts the averaged MUAP waveforms of all other MUs on the same grid from the whitened signal before recomputing the filter — exactly as MUedit2 did when the edit was originally made. The peel-off flag is read from the history log and cannot be toggled during replay.
+
+### Artifact markers
+
+Artifact markers are loaded from the `artifact_times` key in the `_edited.json` sidecar and tracked separately from discharge times throughout the replay session. As the timeline is advanced:
+
+- Each `add_artifact` step adds its peaks to the per-MU artifact set.
+- Each `delete_artifact` step removes its peaks from the set (MUedit2 emits this when a `delete_spikes` ROI also covered artifacts).
+- Stepping backward inverts each step (removing added peaks, restoring removed ones).
+- The current artifact set is always passed to any `update_filter` step, so the filter replay faithfully reproduces the original result.
+
+Both peel-off and artifact subtraction can be active at the same time during a `update_filter` replay step: peel-off runs first (if the flag is set), then any artifact peaks are subtracted unconditionally.
+
+Artifacts are displayed as filled orange dots on the pulse train chart at their actual position on the signal.
 
 ### Chart navigation (keyboard shortcuts)
 

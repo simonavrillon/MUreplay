@@ -63,6 +63,22 @@ def add_spikes_in_roi(
     return sorted({int(x) for x in updated if int(x) >= 0})
 
 
+def add_artifact_in_roi(
+    pulse: np.ndarray,
+    artifact_times: list[int],
+    fsamp: float,
+    x_start: int,
+    x_end: int,
+    y_min: float,
+) -> list[int]:
+    temp = pulse.copy()
+    mask = (np.arange(len(temp)) >= x_start) & (np.arange(len(temp)) <= x_end)
+    temp[~mask] = 0
+    peaks, _ = find_peaks(temp, height=y_min, distance=int(round(fsamp * 0.005)))
+    updated = list(artifact_times) + peaks.astype(int).tolist()
+    return sorted({int(x) for x in updated if int(x) >= 0})
+
+
 def delete_spikes_in_roi(
     pulse: np.ndarray,
     spike_times: list[int],

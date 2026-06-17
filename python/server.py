@@ -14,6 +14,7 @@ from pathlib import Path
 from typing import Any
 
 from mureplay.api import (
+    api_add_artifact,
     api_add_spikes,
     api_delete_dr,
     api_delete_spikes,
@@ -150,6 +151,7 @@ class MUReplayHandler(SimpleHTTPRequestHandler):
             "/api/load-paired-decomp": api_load_paired_decomp,
             "/api/load-paired-from-path": api_load_paired_from_path,
             "/api/edit/update-filter": api_update_filter,
+            "/api/edit/add-artifact": api_add_artifact,
             "/api/edit/add-spikes": api_add_spikes,
             "/api/edit/delete-spikes": api_delete_spikes,
             "/api/edit/delete-dr": api_delete_dr,

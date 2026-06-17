@@ -43,6 +43,7 @@ export function createLoaders({
       state.gridNames = normalized.gridNames;
       state.muGridIndex = normalized.muGridIndex;
       state.muUids = normalized.muUids;
+      state.artifactTimes = normalized.artifactTimes;
       state.editHistory = [];
       state.history = [];
       state.replayGroups = [];
@@ -94,6 +95,10 @@ export function createLoaders({
       ? source.mu_uids.map((v) => String(v))
       : buildMuUids(muGridIndex);
 
+    const artifactTimes = Array.isArray(source.artifact_times)
+      ? source.artifact_times.map((row) => (Array.isArray(row) ? row.map(Number) : []))
+      : [];
+
     return {
       fsamp,
       pulseTrains: pulseTrains.map((row) => (Array.isArray(row) ? row.map(Number) : [])),
@@ -101,6 +106,7 @@ export function createLoaders({
       gridNames,
       muGridIndex,
       muUids,
+      artifactTimes,
     };
   }
 
@@ -118,7 +124,10 @@ export function createLoaders({
     const viewEnd = toOptionalInt(entry.view_end ?? entry.end);
     const spikesAdded = asNumberArray(entry.spikes_added);
     const spikesRemoved = asNumberArray(entry.spikes_removed);
+    const artifactsAdded = asNumberArray(entry.artifacts_added);
+    const artifactsRemoved = asNumberArray(entry.artifacts_removed);
     const usePeeloff = !!entry.use_peeloff;
+    const lockSpikes = !!entry.lock_spikes;
 
     return {
       idx,
@@ -130,7 +139,10 @@ export function createLoaders({
       viewEnd,
       spikesAdded,
       spikesRemoved,
+      artifactsAdded,
+      artifactsRemoved,
       usePeeloff,
+      lockSpikes,
       raw: entry,
     };
   }

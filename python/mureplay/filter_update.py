@@ -72,13 +72,6 @@ def _subtract_mu_waveforms(x: np.ndarray, spikes: np.ndarray, fsamp: float, win:
     return result
 
 
-def _remove_high_amplitude_outliers(pulse_train: np.ndarray, spike_indices: np.ndarray) -> np.ndarray:
-    if spike_indices.size == 0:
-        return spike_indices
-    threshold = np.mean(pulse_train[spike_indices]) + 3 * np.std(pulse_train[spike_indices])
-    return spike_indices[pulse_train[spike_indices] <= threshold]
-
-
 def update_motor_unit_filter_window(
     emg: np.ndarray,
     emg_mask: np.ndarray,
@@ -91,6 +84,8 @@ def update_motor_unit_filter_window(
     peeloff_spike_times: list[list[int]] | None = None,
     peeloff_win: float = 0.025,
     use_peeloff: bool = False,
+    artifact_times: list[int] | None = None,
+    lock_spikes: bool = False,
 ) -> tuple[np.ndarray | None, list[int]]:
     emg_sel = emg[emg_mask == 0, :] if emg_mask.size else emg
     if emg_sel.size == 0 or start >= end:
@@ -123,6 +118,14 @@ def update_motor_unit_filter_window(
             if local_spikes.size > 0:
                 w_sig = _subtract_mu_waveforms(w_sig, local_spikes, fsamp, peeloff_win)
 
+    if artifact_times:
+        local_artifacts = np.asarray(artifact_times, dtype=int) - start
+        local_artifacts = local_artifacts[
+            (local_artifacts >= edge) & (local_artifacts < (win_len - edge))
+        ]
+        if local_artifacts.size > 0:
+            w_sig = _subtract_mu_waveforms(w_sig, local_artifacts, fsamp, peeloff_win)
+
     mu_filters = np.sum(w_sig[:, spikes2], axis=1)
     norm = float(np.linalg.norm(mu_filters))
     if norm > 0:
@@ -144,16 +147,38 @@ def update_motor_unit_filter_window(
             2,
             iter=10,
             minit="++",
-            missing="raise",
+            missing="warn",
             rng=np.random.default_rng(0),
         )
     except TypeError:
         np.random.seed(0)
-        centroids, labels = kmeans2(pt[peaks], 2, iter=10, minit="++", missing="raise")
+        centroids, labels = kmeans2(pt[peaks], 2, iter=10, minit="++", missing="warn")
+    if len(np.unique(labels)) < 2:
+        return None, spike_times
 
     idx2 = int(np.argmax(centroids))
     spikes_new = peaks[labels == idx2]
-    spikes_new = _remove_high_amplitude_outliers(pt, spikes_new).astype(int)
+    spikes_new = spikes_new[pt[spikes_new] <= 3 * centroids[idx2]]
+    spikes_new = spikes_new.astype(int)
+
+    if lock_spikes and spikes1.size > 0:
+        # Realign original spikes to their exact peak positions within +/-10 samples.
+        realigned_spikes = []
+        for orig_spike in spikes1:
+            local_pos = int(orig_spike - start)
+            search_start = max(0, local_pos - 10)
+            search_end = min(len(pt), local_pos + 11)
+            local_peaks_in_range = peaks[(peaks >= search_start) & (peaks < search_end)]
+            if local_peaks_in_range.size > 0:
+                nearest_peak = local_peaks_in_range[
+                    np.argmin(np.abs(local_peaks_in_range - local_pos))
+                ]
+                realigned_spikes.append(int(nearest_peak))
+            else:
+                realigned_spikes.append(local_pos)
+        # Merge realigned original spikes with newly detected spikes.
+        merged_spikes = sorted(set(realigned_spikes) | set(spikes_new.tolist()))
+        spikes_new = np.array(merged_spikes, dtype=int)
 
     updated = [s for s in spike_times if s < start + edge or s > end - edge]
     updated.extend((spikes_new + start).tolist())

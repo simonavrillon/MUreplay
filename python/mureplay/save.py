@@ -39,6 +39,14 @@ def save_npz(
     )
 
 
-def save_editlog(path: Path, mu_uids: list[str], history: list[dict[str, Any]]) -> None:
+def save_editlog(
+    path: Path,
+    mu_uids: list[str],
+    history: list[dict[str, Any]],
+    artifact_times: list[list[int]] | None = None,
+) -> None:
+    doc: dict[str, Any] = {"mu_uids": mu_uids, "history": history}
+    if artifact_times is not None:
+        doc["artifact_times"] = artifact_times
     with path.open("w", encoding="utf-8") as fh:
-        json.dump({"mu_uids": mu_uids, "history": history}, fh, indent=2)
+        json.dump(doc, fh, indent=2)

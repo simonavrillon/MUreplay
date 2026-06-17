@@ -85,10 +85,20 @@ def find_single(root: Path, pattern: str) -> Path:
 
 
 def infer_bids_root(file_path: Path) -> str:
-    """Infer BIDS root as the path segment before the first `sub-*` folder."""
+    """Infer the BIDS dataset root from a decomp/edited file path.
+
+    The root is the path segment before the first `sub-*` folder. MUedit2 now
+    saves decompositions under `<root>/derivatives/muedit/sub-XX/.../decomp/`,
+    so when the inferred prefix ends with `derivatives/<pipeline>` we strip those
+    two parts to return the true dataset root (where raw `<root>/sub-XX/emg/`
+    lives). Old flat layouts (no `derivatives/`) are unaffected.
+    """
     for i, part in enumerate(file_path.parts):
         if part.startswith("sub-"):
-            return str(Path(*file_path.parts[:i]))
+            prefix = file_path.parts[:i]
+            if len(prefix) >= 2 and prefix[-2] == "derivatives":
+                prefix = prefix[:-2]
+            return str(Path(*prefix)) if prefix else ""
     return ""
 
 
@@ -106,6 +116,9 @@ def _merge_sidecar(decomp_payload: dict[str, Any], edited_json_path: Path) -> No
         mu_uids = sidecar.get("mu_uids")
         if isinstance(mu_uids, list) and mu_uids:
             decomp_payload["mu_uids"] = mu_uids
+        artifact_times = sidecar.get("artifact_times")
+        if isinstance(artifact_times, list):
+            decomp_payload["artifact_times"] = artifact_times
     decomp_payload["edit_history"] = history
 
 

@@ -52,6 +52,7 @@ const { renderAll } = createCharts({
   isCurrentMuStep: replay.isCurrentMuStep,
   pulseForCurrentMu: replay.pulseForCurrentMu,
   distimesForCurrentMu: replay.distimesForCurrentMu,
+  artifactTimesForCurrentMu: () => state.artifactTimes?.[state.currentMu] || [],
 });
 replay.setRenderAll(renderAll);
 
