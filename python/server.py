@@ -38,6 +38,11 @@ _compute_pool = ThreadPoolExecutor(max_workers=1)
 class MUReplayHandler(SimpleHTTPRequestHandler):
     bids_root: str = ""
 
+    def log_request(self, code: str | int = "-", size: str | int = "-") -> None:
+        # Suppress the per-request access log that floods the terminal.
+        # Errors still go through log_error/log_message.
+        pass
+
     def _send_cors_headers(self) -> None:
         self.send_header("Access-Control-Allow-Origin", "*")
         self.send_header("Access-Control-Allow-Methods", "GET,POST,OPTIONS")

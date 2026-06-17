@@ -43,7 +43,7 @@ const replay = createReplayController({
   clamp,
 });
 
-const { renderAll } = createCharts({
+const { renderAll, bindTimeline } = createCharts({
   els,
   state,
   COLORS,
@@ -120,6 +120,7 @@ els.nextStepBtn.addEventListener("click", () => replay.moveStep(1));
 els.playPauseBtn.addEventListener("click", replay.togglePlay);
 window.addEventListener("keydown", onWindowKeydown);
 window.addEventListener("resize", renderAll);
+bindTimeline();
 
 replay.updateTimelineUi();
 renderAll();

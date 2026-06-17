@@ -11,6 +11,7 @@ export const els = {
   timelineCounter: document.getElementById("timelineCounter"),
   editDrCanvas: document.getElementById("editDrCanvas"),
   editPulseCanvas: document.getElementById("editPulseCanvas"),
+  editTimelineCanvas: document.getElementById("editTimelineCanvas"),
 };
 
 export const state = {

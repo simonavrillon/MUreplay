@@ -10,6 +10,7 @@ export function createCharts({ els, state, COLORS, UNIFORM_PULSE_COLOR, currentS
   function renderAll() {
     renderPulse();
     renderFiringRate();
+    renderTimeline();
   }
 
   function drawSeries(
@@ -107,16 +108,23 @@ export function createCharts({ els, state, COLORS, UNIFORM_PULSE_COLOR, currentS
       ctx.stroke();
 
       if (!hideYAxis) {
+        ctx.fillStyle = COLORS.muted;
+        ctx.font = "10px sans-serif";
         const yTicks = 3;
         for (let i = 0; i <= yTicks; i++) {
           const t = i / yTicks;
           const y = padding.top + plotHeight - t * plotHeight;
+          const value = min + t * span;
           ctx.strokeStyle = "rgba(255, 255, 255, 0.08)";
           ctx.beginPath();
           ctx.moveTo(padding.left, y);
           ctx.lineTo(padding.left + plotWidth, y);
           ctx.stroke();
+          ctx.fillStyle = COLORS.muted;
+          ctx.textAlign = "right";
+          ctx.fillText(`${value.toFixed(1)}`, padding.left - 8, y + 3);
         }
+        ctx.textAlign = "left";
       }
 
       if (fsamp) {
@@ -354,7 +362,138 @@ export function createCharts({ els, state, COLORS, UNIFORM_PULSE_COLOR, currentS
     );
   }
 
+  // Navigation timeline drawn below the pulse train canvas. Mirrors MUedit2's
+  // edit timeline: a full-signal overview bar with the current view window,
+  // current spikes, and the last edit's added/removed markers.
+  const TIMELINE_PAD_L = 38;
+  const TIMELINE_PAD_R = 8;
+
+  function timelineView(total) {
+    return state.replayView && state.replayView.end > state.replayView.start
+      ? state.replayView
+      : { start: 0, end: total };
+  }
+
+  function renderTimeline() {
+    const canvas = els.editTimelineCanvas;
+    if (!canvas) return;
+    const ctx = canvas.getContext("2d");
+    const w = canvas.clientWidth || canvas.width || 1;
+    canvas.width = w;
+    canvas.height = 20;
+    ctx.clearRect(0, 0, w, 20);
+
+    const pulse = pulseForCurrentMu();
+    const total = pulse?.length || 0;
+    if (!total) return;
+
+    const bw = Math.max(1, w - TIMELINE_PAD_L - TIMELINE_PAD_R);
+    const barTop = 4;
+    const barH = 12;
+
+    ctx.fillStyle = "rgba(255,255,255,0.07)";
+    ctx.fillRect(TIMELINE_PAD_L, barTop, bw, barH);
+
+    // Last edit action for the current MU: green = added, red = removed
+    const step = currentStep();
+    if (isCurrentMuStep(step)) {
+      const added = Array.isArray(step.spikesAdded) ? step.spikesAdded : [];
+      const removed = Array.isArray(step.spikesRemoved) ? step.spikesRemoved : [];
+      ctx.fillStyle = "rgba(74,222,128,0.85)";
+      added.forEach((s) => {
+        if (s >= 0 && s < total) ctx.fillRect(TIMELINE_PAD_L + Math.round((s / total) * bw), barTop, 2, barH);
+      });
+      ctx.fillStyle = "rgba(248,113,113,0.85)";
+      removed.forEach((s) => {
+        if (s >= 0 && s < total) ctx.fillRect(TIMELINE_PAD_L + Math.round((s / total) * bw), barTop, 2, barH);
+      });
+    }
+
+    // Current spike positions (faint purple, drawn on top of history)
+    const spikes = distimesForCurrentMu();
+    ctx.fillStyle = "rgba(231,193,255,0.35)";
+    spikes.forEach((s) => {
+      if (s >= 0 && s < total) ctx.fillRect(TIMELINE_PAD_L + Math.round((s / total) * bw), barTop, 2, barH);
+    });
+
+    // View window
+    const view = timelineView(total);
+    const x1 = TIMELINE_PAD_L + (Math.max(0, view.start) / total) * bw;
+    const x2 = TIMELINE_PAD_L + (Math.min(total, view.end) / total) * bw;
+    const ww = Math.max(4, x2 - x1);
+    ctx.fillStyle = "rgba(195,155,242,0.28)";
+    ctx.fillRect(x1, barTop - 2, ww, barH + 4);
+    ctx.strokeStyle = "rgba(195,155,242,0.75)";
+    ctx.lineWidth = 1;
+    ctx.strokeRect(x1 + 0.5, barTop - 1.5, Math.max(3, ww - 1), barH + 3);
+  }
+
+  function bindTimeline() {
+    const canvas = els.editTimelineCanvas;
+    if (!canvas) return;
+
+    let dragging = false;
+    let startClientX = 0;
+    let dragViewStart = 0;
+    let didMove = false;
+
+    const getTotal = () => pulseForCurrentMu().length;
+
+    const applyView = (s, e2, total) => {
+      if (s < 0) {
+        e2 -= s;
+        s = 0;
+      }
+      if (e2 > total) {
+        s = Math.max(0, s - (e2 - total));
+        e2 = total;
+      }
+      if (e2 <= s) e2 = Math.min(total, s + 1);
+      state.replayView = { start: s, end: e2 };
+      renderAll();
+    };
+
+    canvas.addEventListener("mousedown", (e) => {
+      const total = getTotal();
+      if (!total) return;
+      dragging = true;
+      didMove = false;
+      startClientX = e.clientX;
+      dragViewStart = timelineView(total).start;
+    });
+
+    window.addEventListener("mousemove", (e) => {
+      if (!dragging) return;
+      if (Math.abs(e.clientX - startClientX) > 3) didMove = true;
+      if (!didMove) return;
+      const total = getTotal();
+      if (!total) return;
+      const rect = canvas.getBoundingClientRect();
+      const bw = Math.max(1, rect.width - TIMELINE_PAD_L - TIMELINE_PAD_R);
+      const delta = Math.round(((e.clientX - startClientX) / bw) * total);
+      const view = timelineView(total);
+      const span = view.end - view.start;
+      applyView(dragViewStart + delta, dragViewStart + delta + span, total);
+    });
+
+    window.addEventListener("mouseup", (e) => {
+      if (!dragging) return;
+      dragging = false;
+      if (didMove) return;
+      const total = getTotal();
+      if (!total) return;
+      const view = timelineView(total);
+      const span = view.end - view.start;
+      const rect = canvas.getBoundingClientRect();
+      const bw = Math.max(1, rect.width - TIMELINE_PAD_L - TIMELINE_PAD_R);
+      const frac = Math.max(0, Math.min(1, (e.clientX - rect.left - TIMELINE_PAD_L) / bw));
+      const s = Math.round(frac * total - span / 2);
+      applyView(s, s + span, total);
+    });
+  }
+
   return {
     renderAll,
+    bindTimeline,
   };
 }

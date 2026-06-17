@@ -61,14 +61,15 @@
               </div>
             </div>
 
-            <div class="chart-card glass edit-full">
-              <div class="chart-title">Firing Rate (Hz)</div>
+            <div class="chart-card glass edit-full" id="editDrCard">
+              <div class="chart-title">Firing Rate (pps)</div>
               <canvas id="editDrCanvas" height="180" class="mu-canvas muted-bg"></canvas>
             </div>
 
-            <div class="chart-card glass edit-full">
+            <div class="chart-card glass edit-full" id="editPulseCard">
               <div class="chart-title">Pulse Train / Discharge Times</div>
               <canvas id="editPulseCanvas" height="220" class="mu-canvas"></canvas>
+              <canvas id="editTimelineCanvas" class="edit-timeline-canvas" aria-label="Navigation timeline"></canvas>
             </div>
 
           </div>
