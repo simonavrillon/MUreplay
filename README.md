@@ -1,11 +1,8 @@
 # MUreplay
 
-Editing a motor unit decomposition by hand takes time, and the result carries
-the editor's judgement: which discharges were added, which were deleted, which
-units were flagged as unusable or split apart. MUreplay lets you see that
-judgement for yourself. Load a decomposition that was edited in MUedit2 and
+Load a decomposition that was edited in MUedit2 and
 MUreplay replays the editing session step by step on an interactive timeline,
-so you can watch the motor units take their final shape — one edit at a time.
+so you can watch the motor units take their final shape one edit at a time.
 
 It is built for the situations where the editing itself matters: checking the
 work of a student or a colleague in a collaborative project, or reviewing the
