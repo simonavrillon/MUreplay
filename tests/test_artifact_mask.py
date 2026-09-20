@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import io
+from pathlib import Path
 from typing import Any
 
 import numpy as np
@@ -183,4 +184,5 @@ def test_update_filter_accepts_artifact_regions_key() -> None:
     assert response.status_code == 404
     error = response.json()["error"]
     assert error["code"] == "not_found"
-    assert "/nonexistent/sub-1/emg" in error["message"]
+    # The service resolves the EMG directory with native path separators.
+    assert str(Path("/nonexistent") / "sub-1" / "emg") in error["message"]

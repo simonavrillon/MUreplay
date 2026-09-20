@@ -2,6 +2,8 @@
 
 from __future__ import annotations
 
+from pathlib import Path
+
 from fastapi.testclient import TestClient
 
 from mureplay.api.app_factory import create_app
@@ -38,8 +40,9 @@ def test_load_paired_from_path_missing_file_is_a_clean_error() -> None:
     error = response.json()["error"]
     assert error["code"] == "not_found"
     # The path the user picked has to survive into the message, or the UI can
-    # only say that something went wrong.
-    assert "/nonexistent/entity_edited.npz" in error["message"]
+    # only say that something went wrong. The service reports it in the
+    # platform's native separator style.
+    assert str(Path("/nonexistent/entity_edited.npz")) in error["message"]
 
 
 def test_rejected_payload_is_a_400_naming_the_reason() -> None:
