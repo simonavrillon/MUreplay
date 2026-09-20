@@ -5,61 +5,62 @@ ROOT_DIR="$(cd "$(dirname "$0")/.." && pwd)"
 BACKEND_DIR="$ROOT_DIR/python"
 FRONTEND_DIR="$ROOT_DIR/frontend"
 
-export MUREPLAY_HOST="${MUREPLAY_HOST:-0.0.0.0}"
-export MUREPLAY_BACKEND_PORT="${MUREPLAY_BACKEND_PORT:-8000}"
-export MUREPLAY_FRONTEND_PORT="${MUREPLAY_FRONTEND_PORT:-8080}"
-export MUREPLAY_OPEN_BROWSER="${MUREPLAY_OPEN_BROWSER:-1}"
-MUREPLAY_BIDS_ROOT="${1:-${MUREPLAY_BIDS_ROOT:-}}"
-
-BACKEND_HOST_FOR_URL="$MUREPLAY_HOST"
-if [[ "$BACKEND_HOST_FOR_URL" == "0.0.0.0" || "$BACKEND_HOST_FOR_URL" == "::" ]]; then
-  BACKEND_HOST_FOR_URL="127.0.0.1"
+# `uv run` syncs the locked environment and executes inside it, so the app
+# launches from a bare checkout with no activation step.  Falling back to a
+# plain `python` keeps the script working inside an already-activated
+# environment (conda, venv) and when uv is not installed.
+if command -v uv >/dev/null 2>&1 && [[ "${MUREPLAY_NO_UV:-0}" != "1" ]]; then
+  PY=(uv run --project "$ROOT_DIR" python)
+else
+  PY=(python)
 fi
 
-# Resolve Python: prefer the MUreplay conda env, fall back to python3.
-CONDA_PYTHON="$(conda run -n MUreplay which python 2>/dev/null || true)"
-PYTHON="${CONDA_PYTHON:-python3}"
-echo "Using Python: $PYTHON"
-
-"$PYTHON" - <<PY
-from pathlib import Path
-
-template = Path("$FRONTEND_DIR/runtime-config.template.js").read_text(encoding="utf-8")
-rendered = (
-    template
-    .replace("__MUREPLAY_API_BASE__", "http://${BACKEND_HOST_FOR_URL}:${MUREPLAY_BACKEND_PORT}")
-    .replace("__MUREPLAY_BIDS_ROOT__", "${MUREPLAY_BIDS_ROOT}")
-)
-Path("$FRONTEND_DIR/runtime-config.js").write_text(rendered, encoding="utf-8")
-PY
+export PYTHONPATH="$BACKEND_DIR/src:${PYTHONPATH:-}"
+export MUREPLAY_HOST="${MUREPLAY_HOST:-0.0.0.0}"
+export MUREPLAY_PORT="${MUREPLAY_BACKEND_PORT:-8000}"
+export MUREPLAY_FRONTEND_PORT="${MUREPLAY_FRONTEND_PORT:-8080}"
+export MUREPLAY_OPEN_BROWSER="${MUREPLAY_OPEN_BROWSER:-1}"
 
 cd "$BACKEND_DIR"
-"$PYTHON" server.py --host "$MUREPLAY_HOST" --port "$MUREPLAY_BACKEND_PORT" ${MUREPLAY_BIDS_ROOT:+--bids-root "$MUREPLAY_BIDS_ROOT"} &
+"${PY[@]}" -m mureplay.cli api &
 BACK_PID=$!
-echo "Backend started (PID $BACK_PID) on :$MUREPLAY_BACKEND_PORT"
+echo "Backend started (PID $BACK_PID) on :$MUREPLAY_PORT"
 
 cd "$FRONTEND_DIR"
-"$PYTHON" -m http.server "$MUREPLAY_FRONTEND_PORT" >/dev/null 2>&1 &
+"${PY[@]}" -m http.server "$MUREPLAY_FRONTEND_PORT" 2>/dev/null &
 FRONT_PID=$!
 echo "Frontend started (PID $FRONT_PID) on :$MUREPLAY_FRONTEND_PORT"
 
 cleanup() {
-  echo "Stopping MUreplay..."
+  echo "Stopping services..."
   [[ -n "${FRONT_PID:-}" ]] && kill "$FRONT_PID" >/dev/null 2>&1 || true
   [[ -n "${BACK_PID:-}" ]] && kill "$BACK_PID" >/dev/null 2>&1 || true
 }
 trap cleanup EXIT INT TERM
 
 if [[ "$MUREPLAY_OPEN_BROWSER" == "1" ]]; then
-  sleep 2
-  "$PYTHON" - <<PY
-import os
-import webbrowser
+  "${PY[@]}" - <<PY
+import urllib.request, time, sys, os, webbrowser
 
-host = os.environ.get("MUREPLAY_HOST", "127.0.0.1")
-port = os.environ.get("MUREPLAY_FRONTEND_PORT", "8080")
-url_host = "127.0.0.1" if host in {"0.0.0.0", "::"} else host
-webbrowser.open(f"http://{url_host}:{port}/")
+backend_port  = os.environ.get("MUREPLAY_PORT", "8000")
+frontend_port = os.environ.get("MUREPLAY_FRONTEND_PORT", "8080")
+deadline = time.time() + 60
+
+def wait_for(url, label):
+    while time.time() < deadline:
+        try:
+            with urllib.request.urlopen(url, timeout=2) as r:
+                if r.status == 200:
+                    return True
+        except Exception:
+            pass
+        time.sleep(0.5)
+    print(f"Timed out waiting for {label}", file=sys.stderr)
+    return False
+
+if wait_for(f"http://localhost:{backend_port}/api/v1/health", "backend") and \
+   wait_for(f"http://localhost:{frontend_port}/", "frontend"):
+    webbrowser.open(f"http://localhost:{frontend_port}/")
 PY
 fi
 

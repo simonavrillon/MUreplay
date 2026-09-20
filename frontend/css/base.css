@@ -1,0 +1,84 @@
+/* Global resets, layout shell, and canvas styles. */
+html,
+body {
+  height: 100%;
+}
+
+body {
+  margin: 0;
+  font-family: var(--font);
+  background: var(--bg);
+  color: var(--text);
+  font-weight: var(--fw-regular);
+  overflow-x: hidden;
+}
+
+.glass {
+  background: transparent;
+  border: none;
+}
+
+.hidden {
+  display: none !important;
+}
+
+#app {
+  height: 100dvh;
+  min-height: 100dvh;
+  display: flex;
+  flex-direction: column;
+}
+
+@supports not (height: 100dvh) {
+  #app {
+    height: 100vh;
+    min-height: 100vh;
+  }
+}
+
+.page {
+  flex: 1;
+  display: flex;
+  flex-direction: column;
+}
+
+/* Canvas */
+/* ── Canvas ── */
+
+canvas {
+  width: 100%;
+  display: block;
+  border-radius: 6px;
+  background: transparent;
+  border: none;
+}
+
+.mu-canvas {
+  width: 100%;
+  border: none;
+  border-radius: 6px;
+  background: transparent;
+}
+
+.mu-canvas.muted-bg {
+  background: transparent;
+}
+
+.edit-timeline-canvas {
+  width: 100%;
+  height: 20px;
+  flex: 0 0 20px;
+  display: block;
+  cursor: grab;
+  border-radius: 3px;
+}
+
+.edit-timeline-canvas:active {
+  cursor: grabbing;
+}
+
+#consoleText {
+  max-height: 180px;
+  overflow-y: auto;
+  padding-right: 6px;
+}

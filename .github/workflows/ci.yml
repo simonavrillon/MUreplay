@@ -1,0 +1,86 @@
+name: CI
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: ${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  python-lint:
+    name: Python · ruff
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: astral-sh/setup-uv@v7
+        with:
+          enable-cache: true
+      # ruff is pinned in pyproject.toml's dev extra and resolved through
+      # uv.lock, so a new ruff release cannot reformat the tree underneath us.
+      - run: uv run --locked --extra dev ruff check --output-format=github .
+      - run: uv run --locked --extra dev ruff format --check .
+
+  python:
+    name: Python · mypy + pytest (${{ matrix.os }})
+    runs-on: ${{ matrix.os }}
+    strategy:
+      fail-fast: false
+      matrix:
+        # Users launch MUreplay on all three through the .bat/.command
+        # launchers, so path, encoding and BLAS differences surface here.
+        os: [ubuntu-latest, windows-latest, macos-latest]
+    steps:
+      - uses: actions/checkout@v4
+      # The parity tests compare the replayed operations against MUedit2's
+      # implementations, which they locate through MUEDIT2_ROOT. Without this
+      # checkout they skip, so CI would never notice the two repos drifting
+      # apart.
+      - uses: actions/checkout@v4
+        with:
+          repository: simonavrillon/MUedit2
+          path: muedit2
+      - uses: astral-sh/setup-uv@v7
+        with:
+          enable-cache: true
+      # --locked fails if uv.lock has drifted from pyproject.toml, so a
+      # dependency edit that skipped `uv lock` cannot reach main.  The lock
+      # pins the full transitive graph, so CI runs the exact versions a
+      # developer gets from `uv sync`.
+      - run: uv sync --locked --extra dev
+      - run: uv run mypy
+      # Runners have no recordings under data/, so the real-data tests skip
+      # through their own skipif guards (data/ is gitignored).
+      - name: pytest
+        env:
+          MUEDIT2_ROOT: ${{ github.workspace }}/muedit2
+        run: uv run pytest --cov=mureplay --cov-report=term-missing:skip-covered
+
+  frontend:
+    name: Frontend · eslint + prettier + tsc (Node ${{ matrix.node }})
+    runs-on: ubuntu-latest
+    strategy:
+      fail-fast: false
+      matrix:
+        # 20 is the engines.node floor in package.json; 22 is current LTS.
+        node: [20, 22]
+    defaults:
+      run:
+        working-directory: frontend
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: ${{ matrix.node }}
+          cache: npm
+          cache-dependency-path: frontend/package-lock.json
+      - run: npm ci
+      - run: npm run lint
+      - run: npm run format:check
+      - run: npm run typecheck

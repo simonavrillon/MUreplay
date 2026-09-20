@@ -4,7 +4,10 @@
     <meta charset="UTF-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1.0" />
     <title>MUreplay</title>
-    <link rel="stylesheet" href="style.css" />
+    <link rel="stylesheet" href="css/tokens.css" />
+    <link rel="stylesheet" href="css/base.css" />
+    <link rel="stylesheet" href="css/stages/workspace.css" />
+    <link rel="stylesheet" href="css/stages/edit.css" />
   </head>
   <body>
     <div id="app">
@@ -35,7 +38,9 @@
                 />
               </svg>
             </button>
-            <span id="status" class="status-pill hidden">Load edited file and log</span>
+            <span id="status" class="status-pill hidden"
+              >Load edited file and log</span
+            >
           </div>
         </div>
 
@@ -49,35 +54,83 @@
                     <select id="editMuSelect" aria-label="Motor unit"></select>
                   </div>
 
-                  <div class="timeline-toolbar" role="toolbar" aria-label="Replay timeline controls">
-                    <button id="prevStepBtn" class="pill-toggle" type="button" aria-label="Previous step">⏮</button>
-                    <input id="timelineSlider" type="range" min="0" max="0" value="0" step="1" />
-                    <button id="nextStepBtn" class="pill-toggle" type="button" aria-label="Next step">⏭</button>
-                    <button id="playPauseBtn" class="pill-toggle" type="button" aria-label="Play or pause">▶</button>
-                    <span id="timelineCounter" class="timeline-counter">Step 0 / 0</span>
+                  <div
+                    class="timeline-toolbar"
+                    role="toolbar"
+                    aria-label="Replay timeline controls"
+                  >
+                    <button
+                      id="prevStepBtn"
+                      class="pill-toggle"
+                      type="button"
+                      aria-label="Previous step"
+                    >
+                      ⏮
+                    </button>
+                    <input
+                      id="timelineSlider"
+                      type="range"
+                      min="0"
+                      max="0"
+                      value="0"
+                      step="1"
+                    />
+                    <button
+                      id="nextStepBtn"
+                      class="pill-toggle"
+                      type="button"
+                      aria-label="Next step"
+                    >
+                      ⏭
+                    </button>
+                    <button
+                      id="playPauseBtn"
+                      class="pill-toggle"
+                      type="button"
+                      aria-label="Play or pause"
+                    >
+                      ▶
+                    </button>
+                    <span id="timelineCounter" class="timeline-counter"
+                      >Step 0 / 0</span
+                    >
                   </div>
                 </div>
-                <span id="editStatus" class="status-pill" aria-live="polite"></span>
+                <span
+                  id="editStatus"
+                  class="status-pill"
+                  aria-live="polite"
+                ></span>
               </div>
             </div>
 
             <div class="chart-card glass edit-full" id="editDrCard">
               <div class="chart-title">Firing Rate (pps)</div>
-              <canvas id="editDrCanvas" height="180" class="mu-canvas muted-bg"></canvas>
+              <canvas
+                id="editDrCanvas"
+                height="180"
+                class="mu-canvas muted-bg"
+              ></canvas>
             </div>
 
             <div class="chart-card glass edit-full" id="editPulseCard">
               <div class="chart-title">Pulse Train / Discharge Times</div>
-              <canvas id="editPulseCanvas" height="220" class="mu-canvas"></canvas>
-              <canvas id="editTimelineCanvas" class="edit-timeline-canvas" aria-label="Navigation timeline"></canvas>
+              <canvas
+                id="editPulseCanvas"
+                height="220"
+                class="mu-canvas"
+              ></canvas>
+              <canvas
+                id="editTimelineCanvas"
+                class="edit-timeline-canvas"
+                aria-label="Navigation timeline"
+              ></canvas>
             </div>
-
           </div>
         </section>
       </main>
     </div>
 
-    <script src="runtime-config.js"></script>
     <script type="module" src="app.js"></script>
   </body>
 </html>

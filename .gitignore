@@ -1,39 +1,52 @@
-# Python
+# ── OS & editor artefacts ──────────────────────────────────────────────────
+.DS_Store
+Thumbs.db
+
+# ── IDE configs ─────────────────────────────────────────────────────────────
+.vscode/
+.idea/
+*.iml
+*.swp
+*.swo
+
+# ── Python ─────────────────────────────────────────────────────────────────
 __pycache__/
 *.py[cod]
 *.pyo
-*.pyd
-.Python
+*.so
+*.egg
 *.egg-info/
 dist/
 build/
 .eggs/
-*.egg
 
-# Environment variables
-.env
-.env.*
-
-# Virtual environments
+# ── Virtual environments ────────────────────────────────────────────────────
 .venv/
 venv/
 env/
+.env
+.env.*
 
-# IDE
-.DS_Store
-.idea/
-.vscode/
-*.swp
-*.swo
-
-# Data files
-*.npz
-*.bdf
-*.edf
-*.json.bak
-frontend/runtime-config.js
-
-# Test artifacts
+# ── Type-checking & test caches ─────────────────────────────────────────────
+.mypy_cache/
+.ruff_cache/
 .pytest_cache/
 .coverage
 htmlcov/
+
+# ── Frontend ────────────────────────────────────────────────────────────────
+frontend/node_modules/
+
+# ── Linter & formatter caches ───────────────────────────────────────────────
+.eslintcache
+.prettiercache
+
+# ── EMG data files ──────────────────────────────────────────────────────────
+*.mat
+*.bdf
+*.edf
+*.npz
+*.json.bak
+
+# ── Local data (full MUedit2 BIDS output; sample dataset for IO tests) ──────
+data/

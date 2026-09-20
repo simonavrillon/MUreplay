@@ -1,0 +1,143 @@
+.edit-top-row {
+  display: flex;
+  flex-direction: column;
+  gap: 14px;
+  align-items: stretch;
+  margin-bottom: 10px;
+}
+
+.edit-full {
+  width: 100%;
+  margin-top: 10px;
+}
+
+.stage-edit .chart-card {
+  padding: 12px;
+}
+
+.edit-controls-row {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+}
+
+.edit-controls-row .mu-controls {
+  margin-bottom: 0;
+}
+
+.edit-selects {
+  align-items: center;
+}
+
+.edit-selects select {
+  height: 40px;
+  padding: 0 12px;
+  font-size: var(--fs-md);
+  font-weight: var(--fw-bold);
+  line-height: 1;
+}
+
+#editMuSelect {
+  min-width: 110px;
+  width: 110px;
+}
+
+#editSaveBtn {
+  background: #303030;
+  border: 1px solid var(--border);
+  color: #e7c1ff;
+}
+
+/* MUreplay overrides */
+/* ── MUreplay overrides ── */
+
+.workspace-header {
+  justify-content: space-between;
+  padding: 8px 14px 10px;
+}
+
+.workspace-header h1 {
+  margin: 0;
+  font-size: var(--fs-lg);
+  font-weight: var(--fw-bold);
+}
+
+.header-actions {
+  position: relative;
+  display: inline-flex;
+  align-items: center;
+  gap: 10px;
+}
+
+.load-headline {
+  margin: 0;
+  font-size: var(--fs-md);
+  font-weight: var(--fw-bold);
+}
+
+.timeline-toolbar {
+  display: flex;
+  align-items: center;
+  gap: 4px;
+  flex: 1;
+}
+
+.timeline-toolbar .pill-toggle {
+  height: 40px;
+  width: 36px;
+  min-width: 36px;
+  padding: 0;
+  font-size: var(--fs-md);
+  font-weight: var(--fw-bold);
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+}
+
+#timelineSlider {
+  flex: 1 1 auto;
+  min-width: 0;
+  height: 40px;
+  -webkit-appearance: none;
+  appearance: none;
+  background: transparent;
+}
+
+#timelineSlider::-webkit-slider-runnable-track {
+  height: 40px;
+  border-radius: 6px;
+  background: var(--timeline-gradient, #3a3a3a);
+  border: 1px solid var(--border);
+}
+
+#timelineSlider::-moz-range-track {
+  height: 40px;
+  border-radius: 6px;
+  background: var(--timeline-gradient, #3a3a3a);
+  border: 1px solid var(--border);
+}
+
+#timelineSlider::-webkit-slider-thumb {
+  -webkit-appearance: none;
+  appearance: none;
+  width: 3px;
+  height: 34px;
+  border-radius: 2px;
+  background: #f5f5f5;
+  border: none;
+  margin-top: 2px;
+  box-shadow:
+    0 0 0 1px #111,
+    0 0 0 2px rgba(255, 255, 255, 0.08);
+}
+
+#timelineSlider::-moz-range-thumb {
+  width: 3px;
+  height: 34px;
+  border-radius: 2px;
+  background: #f5f5f5;
+  border: none;
+  box-shadow:
+    0 0 0 1px #111,
+    0 0 0 2px rgba(255, 255, 255, 0.08);
+}

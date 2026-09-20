@@ -30,7 +30,7 @@ Load data  →  Select motor unit  →  Navigate timeline
 ### Path B — Paired autoload
 
 1. Click **Load** and select the `<entity>_edited.npz` or `<entity>_decomp.npz` file. In recent MUedit2 versions these live under `<bids_root>/derivatives/muedit/sub-XX/[ses-YY]/decomp/` (the raw EMG stays at `<bids_root>/sub-XX/[ses-YY]/emg/`); older flat layouts (`<bids_root>/sub-XX/decomp/`) are still supported.
-2. MUreplay infers the entity label from the filename, locates the paired `_decomp.npz` and `_edited.json` in the same folder, and merges the edit history from the JSON sidecar. The BIDS dataset root is inferred automatically (stepping above any `derivatives/muedit` segment) so `update_filter` replay can find the raw EMG. Files saved from MUreplay are written back to the same `derivatives/muedit/.../decomp/` location.
+2. MUreplay infers the entity label from the filename, locates the paired `_decomp.npz` and `_edited.json` in the same folder, and merges the edit history from the JSON sidecar. The BIDS dataset root is inferred automatically (stepping above any `derivatives/muedit` segment) so `update_filter` replay can find the raw EMG.
 
 ---
 
@@ -40,7 +40,7 @@ Use the **Grid** and **Motor Unit** dropdowns to focus on a specific MU. Both ch
 
 ### Motor unit status indicators
 
-When the loaded edit history contains `flag_mu`, `duplicate_mu`, or `remove_duplicates` entries, the Motor Unit dropdown annotates affected MUs with a prefix symbol:
+When the loaded edit history contains `flag_mu`, `duplicate_mu`, `remove_duplicates`, or `remove_flagged` entries, the Motor Unit dropdown annotates affected MUs with a prefix symbol:
 
 | Prefix | Meaning | Selectable |
 |---|---|---|
@@ -48,7 +48,7 @@ When the loaded edit history contains `flag_mu`, `duplicate_mu`, or `remove_dupl
 | `⊕ MU N` | Created as a duplicate of another MU | No — greyed out |
 | `⊗ MU N` | Removed by deduplication | No — greyed out |
 
-MUs that were removed and are no longer present in the final file appear at the bottom of the list as disabled entries in the form `⊕ g0_mu34 (removed)`.
+MUs that were removed and are no longer present in the final file appear at the bottom of the list as disabled entries carrying their mark symbol, e.g. `⊗ g0_mu34 (removed)`.
 
 On load, if the first MU in the grid would be greyed out, MUreplay automatically selects the first non-disabled MU. The `<` / `>` keyboard shortcuts also skip disabled MUs.
 
@@ -63,7 +63,7 @@ On load, if the first MU in the grid would be greyed out, MUreplay automatically
 
 ## Step 3 — Navigate the timeline
 
-The timeline displays only the edit steps that affect the currently selected motor unit.
+The timeline displays only the edit steps that affect the currently selected motor unit. Consecutive spike-edit steps (`add_spikes`, `delete_spikes`, `delete_dr`, `remove_outliers`) on the same MU are merged into a single timeline step, with the status bar showing the combined spikes added and removed.
 
 ### Controls
 
@@ -96,9 +96,10 @@ The **step counter** (e.g. `Step 3 / 12`) and the status bar show the current ac
 | `remove_outliers` | Removes spikes whose discharge rate exceeds mean + 3 SD across the full spike train. |
 | `add_artifact` | Records that a peak was marked as an artifact. The artifact is shown as an orange dot on the pulse train canvas. It does not affect discharge times; it is subtracted from the whitened signal whenever `update_filter` is run for the same MU. |
 | `delete_artifact` | Removes the listed artifact markers from the per-MU artifact set (emitted by MUedit2 when a `delete_spikes` ROI also covered artifacts). Stepping backward restores them. |
-| `flag_mu` | Marks or unmarks the MU as flagged (visual indicator only, no discharge time change). |
+| `flag_mu` | Marks the MU as flagged (visual indicator only, no discharge time change). |
 | `duplicate_mu` | Records that a new MU was created as a copy of an existing one. No discharge time change is replayed; the entry is used to annotate the dropdown. |
 | `remove_duplicates` | Records that deduplication was run and lists the UIDs that were removed. Removed UIDs are annotated in the dropdown; their edit steps are excluded from all timelines. |
+| `remove_flagged` | Records that the flagged MUs were removed. Behaves like `remove_duplicates`: the listed UIDs are annotated in the dropdown and their edit steps are excluded from all timelines. |
 
 If `update_filter` cannot reach the BIDS source, the step is skipped and discharge times remain as-is.
 
@@ -126,7 +127,6 @@ Artifacts are displayed as filled orange dots on the pulse train chart at their 
 | `←` / `→` | Scroll the view left / right |
 | `↑` / `↓` | Zoom in / out |
 | `Space` | Play / Pause |
-| Double-click canvas | Zoom back out to full signal |
 
 ---
 

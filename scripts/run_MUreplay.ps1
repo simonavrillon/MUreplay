@@ -2,71 +2,77 @@
 Set-StrictMode -Version Latest
 $ErrorActionPreference = 'Stop'
 
-$RootDir = Split-Path $PSScriptRoot -Parent
-$BackendDir = Join-Path $RootDir 'python'
+$RootDir     = Split-Path $PSScriptRoot -Parent
+$BackendDir  = Join-Path $RootDir 'python'
 $FrontendDir = Join-Path $RootDir 'frontend'
 
-$env:MUREPLAY_HOST = if ($env:MUREPLAY_HOST) { $env:MUREPLAY_HOST } else { '0.0.0.0' }
-$env:MUREPLAY_BACKEND_PORT = if ($env:MUREPLAY_BACKEND_PORT) { $env:MUREPLAY_BACKEND_PORT } else { '8000' }
+# `uv run` syncs the locked environment and executes inside it, so the app
+# launches from a bare checkout with no activation step.  Falling back to a
+# plain `python` keeps the script working inside an already-activated
+# environment (conda, venv) and when uv is not installed.
+if ((Get-Command uv -ErrorAction SilentlyContinue) -and ($env:MUREPLAY_NO_UV -ne '1')) {
+    $PyExe  = 'uv'
+    $PyArgs = @('run', '--project', $RootDir, 'python')
+} else {
+    $PyExe  = 'python'
+    $PyArgs = @()
+}
+
+$env:PYTHONPATH             = "$BackendDir\src" + $(if ($env:PYTHONPATH) { ";$env:PYTHONPATH" } else { '' })
+$env:MUREPLAY_HOST          = if ($env:MUREPLAY_HOST) { $env:MUREPLAY_HOST } else { '0.0.0.0' }
+$env:MUREPLAY_PORT          = if ($env:MUREPLAY_BACKEND_PORT) { $env:MUREPLAY_BACKEND_PORT } else { '8000' }
 $env:MUREPLAY_FRONTEND_PORT = if ($env:MUREPLAY_FRONTEND_PORT) { $env:MUREPLAY_FRONTEND_PORT } else { '8080' }
-$env:MUREPLAY_OPEN_BROWSER = if ($env:MUREPLAY_OPEN_BROWSER) { $env:MUREPLAY_OPEN_BROWSER } else { '1' }
-$MureplayBidsRoot = if ($args.Count -gt 0) { $args[0] } elseif ($env:MUREPLAY_BIDS_ROOT) { $env:MUREPLAY_BIDS_ROOT } else { '' }
-$env:MUREPLAY_BIDS_ROOT = $MureplayBidsRoot
+$env:MUREPLAY_OPEN_BROWSER  = if ($env:MUREPLAY_OPEN_BROWSER) { $env:MUREPLAY_OPEN_BROWSER } else { '1' }
 
-$hostForApi = if ($env:MUREPLAY_HOST -in @('0.0.0.0', '::')) { '127.0.0.1' } else { $env:MUREPLAY_HOST }
-$templatePath = Join-Path $FrontendDir 'runtime-config.template.js'
-$runtimeConfigPath = Join-Path $FrontendDir 'runtime-config.js'
-$template = Get-Content -Path $templatePath -Raw
-$JsBidsRoot = $MureplayBidsRoot.Replace('\', '\\')
-$rendered = $template.Replace('__MUREPLAY_API_BASE__', "http://$hostForApi`:$($env:MUREPLAY_BACKEND_PORT)").Replace('__MUREPLAY_BIDS_ROOT__', $JsBidsRoot)
-Set-Content -Path $runtimeConfigPath -Value $rendered
-
+# The unary comma keeps $PyArgs a single array argument instead of being
+# unrolled into separate positional parameters by -ArgumentList.
 $BackendJob = Start-Job -ScriptBlock {
-    param($dir, $bindHost, $port, $bidsRoot)
+    param($dir, $pythonpath, $exe, $pyargs)
+    $env:PYTHONPATH = $pythonpath
     Set-Location $dir
-    if ($bidsRoot) {
-        python server.py --host $bindHost --port $port --bids-root $bidsRoot 2>&1
-    } else {
-        python server.py --host $bindHost --port $port 2>&1
-    }
-} -ArgumentList $BackendDir, $env:MUREPLAY_HOST, $env:MUREPLAY_BACKEND_PORT, $MureplayBidsRoot
+    & $exe @pyargs -m mureplay.cli api
+} -ArgumentList $BackendDir, $env:PYTHONPATH, $PyExe, (, $PyArgs)
+Write-Host "Backend started (Job $($BackendJob.Id)) on :$($env:MUREPLAY_PORT)"
 
 $FrontendJob = Start-Job -ScriptBlock {
-    param($dir, $port)
+    param($dir, $port, $exe, $pyargs)
     Set-Location $dir
-    python -m http.server $port 2>&1
-} -ArgumentList $FrontendDir, $env:MUREPLAY_FRONTEND_PORT
-
-Write-Host "Backend starting on :$($env:MUREPLAY_BACKEND_PORT)"
-Write-Host "Frontend starting on :$($env:MUREPLAY_FRONTEND_PORT)"
-
-Start-Sleep -Seconds 2
-if ($BackendJob.State -ne 'Running') {
-    Write-Host "ERROR: Backend failed to start:" -ForegroundColor Red
-    Receive-Job $BackendJob | ForEach-Object { Write-Host $_ -ForegroundColor Red }
-    Stop-Job $FrontendJob -ErrorAction SilentlyContinue
-    Remove-Job $BackendJob, $FrontendJob -ErrorAction SilentlyContinue
-    exit 1
-}
-Write-Host "Backend running."
+    & $exe @pyargs -m http.server $port
+} -ArgumentList $FrontendDir, $env:MUREPLAY_FRONTEND_PORT, $PyExe, (, $PyArgs)
+Write-Host "Frontend started (Job $($FrontendJob.Id)) on :$($env:MUREPLAY_FRONTEND_PORT)"
 
 if ($env:MUREPLAY_OPEN_BROWSER -eq '1') {
-    $hostForBrowser = if ($env:MUREPLAY_HOST -in @('0.0.0.0', '::')) { '127.0.0.1' } else { $env:MUREPLAY_HOST }
-    try { Start-Process "http://$hostForBrowser`:$($env:MUREPLAY_FRONTEND_PORT)/" }
+    $backendPort  = $env:MUREPLAY_PORT
+    $frontendPort = $env:MUREPLAY_FRONTEND_PORT
+    $deadline = (Get-Date).AddSeconds(60)
+
+    foreach ($check in @(
+        @{ Url = "http://localhost:$backendPort/api/v1/health"; Label = "backend"  },
+        @{ Url = "http://localhost:$frontendPort/";               Label = "frontend" }
+    )) {
+        while ((Get-Date) -lt $deadline) {
+            try {
+                $r = Invoke-WebRequest -Uri $check.Url -TimeoutSec 2 -UseBasicParsing -ErrorAction Stop
+                if ($r.StatusCode -eq 200) { break }
+            } catch {}
+            Start-Sleep -Milliseconds 500
+        }
+        if ((Get-Date) -ge $deadline) {
+            Write-Warning "Timed out waiting for $($check.Label)"
+        }
+    }
+
+    try { Start-Process "http://localhost:$frontendPort/" }
     catch { Write-Warning "Could not open browser automatically: $_" }
 }
 
 try {
-    while ($BackendJob.State -eq 'Running' -and $FrontendJob.State -eq 'Running') {
-        Receive-Job $BackendJob, $FrontendJob | ForEach-Object { Write-Host $_ }
+    while ($BackendJob.State -eq 'Running' -or $FrontendJob.State -eq 'Running') {
+        Receive-Job $BackendJob, $FrontendJob -ErrorAction SilentlyContinue
         Start-Sleep -Milliseconds 500
     }
-    if ($BackendJob.State -ne 'Running') {
-        Write-Host "Backend stopped unexpectedly:" -ForegroundColor Red
-        Receive-Job $BackendJob | ForEach-Object { Write-Host $_ -ForegroundColor Red }
-    }
 } finally {
-    Write-Host "Stopping MUreplay..."
-    Stop-Job $BackendJob, $FrontendJob -ErrorAction SilentlyContinue
+    Write-Host "Stopping services..."
+    Stop-Job  $BackendJob, $FrontendJob -ErrorAction SilentlyContinue
     Remove-Job $BackendJob, $FrontendJob -ErrorAction SilentlyContinue
 }
