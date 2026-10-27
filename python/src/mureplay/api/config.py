@@ -5,15 +5,19 @@ from __future__ import annotations
 import os
 from pathlib import Path
 
-# Repo root is 4 levels up from this file: api/ → mureplay/ → src/ → python/ → MUreplay/
-_REPO_ROOT = Path(__file__).resolve().parents[4]
-DATA_ROOT = Path(os.environ.get("MUREPLAY_DATA_ROOT") or _REPO_ROOT / "data")
+from mureplay.paths import repo_root
+
+DATA_ROOT_ENV = "MUREPLAY_DATA_ROOT"
 
 
-def resolve_bids_root(project: str | None) -> Path:
-    """Return the absolute BIDS root for a given project name.
+def default_data_root() -> Path:
+    """``MUREPLAY_DATA_ROOT``, else the checkout's data/, else the working directory."""
+    override = os.environ.get(DATA_ROOT_ENV, "").strip()
+    if override:
+        return Path(override)
+    root = repo_root()
+    return root / "data" if root is not None else Path.cwd()
 
-    Falls back to ``DATA_ROOT/mureplay_out`` when project is empty.
-    """
-    name = str(project or "").strip()
-    return DATA_ROOT / (name if name else "mureplay_out")
+
+#: Where the page looks for BIDS datasets when a file names none.
+DATA_ROOT = default_data_root()

@@ -1,8 +1,4 @@
-"""Pydantic request schemas for MUreplay API.
-
-Mirrors MUedit2's schema approach: typed models for every POST body so
-FastAPI validates before the handler runs.
-"""
+"""Pydantic request schemas for the MUreplay API: one model per POST body."""
 
 from __future__ import annotations
 
@@ -12,10 +8,14 @@ from pydantic import BaseModel, Field
 
 
 class LoadPairedFromPathPayload(BaseModel):
+    """The decomposition or edit log the user chose."""
+
     file_path: str
 
 
 class UpdateFilterPayload(BaseModel):
+    """A logged ``update_filter`` step, with the replay state it runs on."""
+
     bids_root: str
     entity_label: str
     distimes: list[list[int]] = Field(default_factory=list)

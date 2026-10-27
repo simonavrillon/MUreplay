@@ -3,9 +3,11 @@
 from __future__ import annotations
 
 from pathlib import Path
+from typing import Any
 
 import numpy as np
 
+from mureplay.errors import MureplayError
 from mureplay.io.bids import load_bids_emg_grid
 from mureplay.replay.artifact_mask import build_manual_artifact_mask, parse_artifact_regions
 from mureplay.replay.filter_update import (
@@ -25,23 +27,25 @@ def emg_type(grid_name: str) -> int:
     return 2 if any(key in grid_name for key in INTRAMUSCULAR_GRIDS) else 1
 
 
-def run_update_filter(payload: dict) -> dict:
-    """Run MUedit-style filter update for one MU and return updated spikes/pulse."""
+def run_update_filter(payload: dict[str, Any]) -> dict[str, Any]:
+    """Refit one MU's filter as MUedit2 does and return its new discharges and pulse train."""
     bids_root = str(payload.get("bids_root") or "").strip()
     entity_label = str(payload.get("entity_label") or "").strip()
     if not bids_root or not entity_label:
-        raise ValueError("Missing required fields for update_filter: bids_root and entity_label.")
+        raise MureplayError(
+            "This step needs the BIDS dataset and recording of the session.", field="bids_root"
+        )
 
     distimes = normalize_distimes(payload.get("distimes") or [])
     mu_index = int(payload.get("mu_index") or 0)
     if mu_index < 0 or mu_index >= len(distimes):
-        raise ValueError("MU index is out of range.")
+        raise MureplayError("MU index is out of range.", field="mu_index")
 
     grid_index = int(payload.get("grid_index") or 0)
     view_start = int(payload.get("view_start") or 0)
     view_end = int(payload.get("view_end") or 0)
     if view_end <= view_start:
-        raise ValueError("Invalid view range: view_end must be greater than view_start.")
+        raise MureplayError("The step's window ends before it starts.", field="view_end")
 
     pulse_train = np.asarray(payload.get("pulse_train") or [], dtype=float)
     mu_grid_index = [int(v) for v in (payload.get("mu_grid_index") or [])]
@@ -59,7 +63,9 @@ def run_update_filter(payload: dict) -> dict:
 
     emg, fsamp, discard_mask = load_bids_emg_grid(Path(bids_root), entity_label, grid_index)
     if view_end > emg.shape[1]:
-        raise ValueError("View window exceeds the available EMG samples.")
+        raise MureplayError(
+            "The step's window runs past the end of the EMG recording.", field="view_end"
+        )
     emg = np.ascontiguousarray(emg, dtype=np.float32)
     emg_filter_inplace(emg, float(fsamp), emg_type(str(payload.get("grid_name") or "")))
     artifact_mask = build_manual_artifact_mask(artifact_regions, emg.shape[1])

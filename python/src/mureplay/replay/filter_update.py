@@ -1,12 +1,4 @@
-"""Filter recomputation engine: notch, bandpass, PCA, whitening, peel-off, k-means.
-
-A mirror of MUedit2's filter-update path (``muedit.editing.operations.
-update_motor_unit_filter_window`` and the primitives it calls), kept
-numerically identical so a replayed ``update_filter`` step reproduces the
-edit-session result. The heavy lifting runs in the compute dtype (float32),
-with covariances and waveform means promoted to float64, exactly as MUedit2
-does; ``tests/test_muedit2_parity.py`` asserts the two never diverge.
-"""
+"""MUedit2's ``update_filter`` refit (notch, bandpass, PCA, whitening, peel-off, k-means), mirrored."""
 
 from __future__ import annotations
 
@@ -19,6 +11,12 @@ from scipy.cluster.vq import ClusterError, kmeans2
 from scipy.fft import irfft, rfft
 from scipy.linalg import eigh, inv
 from scipy.signal import butter, filtfilt, find_peaks
+
+from mureplay.errors import MureplayError
+
+# Kept bit-identical to muedit.editing.operations.update_motor_unit_filter_window and the
+# primitives it calls, so a replayed step lands on the session's result;
+# tests/test_muedit2_parity.py fails when the two drift apart.
 
 #: Columns per covariance/whitening chunk, so one float64 chunk stays near 32 MiB.
 _CHUNK_BYTES = 32 * 1024 * 1024
@@ -56,12 +54,12 @@ def _bandpass_coefficients(fsamp: float, emg_type: int) -> tuple[np.ndarray, np.
     """Butterworth (b, a) for the surface (1) or intramuscular (2) bandpass."""
     if emg_type == 1:
         if fsamp <= 1000:
-            raise ValueError(
+            raise MureplayError(
                 f"Surface bandpass (20-500 Hz) requires fsamp > 1000 Hz; got {fsamp} Hz."
             )
         return butter(2, [20, 500], btype="bandpass", fs=fsamp)
     if fsamp <= 8800:
-        raise ValueError(
+        raise MureplayError(
             f"Intramuscular bandpass (100-4400 Hz) requires fsamp > 8800 Hz; got {fsamp} Hz."
         )
     return butter(3, [100, 4400], btype="bandpass", fs=fsamp)
@@ -226,7 +224,7 @@ def pca_extended_signal(
 
     mask = eigenvalues > max(lower_limit_value, 1e-10 * eigenvalues[0])
     if not mask.any():
-        raise ValueError(
+        raise MureplayError(
             "Degenerate window: covariance has no positive eigenvalues (flat channels?)"
         )
     return eigenvectors[:, mask], np.diag(eigenvalues[mask])

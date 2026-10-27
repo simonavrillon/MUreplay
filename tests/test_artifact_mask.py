@@ -183,6 +183,6 @@ def test_update_filter_accepts_artifact_regions_key() -> None:
     )
     assert response.status_code == 404
     error = response.json()["error"]
-    assert error["code"] == "not_found"
+    assert error["code"] == "http_404"
     # The service resolves the EMG directory with native path separators.
     assert str(Path("/nonexistent") / "sub-1" / "emg") in error["message"]

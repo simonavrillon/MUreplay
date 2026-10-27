@@ -43,7 +43,8 @@ def test_load_paired_from_path_missing_file_is_a_clean_error() -> None:
     )
     assert response.status_code == 404
     error = response.json()["error"]
-    assert error["code"] == "not_found"
+    assert error["code"] == "http_404"
+    assert error["detail"] == {"field": "file_path"}
     # The path the user picked has to survive into the message, or the UI can
     # only say that something went wrong. The service reports it in the
     # platform's native separator style.
@@ -64,7 +65,8 @@ def test_rejected_payload_is_a_400_naming_the_reason() -> None:
     )
     assert response.status_code == 400
     error = response.json()["error"]
-    assert error["code"] == "bad_request"
+    assert error["code"] == "http_400"
+    assert error["detail"] == {"field": "mu_index"}
     assert error["message"] == "MU index is out of range."
 
 
@@ -112,3 +114,32 @@ def test_loopback_server_rejects_other_hosts() -> None:
     client = TestClient(app, base_url="http://127.0.0.1")
     assert client.get("/api/v1/health").status_code == 200
     assert client.get("/api/v1/health", headers={"host": "evil.example"}).status_code == 400
+
+
+def test_missing_bids_recording_is_a_404_naming_the_field(tmp_path: Path) -> None:
+    response = make_client().post(
+        "/api/v1/edit/update-filter",
+        json={
+            "bids_root": str(tmp_path),
+            "entity_label": "sub-1_task-x",
+            "distimes": [[1, 2]],
+            "view_start": 0,
+            "view_end": 100,
+        },
+    )
+    assert response.status_code == 404
+    assert response.json()["error"]["detail"] == {"field": "bids_root"}
+
+
+def test_a_bug_is_a_generic_500_that_leaks_nothing() -> None:
+    app = create_app()
+
+    @app.get("/boom")
+    def boom() -> None:
+        raise KeyError("internal detail")
+
+    response = TestClient(app, raise_server_exceptions=False).get("/boom")
+    assert response.status_code == 500
+    assert response.json() == {
+        "error": {"code": "internal_error", "message": "Internal server error"}
+    }

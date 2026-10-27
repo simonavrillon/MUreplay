@@ -1,11 +1,4 @@
-"""Artifact-mask consumption: region parsing, rasterization, and conversion.
-
-MUedit2 creates the mask (automatic QC detection or user-drawn regions) and
-persists it inside the edited NPZ. MUreplay only consumes it: the loader
-converts the stored mask into compact ``[start, end)`` regions for JSON
-transport, and the filter service rasterizes regions back into a mask when
-replaying ``update_filter`` steps, exactly as MUedit2's editor does.
-"""
+"""Artifact windows MUedit2 saved: a mask turned into ``[start, end)`` regions for the page, and back."""
 
 from __future__ import annotations
 

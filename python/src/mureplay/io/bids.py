@@ -5,11 +5,16 @@ from __future__ import annotations
 import csv
 import json
 from pathlib import Path
+from typing import Any
 
 import numpy as np
+import pyedflib
+
+from mureplay.errors import MureplayError, NotFoundError
 
 
 def parse_entity_label(entity_label: str) -> tuple[str, str | None]:
+    """The subject and session of a BIDS entity label such as ``sub-1_ses-1_task-x``."""
     subject = None
     session = None
     for part in str(entity_label).split("_"):
@@ -18,11 +23,15 @@ def parse_entity_label(entity_label: str) -> tuple[str, str | None]:
         elif part.startswith("ses-"):
             session = part.replace("ses-", "", 1)
     if not subject:
-        raise ValueError("Unable to parse subject from entity label.")
+        raise MureplayError(
+            f"The file name {entity_label!r} names no BIDS subject (sub-<label>).",
+            field="entity_label",
+        )
     return subject, session
 
 
 def resolve_bids_emg_path(bids_root: Path, entity_label: str) -> Path:
+    """The ``.bdf``/``.edf`` recording of ``entity_label`` under ``bids_root``."""
     subject, session = parse_entity_label(entity_label)
     base_dir = bids_root / f"sub-{subject}"
     if session:
@@ -32,18 +41,25 @@ def resolve_bids_emg_path(bids_root: Path, entity_label: str) -> Path:
         candidate = emg_dir / f"{entity_label}_emg{ext}"
         if candidate.exists():
             return candidate
-    raise FileNotFoundError(f"Cannot find EMG file for {entity_label} in {emg_dir}.")
+    raise NotFoundError(
+        f"No EMG recording for {entity_label} in {emg_dir}; set MUREPLAY_DATA_ROOT to the dataset.",
+        field="bids_root",
+    )
 
 
 def resolve_bids_channels_tsv(emg_path: Path, entity_label: str) -> Path:
+    """The ``channels.tsv`` beside the recording."""
     for name in (f"{entity_label}_channels.tsv", f"{entity_label}_emg_channels.tsv"):
         candidate = emg_path.with_name(name)
         if candidate.exists():
             return candidate
-    raise FileNotFoundError(f"Cannot find channels TSV for {entity_label}.")
+    raise NotFoundError(
+        f"No channels.tsv for {entity_label} in {emg_path.parent}.", field="bids_root"
+    )
 
 
 def select_grid_channels(channels_tsv: Path, grid_index: int) -> tuple[list[int], np.ndarray]:
+    """The recording rows of grid ``grid_index`` and their bad-channel mask, from ``channels.tsv``."""
     channel_indices: list[int] = []
     bad_mask: list[int] = []
     target = f"Grid{grid_index + 1}"
@@ -58,18 +74,15 @@ def select_grid_channels(channels_tsv: Path, grid_index: int) -> tuple[list[int]
             status = (row.get("status") or "").lower()
             bad_mask.append(1 if status == "bad" else 0)
     if not channel_indices:
-        raise ValueError(f"No EMG channels found for {target}.")
+        raise MureplayError(f"No EMG channels for {target} in {channels_tsv}.", field="grid_index")
     return channel_indices, np.asarray(bad_mask, dtype=int)
 
 
-def _declared_sample_count(sidecar: dict, fsamp: float) -> int | None:
-    """Sample count implied by the sidecar's ``RecordingDuration``, when usable.
-
-    A mirror of MUedit2's reader clamp: EDF/BDF stores whole data records, so
-    the writer zero-pads the last one; ``RecordingDuration`` is the only
-    record of where the signal really ends. Reading past it changes the
-    whole-signal notch and bandpass, which shifts borderline spike detection.
-    """
+def _declared_sample_count(sidecar: dict[str, Any], fsamp: float) -> int | None:
+    """Sample count implied by the sidecar's ``RecordingDuration``, when usable."""
+    # EDF/BDF stores whole data records, so the writer zero-pads the last one;
+    # RecordingDuration is the only record of where the signal really ends. Reading
+    # past it changes the whole-signal notch and bandpass, as in MUedit2's reader.
     duration = sidecar.get("RecordingDuration")
     if duration is None or fsamp <= 0:
         return None
@@ -80,13 +93,14 @@ def _declared_sample_count(sidecar: dict, fsamp: float) -> int | None:
     return n_samples if n_samples > 0 else None
 
 
-def _read_sidecar(emg_path: Path, entity_label: str) -> dict:
+def _read_sidecar(emg_path: Path, entity_label: str) -> dict[str, Any]:
     """Load the ``*_emg.json`` sidecar beside a recording, or ``{}`` if absent."""
     json_path = emg_path.parent / f"{entity_label}_emg.json"
     if not json_path.exists():
         return {}
     with json_path.open("r", encoding="utf-8") as f:
-        return json.load(f)
+        sidecar = json.load(f)
+    return sidecar if isinstance(sidecar, dict) else {}
 
 
 def load_bids_emg_grid(
@@ -96,11 +110,7 @@ def load_bids_emg_grid(
     read_start: int = 0,
     read_n: int | None = None,
 ) -> tuple[np.ndarray, float, np.ndarray]:
-    try:
-        import pyedflib
-    except Exception as exc:
-        raise RuntimeError(f"pyedflib import failed: {exc}.") from exc
-
+    """One grid's float32 rows, sampling rate and bad-channel mask, read from the BIDS recording."""
     emg_path = resolve_bids_emg_path(bids_root, entity_label)
     channels_tsv = resolve_bids_channels_tsv(emg_path, entity_label)
     channel_indices, bad_mask = select_grid_channels(channels_tsv, grid_index)

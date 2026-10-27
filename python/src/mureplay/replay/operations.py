@@ -8,6 +8,7 @@ import numpy as np
 
 
 def normalize_distimes(raw: Any) -> list[list[int]]:
+    """Discharge times of any shape the API receives as sorted, unique, non-negative rows."""
     if raw is None:
         return []
     if isinstance(raw, np.ndarray):
@@ -36,13 +37,14 @@ def normalize_distimes(raw: Any) -> list[list[int]]:
                 try:
                     val = int(row)
                     out.append([val] if val >= 0 else [])
-                except Exception:  # noqa: BLE001
+                except (TypeError, ValueError):
                     out.append([])
         return out
     return []
 
 
 def build_pulse_trains_from_distimes(distimes: list[list[int]], total_samples: int) -> np.ndarray:
+    """Binary pulse trains, 1 at each discharge, for files saved without pulse trains."""
     pulses = np.zeros((len(distimes), total_samples), dtype=float)
     for i, times in enumerate(distimes):
         if not times:

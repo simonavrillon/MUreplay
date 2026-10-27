@@ -10,6 +10,7 @@ from typing import Any
 
 import numpy as np
 
+from mureplay.errors import MureplayError, NotFoundError
 from mureplay.replay.artifact_mask import mask_to_regions
 from mureplay.replay.operations import build_pulse_trains_from_distimes
 
@@ -18,6 +19,7 @@ SCHEMA_KEY = "schema_version"
 
 
 def decode_scalar(value: Any) -> Any:
+    """A NumPy scalar or bytes value as plain Python."""
     if isinstance(value, bytes):
         return value.decode("utf-8", errors="replace")
     if isinstance(value, np.generic):
@@ -26,6 +28,7 @@ def decode_scalar(value: Any) -> Any:
 
 
 def to_serializable(value: Any) -> Any:
+    """An NPZ member as JSON-ready lists, strings and numbers."""
     if isinstance(value, np.ndarray):
         if value.dtype.kind in {"S", "U"}:
             if value.ndim == 0:
@@ -43,6 +46,7 @@ def to_serializable(value: Any) -> Any:
 
 
 def first_present(payload: dict[str, Any], *keys: str, default: Any = None) -> Any:
+    """The value of the first of ``keys`` in ``payload``, else ``default``."""
     for key in keys:
         if key in payload:
             return payload[key]
@@ -74,12 +78,9 @@ def _unpack_spike_csr(data: dict[str, Any]) -> list[list[int]]:
 
 
 def load_npz_payload(raw_bytes: bytes) -> dict[str, Any]:
-    """Normalize MUedit-style NPZ bytes into a stable JSON-serializable payload.
-
-    Reads both file layouts MUedit2 writes: schema v1 (object arrays,
-    ``discharge_times``, ``artifact_mask``) and schema v2 (CSR
-    ``spike_times``/``spike_offsets``, JSON members, ``artifact_intervals``).
-    """
+    """Normalize MUedit-style NPZ bytes into a stable JSON-serializable payload."""
+    # MUedit2 writes two layouts: schema v1 (object arrays, discharge_times, artifact_mask)
+    # and schema v2 (CSR spike_times/spike_offsets, JSON members, artifact_intervals).
     with np.load(io.BytesIO(raw_bytes), allow_pickle=True) as npz:
         data = {key: to_serializable(npz[key]) for key in npz.files}
 
@@ -139,6 +140,7 @@ def load_npz_payload(raw_bytes: bytes) -> dict[str, Any]:
 
 
 def entity_from_filename(name: str) -> str:
+    """The BIDS entity label of a ``_decomp``/``_edited`` file name."""
     stem = Path(str(name)).stem
     if stem.endswith("_edited"):
         return stem[: -len("_edited")]
@@ -148,14 +150,9 @@ def entity_from_filename(name: str) -> str:
 
 
 def infer_bids_root(file_path: Path) -> str:
-    """Infer the BIDS dataset root from a decomp/edited file path.
-
-    The root is the path segment before the first ``sub-*`` folder. MUedit2 now
-    saves decompositions under ``<root>/derivatives/muedit/sub-XX/.../decomp/``,
-    so when the inferred prefix ends with ``derivatives/<pipeline>`` we strip those
-    two parts to return the true dataset root (where raw ``<root>/sub-XX/emg/``
-    lives). Old flat layouts (no ``derivatives/``) are unaffected.
-    """
+    """The BIDS dataset root of a decomp/edited file: the folder above its ``sub-*`` folder."""
+    # MUedit2 saves under <root>/derivatives/muedit/sub-XX/.../decomp/, while the raw EMG is
+    # under <root>/sub-XX/emg/, so a trailing derivatives/<pipeline> is dropped too.
     for i, part in enumerate(file_path.parts):
         if part.startswith("sub-"):
             prefix = file_path.parts[:i]
@@ -166,10 +163,14 @@ def infer_bids_root(file_path: Path) -> str:
 
 
 def _merge_sidecar(decomp_payload: dict[str, Any], edited_json_path: Path) -> None:
+    """Add the edit log, uids and artifact times of ``_edited.json`` to the payload."""
     try:
         sidecar = json.loads(edited_json_path.read_text(encoding="utf-8"))
-    except Exception as exc:
-        raise ValueError(f"Failed to parse sidecar JSON: {edited_json_path}.") from exc
+    except (OSError, UnicodeDecodeError, json.JSONDecodeError) as exc:
+        raise MureplayError(
+            f"The edit log {edited_json_path} could not be read; it is not valid JSON.",
+            field="file_path",
+        ) from exc
 
     history = []
     if isinstance(sidecar, dict):
@@ -188,13 +189,15 @@ def _merge_sidecar(decomp_payload: dict[str, Any], edited_json_path: Path) -> No
 def load_paired_from_path(file_path: Path) -> dict[str, Any]:
     """Resolve and load a paired decomp/log set from a selected file path."""
     if not file_path.name:
-        raise ValueError("file_path is required.")
+        raise MureplayError("Choose a file to open.", field="file_path")
     if not file_path.exists():
-        raise FileNotFoundError(f"File not found: {file_path}.")
+        raise NotFoundError(f"File not found: {file_path}.", field="file_path")
 
     entity = entity_from_filename(file_path.name)
     if not entity:
-        raise ValueError(f"Cannot infer entity label from: {file_path.name}.")
+        raise MureplayError(
+            f"Cannot tell the recording from the file name {file_path.name}.", field="file_path"
+        )
 
     directory = file_path.parent
 
@@ -213,11 +216,15 @@ def load_paired_from_path(file_path: Path) -> dict[str, Any]:
         if edited_candidates:
             decomp_path = edited_candidates[0]
     if decomp_path is None:
-        raise FileNotFoundError(f"No decomp NPZ found for '{entity}' in {directory}.")
+        raise NotFoundError(
+            f"No decomp NPZ found for '{entity}' in {directory}.", field="file_path"
+        )
 
     json_candidates = list(directory.glob(f"{entity}_edited.json"))
     if not json_candidates:
-        raise FileNotFoundError(f"No paired edited JSON found for '{entity}' in {directory}.")
+        raise NotFoundError(
+            f"No paired edited JSON found for '{entity}' in {directory}.", field="file_path"
+        )
     edited_json_path = json_candidates[0]
 
     decomp_payload = load_npz_payload(decomp_path.read_bytes())

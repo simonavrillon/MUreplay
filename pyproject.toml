@@ -8,7 +8,7 @@ version = "1.0.0"
 description = "Interactive replay tool for MUedit2 motor unit editing sessions"
 readme = "README.md"
 license = { file = "LICENSE" }
-requires-python = ">=3.11.4"
+requires-python = ">=3.11.4"  # tarfile extraction filters
 authors = [
   { name = "Simon Avrillon" },
 ]
@@ -27,7 +27,7 @@ dependencies = [
   "scipy>=1.17",
   "pydantic>=2.10",
   "fastapi>=0.141",
-  "starlette>=1.3.1",
+  "starlette>=1.3.1",  # imported directly; floor clears known advisories
   "uvicorn>=0.32",
   "pyedflib>=0.1.36",
 ]
@@ -38,8 +38,8 @@ dev = [
   "twine>=5.1",
   "pytest>=8.3",
   "pytest-cov>=6.0",
-  "httpx>=0.27",
-  "ruff==0.15.16",
+  "httpx>=0.27",  # FastAPI TestClient backend (the tests/test_api_*.py)
+  "ruff==0.15.16",  # keep in sync with the rev in .pre-commit-config.yaml
   "mypy==2.3.1",
   "pre-commit>=4.0",
 ]
@@ -59,8 +59,17 @@ Repository = "https://github.com/simonavrillon/MUreplay"
 "Bug Tracker" = "https://github.com/simonavrillon/MUreplay/issues"
 
 [tool.pytest.ini_options]
+# The ``mureplay`` package lives under ``python/src`` (see [tool.setuptools]
+# above).  Adding it to ``pythonpath`` lets the suite run from a fresh
+# checkout without an editable install (``pip install -e .``), which is
+# convenient for CI and local one-shot runs.  The repo root is added so the
+# ``from tests._helpers import ...`` imports resolve under a bare ``pytest``.
 pythonpath = ["python/src", "."]
 testpaths = ["tests"]
+# Report a one-line summary for every non-passed outcome (skips, xfails,
+# failures).  Useful here because the data-dependent tests skip when the
+# git-ignored sample files are absent, so a clean run still emits skips worth
+# seeing at a glance.
 addopts = ["-ra", "--strict-markers"]
 
 [tool.ruff]
@@ -70,16 +79,25 @@ extend-exclude = ["frontend"]
 
 [tool.ruff.lint]
 select = [
+  # Style and modernisation
   "I", "UP", "FA", "ANN", "C4", "SIM", "RET", "PERF", "RUF",
+  # Bug finders
   "F", "B", "PLE", "PLW", "BLE", "S",
 ]
+# ANN401: Any is deliberate at the JSON/array boundaries.
+# C408: dict(key=value) calls read fine and are common in parameter overrides.
+# RUF001-003: Greek letters and other non-ASCII symbols are intentional in
+#   comments and docstrings.
+# RUF046: int(round(x)) is kept as an explicit, numpy-safe idiom.
+# S101: assert is used for internal invariants and throughout the tests.
+# S603/S607: subprocess calls use fixed argument lists (file dialog helpers).
 ignore = ["ANN401", "C408", "RUF001", "RUF002", "RUF003", "RUF046", "S101", "S603", "S607"]
 
 [tool.ruff.lint.isort]
 known-first-party = ["mureplay", "tests"]
 
 [tool.mypy]
-python_version = "3.12"
+python_version = "3.12"  # numpy >=2.5 stubs use 3.12 syntax; ruff still targets py311
 files = ["python/src/mureplay", "tests"]
 mypy_path = "python/src"
 explicit_package_bases = true
@@ -93,5 +111,6 @@ warn_unreachable = true
 enable_error_code = ["possibly-undefined", "redundant-expr", "truthy-bool"]
 
 [[tool.mypy.overrides]]
+# Third-party packages without type information.
 module = ["scipy.*", "pyedflib.*"]
 ignore_missing_imports = true
