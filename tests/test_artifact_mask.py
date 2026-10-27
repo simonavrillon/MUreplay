@@ -23,7 +23,7 @@ FSAMP = 2000.0
 
 
 def make_client(raise_server_exceptions: bool = True) -> TestClient:
-    app = create_app(title="MUreplay API", version="1.0.0")
+    app = create_app()
     include_routers(app)
     return TestClient(app, raise_server_exceptions=raise_server_exceptions)
 

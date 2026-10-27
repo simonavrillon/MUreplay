@@ -786,7 +786,10 @@ export function createReplayService(app) {
     const total = groups.length;
     if (!els.timelineSlider) return;
     if (!total) {
-      els.timelineSlider.style.setProperty("--timeline-gradient", "#3a3a3a");
+      els.timelineSlider.style.setProperty(
+        "--timeline-gradient",
+        "var(--border)",
+      );
       return;
     }
     const parts = [];
@@ -797,21 +800,27 @@ export function createReplayService(app) {
       if (colorKind === "split_add_remove") {
         const mid = (start + end) / 2;
         parts.push(
-          `#4ce38a ${start}%`,
-          `#4ce38a ${mid}%`,
-          `#ff7a7a ${mid}%`,
-          `#ff7a7a ${end}%`,
+          `var(--timeline-added) ${start}%`,
+          `var(--timeline-added) ${mid}%`,
+          `var(--timeline-removed) ${mid}%`,
+          `var(--timeline-removed) ${end}%`,
         );
       } else if (colorKind === "add") {
-        parts.push(`#4ce38a ${start}%`, `#4ce38a ${end}%`);
+        parts.push(
+          `var(--timeline-added) ${start}%`,
+          `var(--timeline-added) ${end}%`,
+        );
       } else if (colorKind === "remove") {
-        parts.push(`#ff7a7a ${start}%`, `#ff7a7a ${end}%`);
+        parts.push(
+          `var(--timeline-removed) ${start}%`,
+          `var(--timeline-removed) ${end}%`,
+        );
       } else if (colorKind === "update_filter") {
-        parts.push(`#3776ab ${start}%`, `#3776ab ${end}%`);
+        parts.push(`var(--accent) ${start}%`, `var(--accent) ${end}%`);
       } else if (colorKind === "artifact") {
-        parts.push(`#ff8c66 ${start}%`, `#ff8c66 ${end}%`);
+        parts.push(`var(--artifact) ${start}%`, `var(--artifact) ${end}%`);
       } else {
-        parts.push(`#3a3a3a ${start}%`, `#3a3a3a ${end}%`);
+        parts.push(`var(--border) ${start}%`, `var(--border) ${end}%`);
       }
     }
     els.timelineSlider.style.setProperty(

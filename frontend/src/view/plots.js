@@ -3,7 +3,7 @@
  * Ported from the original charts.js drawSeries function.
  */
 
-import { COLORS } from "../config.js";
+import { COLORS, canvasFont } from "../config.js";
 import { extent } from "../io/utils.js";
 
 /**
@@ -58,7 +58,7 @@ export function drawSeries(
     const noDataText = options.noDataText ?? "No data";
     if (noDataText) {
       ctx.fillStyle = COLORS.muted;
-      ctx.font = "12px sans-serif";
+      ctx.font = canvasFont();
       ctx.fillText(noDataText, 12, 24);
     }
     return;
@@ -67,7 +67,7 @@ export function drawSeries(
   const showAxes = !!options.showAxes;
   const hideYAxis = !!options.hideYAxis;
   const fsamp = options.fsamp || null;
-  const markerColor = options.markerColor || "#e7c1ff";
+  const markerColor = options.markerColor || COLORS.discharge;
   const padding = showAxes
     ? hideYAxis
       ? { left: 8, right: 8, top: 8, bottom: 20 }
@@ -116,16 +116,16 @@ export function drawSeries(
         : plotHeight;
       const rectTop = padding.top + Math.min(yMin, yMax);
       const rectHeight = Math.max(1, Math.abs(yMax - yMin));
-      ctx.fillStyle = "rgba(195, 155, 242, 0.08)";
+      ctx.fillStyle = COLORS.selectionFill;
       ctx.fillRect(startX, rectTop, width, rectHeight);
-      ctx.strokeStyle = "rgba(195, 155, 242, 0.6)";
+      ctx.strokeStyle = COLORS.selectionStroke;
       ctx.lineWidth = 1;
       ctx.strokeRect(startX, rectTop, width, rectHeight);
     });
   }
 
   if (showAxes) {
-    ctx.strokeStyle = "rgba(255, 255, 255, 0.15)";
+    ctx.strokeStyle = COLORS.axis;
     ctx.lineWidth = 1;
     ctx.beginPath();
     if (!hideYAxis) {
@@ -139,13 +139,13 @@ export function drawSeries(
 
     if (!hideYAxis) {
       ctx.fillStyle = COLORS.muted;
-      ctx.font = "10px sans-serif";
+      ctx.font = canvasFont();
       const yTicks = 3;
       for (let i = 0; i <= yTicks; i++) {
         const t = i / yTicks;
         const y = padding.top + plotHeight - t * plotHeight;
         const value = min + t * span;
-        ctx.strokeStyle = "rgba(255, 255, 255, 0.08)";
+        ctx.strokeStyle = COLORS.gridline;
         ctx.beginPath();
         ctx.moveTo(padding.left, y);
         ctx.lineTo(padding.left + plotWidth, y);
@@ -172,11 +172,11 @@ export function drawSeries(
       const tEnd = clampedEnd / fsamp;
       const first = Math.ceil(tStart / step) * step;
       ctx.fillStyle = COLORS.muted;
-      ctx.font = "10px sans-serif";
+      ctx.font = canvasFont();
       for (let t = first; t <= tEnd; t += step) {
         const frac = (t - tStart) / duration;
         const x = padding.left + frac * plotWidth;
-        ctx.strokeStyle = "rgba(255, 255, 255, 0.08)";
+        ctx.strokeStyle = COLORS.gridline;
         ctx.beginPath();
         ctx.moveTo(x, padding.top);
         ctx.lineTo(x, padding.top + plotHeight);
@@ -230,14 +230,14 @@ export function drawSeries(
         : plotHeight;
       const rectTop = padding.top + Math.min(yMin, yMax);
       const rectHeight = Math.max(1, Math.abs(yMax - yMin));
-      ctx.fillStyle = "rgba(195, 155, 242, 0.08)";
+      ctx.fillStyle = COLORS.selectionFill;
       ctx.fillRect(
         Math.min(startX, endX),
         rectTop,
         Math.abs(endX - startX),
         rectHeight,
       );
-      ctx.strokeStyle = "rgba(195, 155, 242, 0.6)";
+      ctx.strokeStyle = COLORS.selectionStroke;
       ctx.lineWidth = 1;
       ctx.strokeRect(
         Math.min(startX, endX),

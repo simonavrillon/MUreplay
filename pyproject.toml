@@ -45,7 +45,7 @@ dev = [
 ]
 
 [project.scripts]
-mureplay-api = "mureplay.cli:serve_api"
+mureplay = "mureplay.cli:main"
 
 [tool.setuptools]
 package-dir = {"" = "python/src"}

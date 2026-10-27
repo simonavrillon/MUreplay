@@ -2,16 +2,21 @@
 
 from __future__ import annotations
 
+import re
 from pathlib import Path
 
 from fastapi.testclient import TestClient
 
-from mureplay.api.app_factory import create_app
+from mureplay.api.app_factory import create_app, mount_frontend
 from mureplay.api.routes import include_routers
+from mureplay.cli import LOOPBACK_HOSTS
+from mureplay.paths import frontend_dir
+
+REPO_ROOT = Path(__file__).resolve().parents[1]
 
 
 def make_client() -> TestClient:
-    app = create_app(title="MUreplay API", version="1.0.0")
+    app = create_app()
     include_routers(app)
     return TestClient(app)
 
@@ -76,3 +81,34 @@ def test_unknown_route_still_returns_the_http_envelope() -> None:
     response = make_client().get("/api/v1/no-such-endpoint")
     assert response.status_code == 404
     assert response.json()["error"]["code"] == "http_404"
+
+
+def test_frontend_routes_are_all_served() -> None:
+    js = (REPO_ROOT / "frontend" / "src" / "api" / "routes.js").read_text(encoding="utf-8")
+    paths = set(re.findall(r':\s*"(/[^"]+)"', js))
+    assert paths, "no routes parsed from routes.js"
+    served = set(make_client().app.openapi()["paths"])  # type: ignore[attr-defined]
+    assert {f"/api/v1{p}" for p in paths} <= served
+
+
+def test_page_and_api_share_one_origin() -> None:
+    folder = frontend_dir()
+    assert folder is not None
+    app = create_app()
+    include_routers(app)
+    mount_frontend(app, folder)
+    client = TestClient(app)
+
+    page = client.get("/")
+    assert page.status_code == 200
+    assert "<html" in page.text.lower()
+    assert page.headers["cache-control"] == "no-cache"
+    assert client.get("/api/v1/health").status_code == 200
+
+
+def test_loopback_server_rejects_other_hosts() -> None:
+    app = create_app(allowed_hosts=LOOPBACK_HOSTS)
+    include_routers(app)
+    client = TestClient(app, base_url="http://127.0.0.1")
+    assert client.get("/api/v1/health").status_code == 200
+    assert client.get("/api/v1/health", headers={"host": "evil.example"}).status_code == 400

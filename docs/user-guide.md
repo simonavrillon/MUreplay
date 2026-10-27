@@ -136,6 +136,6 @@ Artifacts are displayed as filled orange dots on the pulse train chart at their 
 |---|---|
 | File won't load | Check the extension is `.npz`; for paired autoload confirm the `_edited.json` sidecar exists alongside the decomp NPZ |
 | `update_filter` replay fails | Ensure the BIDS root path is set and the original EMG file is accessible |
-| Port already in use | Set `MUREPLAY_BACKEND_PORT` / `MUREPLAY_FRONTEND_PORT` to free ports before launching |
-| Browser does not open | Navigate manually to `http://localhost:8080` (or the port shown in the terminal) |
+| Port already in use | Set `MUREPLAY_PORT` to a free port before launching |
+| Browser does not open | Navigate manually to `http://127.0.0.1:8000` (or the address shown in the terminal) |
 | Timeline shows no steps | The loaded edit log may be empty, or no edits were made for the selected MU |

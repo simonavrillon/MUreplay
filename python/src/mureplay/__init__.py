@@ -2,4 +2,12 @@
 
 from __future__ import annotations
 
-__version__ = "1.0.0"
+import importlib.metadata
+
+
+def installed_version() -> str | None:
+    """The installed MUreplay version, or ``None`` when the package metadata is missing."""
+    try:
+        return importlib.metadata.version("mureplay")
+    except importlib.metadata.PackageNotFoundError:
+        return None

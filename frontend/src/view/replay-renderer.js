@@ -3,7 +3,7 @@
  * Ported from the original charts.js createCharts function.
  */
 
-import { COLORS, UNIFORM_PULSE_COLOR } from "../config.js";
+import { COLORS } from "../config.js";
 import { drawSeries } from "./plots.js";
 import { extent } from "../io/utils.js";
 
@@ -56,7 +56,7 @@ export function createReplayRenderer(deps) {
     drawSeries(
       els.editPulseCanvas,
       pulse,
-      UNIFORM_PULSE_COLOR,
+      COLORS.pulseTrain,
       spikes,
       selections,
       pulse.length,
@@ -67,7 +67,7 @@ export function createReplayRenderer(deps) {
         showAxes: true,
         hideYAxis: false,
         fsamp: state.fsamp,
-        markerColor: "#e7c1ff",
+        markerColor: COLORS.discharge,
         noDataText: "No data",
       },
     );
@@ -85,8 +85,8 @@ export function createReplayRenderer(deps) {
         const vStart = viewRange?.start ?? 0;
         const vEnd = viewRange?.end ?? total;
         const vSpan = Math.max(1, vEnd - vStart);
-        ctx.fillStyle = "rgba(255, 140, 102, 0.18)";
-        ctx.strokeStyle = "rgba(255, 140, 102, 0.55)";
+        ctx.fillStyle = COLORS.artifactWindowFill;
+        ctx.strokeStyle = COLORS.artifactWindowStroke;
         ctx.lineWidth = 1;
         regions.forEach(([rs, re]) => {
           if (re <= vStart || rs >= vEnd) return;
@@ -162,16 +162,8 @@ export function createReplayRenderer(deps) {
             ctx.stroke();
           });
         };
-        drawSpikeROI(
-          removed,
-          "rgba(255, 80, 80, 0.18)",
-          "rgba(255, 80, 80, 0.75)",
-        );
-        drawSpikeROI(
-          added,
-          "rgba(80, 220, 120, 0.18)",
-          "rgba(80, 220, 120, 0.75)",
-        );
+        drawSpikeROI(removed, COLORS.stepRemovedFill, COLORS.stepRemovedStroke);
+        drawSpikeROI(added, COLORS.stepAddedFill, COLORS.stepAddedStroke);
       }
     }
 
@@ -199,7 +191,7 @@ export function createReplayRenderer(deps) {
       const vSpan = Math.max(1, vEnd - vStart);
       const { min: pMin, max: pMax } = extent(pulse, vStart, vEnd);
       const pSpan = pMax - pMin || 1;
-      ctx.fillStyle = COLORS.artifactMarker || "#ff8c66";
+      ctx.fillStyle = COLORS.artifactMarker;
       artifacts.forEach((s) => {
         if (s < vStart || s >= vEnd) return;
         const x =
@@ -210,7 +202,7 @@ export function createReplayRenderer(deps) {
         ctx.beginPath();
         ctx.arc(x, y, 4, 0, Math.PI * 2);
         ctx.fill();
-        ctx.strokeStyle = "rgba(0,0,0,0.4)";
+        ctx.strokeStyle = COLORS.markerOutline;
         ctx.lineWidth = 1;
         ctx.stroke();
       });
@@ -237,7 +229,7 @@ export function createReplayRenderer(deps) {
           showAxes: true,
           hideYAxis: false,
           fsamp: state.fsamp,
-          markerColor: "#e7c1ff",
+          markerColor: COLORS.discharge,
           noDataText: "No data",
         },
       );
@@ -284,7 +276,7 @@ export function createReplayRenderer(deps) {
         showAxes: true,
         hideYAxis: false,
         fsamp: state.fsamp,
-        markerColor: "#e7c1ff",
+        markerColor: COLORS.discharge,
         noDataText: "No data",
       },
     );
@@ -320,7 +312,7 @@ export function createReplayRenderer(deps) {
     const barTop = 4;
     const barH = 12;
 
-    ctx.fillStyle = "rgba(255,255,255,0.07)";
+    ctx.fillStyle = COLORS.timelineTrack;
     ctx.fillRect(TIMELINE_PAD_L, barTop, bw, barH);
 
     const step = deps.currentStep();
@@ -329,7 +321,7 @@ export function createReplayRenderer(deps) {
       const removed = Array.isArray(step.spikesRemoved)
         ? step.spikesRemoved
         : [];
-      ctx.fillStyle = "rgba(74,222,128,0.85)";
+      ctx.fillStyle = COLORS.timelineAdded;
       added.forEach((s) => {
         if (s >= 0 && s < total)
           ctx.fillRect(
@@ -339,7 +331,7 @@ export function createReplayRenderer(deps) {
             barH,
           );
       });
-      ctx.fillStyle = "rgba(248,113,113,0.85)";
+      ctx.fillStyle = COLORS.timelineRemoved;
       removed.forEach((s) => {
         if (s >= 0 && s < total)
           ctx.fillRect(
@@ -352,7 +344,7 @@ export function createReplayRenderer(deps) {
     }
 
     const spikes = deps.distimesForCurrentMu();
-    ctx.fillStyle = "rgba(231,193,255,0.35)";
+    ctx.fillStyle = COLORS.timelineSpikes;
     spikes.forEach((s) => {
       if (s >= 0 && s < total)
         ctx.fillRect(
@@ -367,9 +359,9 @@ export function createReplayRenderer(deps) {
     const x1 = TIMELINE_PAD_L + (Math.max(0, view.start) / total) * bw;
     const x2 = TIMELINE_PAD_L + (Math.min(total, view.end) / total) * bw;
     const ww = Math.max(4, x2 - x1);
-    ctx.fillStyle = "rgba(195,155,242,0.28)";
+    ctx.fillStyle = COLORS.timelineViewFill;
     ctx.fillRect(x1, barTop - 2, ww, barH + 4);
-    ctx.strokeStyle = "rgba(195,155,242,0.75)";
+    ctx.strokeStyle = COLORS.timelineViewStroke;
     ctx.lineWidth = 1;
     ctx.strokeRect(x1 + 0.5, barTop - 1.5, Math.max(3, ww - 1), barH + 3);
   }

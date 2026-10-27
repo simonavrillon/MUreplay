@@ -60,14 +60,14 @@ macOS, `MUreplay.bat` on Windows. A terminal window appears and reports what it
 is doing; leave it open, because that window *is* MUreplay running.
 
 Your browser should open on MUreplay's landing page by itself. If it does not,
-go to <http://localhost:8080> — the app is already running and waiting for you.
+go to <http://127.0.0.1:8000> — the app is already running and waiting for you.
 
 When you are finished, quit MUreplay from that terminal window rather than the
 browser: press `Ctrl+C` in it, or simply close the window. Either one stops the
 app cleanly. Closing the browser tab on its own does **not** quit MUreplay —
 the tab is only a window onto the app, which keeps running in the background
-and holding on to its ports. If you close the tab by accident, nothing is
-lost: reopen <http://localhost:8080> and carry on where you were.
+and holding on to its port. If you close the tab by accident, nothing is
+lost: reopen <http://127.0.0.1:8000> and carry on where you were.
 
 Two things to know the first time. On macOS, if you downloaded MUreplay rather
 than cloning it, macOS will refuse to open the launcher from an unidentified
@@ -135,14 +135,13 @@ as much as you like and the saved files are never touched.
 
 ## When something goes wrong
 
-If the browser never opens, go to <http://localhost:8080> manually. If the
-launcher complains that a port is already in use, something else on your
-machine has taken it — set `MUREPLAY_BACKEND_PORT` or
-`MUREPLAY_FRONTEND_PORT` to free numbers and relaunch. If the app tells you
-the backend is unreachable, the Python process behind the interface has
-stopped; close the terminal and run the launcher again. To check whether the
-backend is alive at all, visit
-<http://localhost:8000/api/v1/health> in your browser.
+If the browser never opens, go to <http://127.0.0.1:8000> manually. If the
+launcher complains that the port is already in use, something else on your
+machine has taken it — set `MUREPLAY_PORT` to a free number and relaunch. If
+the app tells you the backend is unreachable, the Python process behind the
+interface has stopped; close the terminal and run the launcher again. To check
+whether the backend is alive at all, visit
+<http://127.0.0.1:8000/api/v1/health> in your browser.
 
 If a file will not load, check that it is the `.npz` MUedit2 saved and that the
 `_edited.json` sidecar really is sitting next to it. If filter steps are being
@@ -159,8 +158,10 @@ does. [File formats](docs/file-formats.md) documents the contents of the
 `.npz` and `_edited.json` files MUreplay reads, which is what you want when
 you start inspecting edit histories in your own scripts.
 
-MUreplay also has a command-line entry point, for scripting and batch work:
-`mureplay-api` starts just the backend, without the interface.
+The launchers run `uv run mureplay api`, which serves the interface and its
+API together at <http://127.0.0.1:8000>; you can run that command yourself from
+a terminal in the MUreplay folder. `MUREPLAY_PORT` changes the port, and
+`MUREPLAY_OPEN_BROWSER=1` opens the browser once the server is listening.
 
 ## For developers
 
@@ -186,17 +187,13 @@ loads `frontend/app.js` directly. It is checked with the usual Node tooling:
 ```bash
 cd frontend
 npm ci
-npm run check           # eslint + prettier + tsc
+npm run check           # eslint + prettier + tsc + node --test
 ```
 
-The two services can also be run manually, in separate terminals:
+One server holds both halves; run it without the launcher with:
 
 ```bash
-uv run python -m mureplay.cli api   # backend, http://localhost:8000
-```
-
-```bash
-cd frontend && python -m http.server 8080   # frontend, http://localhost:8080
+uv run mureplay api    # page and API, http://127.0.0.1:8000
 ```
 
 ## Acknowledgment
