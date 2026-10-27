@@ -30,6 +30,8 @@ jobs:
   python:
     name: Python · mypy + pytest (${{ matrix.os }})
     runs-on: ${{ matrix.os }}
+    # A hung test fails the job instead of holding a runner for GitHub's 6 h limit.
+    timeout-minutes: 30
     strategy:
       fail-fast: false
       matrix:
@@ -55,15 +57,17 @@ jobs:
       # developer gets from `uv sync`.
       - run: uv sync --locked --extra dev
       - run: uv run mypy
-      # Runners have no recordings under data/, so the real-data tests skip
-      # through their own skipif guards (data/ is gitignored).
-      - name: pytest
+      # Runners have no recordings under data/, so the data tier is deselected.
+      # MUREPLAY_REQUIRE_DATA turns any remaining missing-file skip into a
+      # failure, which catches a data-dependent test the marker missed.
+      - name: pytest (not data)
         env:
           MUEDIT2_ROOT: ${{ github.workspace }}/muedit2
-        run: uv run pytest --cov=mureplay --cov-report=term-missing:skip-covered
+          MUREPLAY_REQUIRE_DATA: "1"
+        run: uv run pytest -m "not data" --cov=mureplay --cov-report=term-missing:skip-covered
 
   frontend:
-    name: Frontend · eslint + prettier + tsc + tests (Node ${{ matrix.node }})
+    name: Frontend · eslint + prettier + tsc + node --test (Node ${{ matrix.node }})
     runs-on: ubuntu-latest
     strategy:
       fail-fast: false

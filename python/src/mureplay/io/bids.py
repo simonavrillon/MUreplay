@@ -104,13 +104,9 @@ def _read_sidecar(emg_path: Path, entity_label: str) -> dict[str, Any]:
 
 
 def load_bids_emg_grid(
-    bids_root: Path,
-    entity_label: str,
-    grid_index: int,
-    read_start: int = 0,
-    read_n: int | None = None,
+    bids_root: Path, entity_label: str, grid_index: int
 ) -> tuple[np.ndarray, float, np.ndarray]:
-    """One grid's float32 rows, sampling rate and bad-channel mask, read from the BIDS recording."""
+    """One grid over the whole recording as float32 rows, with its sampling rate and bad-channel mask."""
     emg_path = resolve_bids_emg_path(bids_root, entity_label)
     channels_tsv = resolve_bids_channels_tsv(emg_path, entity_label)
     channel_indices, bad_mask = select_grid_channels(channels_tsv, grid_index)
@@ -118,13 +114,12 @@ def load_bids_emg_grid(
     reader = pyedflib.EdfReader(str(emg_path))
     try:
         fsamp = float(reader.getSampleFrequency(channel_indices[0]))
-        n_stored = min(int(reader.getNSamples()[ch]) for ch in channel_indices)
+        n = min(int(reader.getNSamples()[ch]) for ch in channel_indices)
         declared = _declared_sample_count(_read_sidecar(emg_path, entity_label), fsamp)
-        n_available = n_stored if declared is None else min(n_stored, declared)
-        start = max(0, min(read_start, n_available))
-        n = n_available - start if read_n is None else max(0, min(read_n, n_available - start))
-        signals = [reader.readSignal(ch_idx, start=start, n=n) for ch_idx in channel_indices]
-        data = np.vstack(signals).astype(np.float32) if signals else np.zeros((0, 0), np.float32)
+        n = n if declared is None else min(n, declared)
+        data = np.empty((len(channel_indices), n), dtype=np.float32)
+        for row, ch in enumerate(channel_indices):
+            data[row] = reader.readSignal(ch, start=0, n=n)
     finally:
         reader.close()
     return data, fsamp, bad_mask

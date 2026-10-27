@@ -176,7 +176,8 @@ uv run pre-commit install
 activate:
 
 ```bash
-uv run pytest          # backend tests
+uv run pytest          # backend tests (the data tier needs recordings under data/)
+uv run pytest -m "not data"   # the tier CI runs, no recordings needed
 uv run mypy            # backend type checks
 uv run ruff check .    # backend lint
 ```

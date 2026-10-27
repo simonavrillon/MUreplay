@@ -35,16 +35,6 @@ export default [
   { ignores: ["node_modules/**", "dist/**"] },
   js.configs.recommended,
   prettier,
-  // Tests run in Node's built-in test runner, so they see Node and browser
-  // globals (the http seam uses fetch/AbortSignal, which exist in both).
-  {
-    files: ["test/**/*.js"],
-    languageOptions: {
-      ecmaVersion: 2023,
-      sourceType: "module",
-      globals: { ...globals.node, ...globals.browser },
-    },
-  },
   {
     files: ["src/**/*.js", "app.js"],
     plugins: { filenames: filenamesPlugin },
@@ -54,12 +44,28 @@ export default [
       globals: { ...globals.browser },
     },
     rules: {
+      // Catches things like the two-statement import from the same module.
       "no-duplicate-imports": "error",
+      // "smart" keeps `x == null`, which tests null and undefined at once.
+      eqeqeq: ["error", "smart"],
+      "prefer-const": "error",
+      // Underscore-prefixed args/vars are intentionally unused (DI placeholders).
       "no-unused-vars": [
         "error",
         { argsIgnorePattern: "^_", varsIgnorePattern: "^_" },
       ],
+      // Frontend source files use kebab-case filenames.
       "filenames/kebab-case": "error",
+    },
+  },
+  // Tests run in Node's built-in test runner, so they see Node and browser
+  // globals (the http seam uses fetch/AbortSignal, which exist in both).
+  {
+    files: ["tests/**/*.js"],
+    languageOptions: {
+      ecmaVersion: 2023,
+      sourceType: "module",
+      globals: { ...globals.node, ...globals.browser },
     },
   },
 ];
