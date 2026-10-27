@@ -11,6 +11,10 @@ from typing import Any
 import numpy as np
 
 from mureplay.replay.artifact_mask import mask_to_regions
+from mureplay.replay.operations import build_pulse_trains_from_distimes
+
+#: Member MUedit2 writes to mark a schema v2 decomposition file; absent in v1.
+SCHEMA_KEY = "schema_version"
 
 
 def decode_scalar(value: Any) -> Any:
@@ -24,6 +28,9 @@ def decode_scalar(value: Any) -> Any:
 def to_serializable(value: Any) -> Any:
     if isinstance(value, np.ndarray):
         if value.dtype.kind in {"S", "U"}:
+            if value.ndim == 0:
+                # A 0-d string array holds one string (schema v2 JSON members).
+                return decode_scalar(value.item())
             return [str(v) for v in value.tolist()]
         if value.dtype == object:
             return [to_serializable(v) for v in value.tolist()]
@@ -42,22 +49,68 @@ def first_present(payload: dict[str, Any], *keys: str, default: Any = None) -> A
     return default
 
 
+def _json_member(data: dict[str, Any], key: str) -> Any | None:
+    """A schema v2 JSON member (stored as one string), or the raw v1 value."""
+    raw = data.get(key)
+    if isinstance(raw, str):
+        try:
+            return json.loads(raw)
+        except json.JSONDecodeError:
+            return None
+    return raw
+
+
+def _unpack_spike_csr(data: dict[str, Any]) -> list[list[int]]:
+    """Per-MU discharge times from the schema v2 ``spike_times`` CSR pair."""
+    spikes = data.get("spike_times")
+    offsets = data.get("spike_offsets")
+    if not isinstance(spikes, list) or not isinstance(offsets, list):
+        return []
+    rows: list[list[int]] = []
+    for i in range(len(offsets) - 1):
+        start, end = int(offsets[i]), int(offsets[i + 1])
+        rows.append([int(v) for v in spikes[start:end]])
+    return rows
+
+
 def load_npz_payload(raw_bytes: bytes) -> dict[str, Any]:
-    """Normalize MUedit-style NPZ bytes into a stable JSON-serializable payload."""
+    """Normalize MUedit-style NPZ bytes into a stable JSON-serializable payload.
+
+    Reads both file layouts MUedit2 writes: schema v1 (object arrays,
+    ``discharge_times``, ``artifact_mask``) and schema v2 (CSR
+    ``spike_times``/``spike_offsets``, JSON members, ``artifact_intervals``).
+    """
     with np.load(io.BytesIO(raw_bytes), allow_pickle=True) as npz:
         data = {key: to_serializable(npz[key]) for key in npz.files}
 
-    pulse_trains = first_present(data, "pulse_trains", "pulseTrains", default=[])
-    discharge_times = first_present(
-        data, "discharge_times", "distimes", "dischargeTimes", default=[]
-    )
+    distimes = first_present(data, "discharge_times", "distimes", "dischargeTimes", default=None)
+    if distimes is None:
+        distimes = _unpack_spike_csr(data)
+    if not isinstance(distimes, list):
+        distimes = []
+
+    pulse_trains = first_present(data, "pulse_trains", "pulseTrains", default=None)
+    if pulse_trains is None:
+        # Spikes-only file: MUedit2's loader draws binary trains from the
+        # discharge times, so the replay payload does the same.
+        total = int(first_present(data, "total_samples", default=0) or 0)
+        pulse_trains = (
+            build_pulse_trains_from_distimes([list(row) for row in distimes], total).tolist()
+            if distimes
+            else []
+        )
+
+    grid_names = _json_member(data, "grid_names")
+    if not isinstance(grid_names, list):
+        grid_names = first_present(data, "grid_names", default=[])
     payload = {
         "fsamp": float(first_present(data, "fsamp", "fs", default=2048)),
         "pulse_trains": pulse_trains,
-        "discharge_times": discharge_times,
-        "grid_names": first_present(data, "grid_names", default=[]),
+        "discharge_times": distimes,
+        "grid_names": grid_names,
         "mu_grid_index": first_present(data, "mu_grid_index", default=[]),
         "mu_uids": first_present(data, "mu_uids", default=[]),
+        "total_samples": int(first_present(data, "total_samples", default=0) or 0),
     }
 
     raw_hist = first_present(data, "edit_history", "history", default=[])
@@ -69,12 +122,18 @@ def load_npz_payload(raw_bytes: bytes) -> dict[str, Any]:
     if isinstance(raw_hist, list):
         payload["edit_history"] = raw_hist
 
-    artifact_mask_raw = data.get("artifact_mask")
-    if artifact_mask_raw is not None:
-        mask = np.asarray(artifact_mask_raw, dtype=bool)
-        regions = mask_to_regions(mask)
+    artifact_intervals = _json_member(data, "artifact_intervals")
+    if isinstance(artifact_intervals, list):
+        regions = [[int(s), int(e)] for s, e in artifact_intervals]
         payload["artifact_regions"] = regions
-        payload["artifact_samples"] = int(mask.sum())
+        payload["artifact_samples"] = sum(e - s for s, e in regions)
+    else:
+        artifact_mask_raw = data.get("artifact_mask")
+        if artifact_mask_raw is not None:
+            mask = np.asarray(artifact_mask_raw, dtype=bool)
+            regions = mask_to_regions(mask)
+            payload["artifact_regions"] = regions
+            payload["artifact_samples"] = int(mask.sum())
 
     return payload
 

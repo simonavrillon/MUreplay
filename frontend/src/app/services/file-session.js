@@ -6,7 +6,7 @@ import {
   normalizeEditedPayload,
   normalizeLogEntry,
 } from "../../api/payloads.js";
-import { buildMuUids } from "../../io/utils.js";
+import { basename, buildMuUids } from "../../io/utils.js";
 
 /**
  * @param {import("../context.js").App} app
@@ -40,8 +40,7 @@ export function createFileSessionService(app) {
       const parsed = await app.api.loadPairedFromPath(filePath);
       const normalized = normalizeEditedPayload(parsed, buildMuUids);
       const { state } = app;
-      state.editedFilename =
-        parsed.source_filename || filePath.split("/").pop();
+      state.editedFilename = parsed.source_filename || basename(filePath);
       state.logFilename = state.editedFilename;
       state.loadedFromDecomp = true;
       state.bidsRoot = parsed.bids_root || "";

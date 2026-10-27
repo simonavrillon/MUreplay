@@ -21,13 +21,15 @@ class UpdateFilterPayload(BaseModel):
     distimes: list[list[int]] = Field(default_factory=list)
     mu_index: int = 0
     grid_index: int = 0
+    grid_name: str = ""
     view_start: int = 0
     view_end: int = 0
     nbextchan: int = 1000
     pulse_train: list[float] = Field(default_factory=list)
     use_peeloff: bool = False
-    peeloff_win: float = 0.025
+    peel_off_win: float = 0.025
     mu_grid_index: list[int] = Field(default_factory=list)
+    inactive_mus: list[int] = Field(default_factory=list)
     artifact_times: list[int] = Field(default_factory=list)
     lock_spikes: bool = False
     artifact_regions: list[Any] | None = None

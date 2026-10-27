@@ -45,7 +45,7 @@ export function normalizeEditedPayload(source, buildMuUids) {
   return {
     fsamp,
     pulseTrains: pulseTrains.map((row) =>
-      Array.isArray(row) ? row.map(Number) : [],
+      Array.isArray(row) ? row.map((n) => Number(n) || 0) : [],
     ),
     distimes: distimes.map((row) =>
       Array.isArray(row) ? row.map((n) => Number(n) || 0) : [],
@@ -93,7 +93,7 @@ export function normalizeLogEntry(entry, idx, muUids) {
   const timestamp = String(entry.timestamp || entry.time || `step-${idx + 1}`);
   const type = String(entry.type || entry.action || entry.op || "unknown");
   const muUid = entry.mu_uid ? String(entry.mu_uid) : "";
-  let muIdx = Number.isFinite(Number(entry.mu_idx)) ? Number(entry.mu_idx) : -1;
+  let muIdx = toOptionalIndex(entry.mu_idx);
   if (muIdx < 0 && muUid) {
     muIdx = muUids.indexOf(muUid);
   }
@@ -123,6 +123,27 @@ export function normalizeLogEntry(entry, idx, muUids) {
     lockSpikes,
     raw: entry,
   };
+}
+
+/**
+ * A logged MU index, or -1 when the entry does not carry one.
+ *
+ * Only a number or a numeric string is an index. `Number()` would turn
+ * `null`, `""`, `false` and `[]` into a finite 0, which reads as "motor unit
+ * 0" and suppresses the `mu_uid` lookup that should have resolved the entry --
+ * so an edit log that identifies MUs by uid but serializes a missing index as
+ * JSON `null` would replay every edit onto the first MU.
+ *
+ * @param {unknown} value
+ * @returns {number}
+ */
+function toOptionalIndex(value) {
+  if (typeof value === "number") return Number.isFinite(value) ? value : -1;
+  if (typeof value === "string" && value.trim()) {
+    const n = Number(value);
+    return Number.isFinite(n) ? n : -1;
+  }
+  return -1;
 }
 
 /**

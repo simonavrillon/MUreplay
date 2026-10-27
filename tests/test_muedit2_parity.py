@@ -1,8 +1,9 @@
-"""Cross-repo parity tests: MUreplay operations must match MUedit2's exactly.
+"""Cross-repo parity tests: MUreplay's replay engine must match MUedit2's exactly.
 
-MUedit2 is the reference implementation; MUreplay mirrors it. These tests
-import both packages side by side and assert identical outputs on shared
-synthetic inputs, so any future change in either codebase that breaks the
+MUedit2 is the reference implementation; MUreplay mirrors the part of it a
+replay recomputes (the ``update_filter`` refit and the session filtering it
+runs on). These tests import both packages side by side and assert identical
+outputs on shared inputs, so any change in either codebase that breaks the
 mirror fails here instead of silently diverging.
 
 MUedit2 is expected as a sibling checkout (``../MUedit2``); override with the
@@ -14,6 +15,7 @@ from __future__ import annotations
 
 import importlib
 import importlib.util
+import json
 import os
 import sys
 import types
@@ -24,20 +26,23 @@ from typing import Any
 import numpy as np
 import pytest
 
+from mureplay.api.services.filter_service import INTRAMUSCULAR_GRIDS, run_update_filter
+from mureplay.io.loaders import load_npz_payload, load_paired_from_path
 from mureplay.replay.artifact_mask import build_manual_artifact_mask
-from mureplay.replay.filter_update import update_motor_unit_filter_window
-from mureplay.replay.operations import (
-    add_artifact_in_roi,
-    add_spikes_in_roi,
-    delete_artifacts_in_roi,
-    delete_high_discharge_rate_spikes_in_roi,
-    delete_spikes_in_roi,
-    remove_discharge_rate_outliers,
+from mureplay.replay.filter_update import (
+    emg_filter_inplace,
+    subtract_mu_waveforms,
+    update_motor_unit_filter_window,
 )
 
 REPO_ROOT = Path(__file__).resolve().parents[1]
 MUEDIT2_ROOT = Path(os.environ.get("MUEDIT2_ROOT") or (REPO_ROOT.parent / "MUedit2"))
 MUEDIT2_SRC = MUEDIT2_ROOT / "python" / "src"
+#: MUedit2's sample session: a decomposition, its edited save and the edit log.
+SESSION_DIR = (
+    MUEDIT2_ROOT / "data" / "Test" / "derivatives" / "muedit" / "sub-1" / "ses-1" / "decomp"
+)
+SESSION_ENTITY = "sub-1_ses-1_task-triangle_run-1"
 
 pytestmark = pytest.mark.skipif(
     not (MUEDIT2_SRC / "muedit" / "editing" / "operations.py").is_file(),
@@ -49,58 +54,28 @@ FSAMP = 2000.0
 
 @cache
 def _mu2(module: str) -> Any:
-    """Import a muedit module lazily, stubbing optional heavy dependencies.
+    """Import a muedit module from the sibling checkout, stubbing its optional file readers.
 
-    The muedit import chain pulls in h5py (MATLAB v7.3 reader) and xmltodict
-    (OTB metadata reader). No compared operation touches either, so missing
-    packages are replaced with inert stubs instead of failing the import.
+    MUedit2's import chain pulls in h5py (MATLAB v7.3) and xmltodict (OTB metadata),
+    which MUreplay does not install; no compared function touches either.
     """
     for missing, attrs in (
-        (
-            "h5py",
-            {
-                "File": type("File", (), {}),
-                "Group": type("Group", (), {}),
-                "Dataset": type("Dataset", (), {}),
-                "Reference": type("Reference", (), {}),
-                "is_hdf5": lambda _path: False,
-            },
-        ),
-        ("xmltodict", {"parse": lambda *args, **kwargs: {}}),
+        ("h5py", {name: type(name, (), {}) for name in ("File", "Group", "Dataset", "Reference")}),
+        ("xmltodict", {"parse": lambda *_args, **_kwargs: {}}),
     ):
         if missing not in sys.modules and importlib.util.find_spec(missing) is None:
             stub = types.ModuleType(missing)
             for attr, value in attrs.items():
                 setattr(stub, attr, value)
             sys.modules[missing] = stub
-
     src = str(MUEDIT2_SRC)
     if src not in sys.path:
         sys.path.insert(0, src)
     return importlib.import_module(module)
 
 
-def _mu2_ops() -> Any:
-    return _mu2("muedit.editing.operations")
-
-
-# ── Shared synthetic inputs ─────────────────────────────────────────────────
-
-
-def _pulse(seed: int, length: int = 1000) -> np.ndarray:
-    rng = np.random.default_rng(seed)
-    pulse = np.abs(rng.normal(size=length)) * 0.3
-    for pos in rng.integers(20, length - 20, 12):
-        pulse[int(pos)] += rng.uniform(0.4, 1.2)
-    return pulse
-
-
-def _spikes(seed: int, length: int = 1000, count: int = 15) -> list[int]:
-    rng = np.random.default_rng(seed)
-    return sorted({int(v) for v in rng.integers(0, length, count)})
-
-
 def _emg(seed: int) -> tuple[np.ndarray, np.ndarray, list[int]]:
+    """Eight channels of noise with one MU's waveform at a dozen spikes."""
     rng = np.random.default_rng(seed)
     n = 3000
     emg = rng.normal(size=(8, n)) * 0.1
@@ -109,192 +84,225 @@ def _emg(seed: int) -> tuple[np.ndarray, np.ndarray, list[int]]:
     for s in spikes:
         if s + 25 < n:
             emg[:, s : s + 25] += wave
-    bad_mask = np.zeros(8, dtype=int)
-    return emg, bad_mask, spikes
+    return emg, np.zeros(8, dtype=int), spikes
 
 
-# ── Pure editing operations ─────────────────────────────────────────────────
+# ── Session filtering ───────────────────────────────────────────────────────
 
 
-@pytest.mark.parametrize("seed", range(8))
-def test_add_spikes_in_roi_parity(seed: int) -> None:
-    pulse = _pulse(seed)
-    spikes = _spikes(seed)
-    x_start, x_end = 100, 600
-    y_min = 0.35
+@pytest.mark.parametrize(("fsamp", "emg_type"), [(2000.0, 1), (10240.0, 2)])
+@pytest.mark.parametrize("n_samples", [4000, 4001])
+def test_emg_filter_matches_muedit2(fsamp: float, emg_type: int, n_samples: int) -> None:
+    rng = np.random.default_rng(int(fsamp) + n_samples)
+    t = np.arange(n_samples) / fsamp
+    raw = rng.normal(size=(3, n_samples)) + np.sin(2 * np.pi * 50 * t) + np.sin(2 * np.pi * 150 * t)
+    ours = raw.astype(np.float32)
+    theirs = raw.astype(np.float32)
 
-    mu2 = _mu2_ops().add_spikes_in_roi(pulse, spikes, FSAMP, x_start, x_end, y_min)
-    mr = add_spikes_in_roi(pulse, spikes, FSAMP, x_start, x_end, y_min)
-    assert mr == mu2
-
-
-@pytest.mark.parametrize("seed", range(8))
-def test_add_artifact_in_roi_parity(seed: int) -> None:
-    pulse = _pulse(seed)
-    artifacts = _spikes(seed)
-    x_start, x_end = 50, 500
-    y_min = 0.3
-
-    mu2 = _mu2_ops().add_artifact_in_roi(pulse, artifacts, FSAMP, x_start, x_end, y_min)
-    mr = add_artifact_in_roi(pulse, artifacts, FSAMP, x_start, x_end, y_min)
-    assert mr == mu2
+    emg_filter_inplace(ours, fsamp, emg_type)
+    _mu2("muedit.signal.filters").emg_filter_inplace(theirs, fsamp, emg_type)
+    np.testing.assert_array_equal(ours, theirs)
 
 
-@pytest.mark.parametrize("seed", range(8))
-def test_delete_spikes_in_roi_parity(seed: int) -> None:
-    pulse = _pulse(seed)
-    spikes = _spikes(seed)
-    x_start, x_end = 100, 800
-    y_min, y_max = 0.2, 0.8
-
-    mu2 = _mu2_ops().delete_spikes_in_roi(pulse, spikes, x_start, x_end, y_min, y_max)
-    mr = delete_spikes_in_roi(pulse, spikes, x_start, x_end, y_min, y_max)
-    assert mr == mu2
+def test_intramuscular_grids_match_muedit2_catalogue() -> None:
+    catalogue = _mu2("muedit.signal.grid")._GRID_CATALOG
+    assert set(INTRAMUSCULAR_GRIDS) == {k for k, spec in catalogue.items() if spec.emg_type == 2}
 
 
-@pytest.mark.parametrize("seed", range(8))
-def test_delete_artifacts_in_roi_parity(seed: int) -> None:
-    pulse = _pulse(seed)
-    artifacts = _spikes(seed)
-    x_start, x_end = 100, 800
-    y_min, y_max = 0.2, 0.8
-
-    mu2 = _mu2_ops().delete_artifacts_in_roi(pulse, artifacts, x_start, x_end, y_min, y_max)
-    mr = delete_artifacts_in_roi(pulse, artifacts, x_start, x_end, y_min, y_max)
-    assert mr == mu2
-
-
-@pytest.mark.parametrize("seed", range(8))
-def test_delete_high_discharge_rate_spikes_in_roi_parity(seed: int) -> None:
-    pulse = _pulse(seed)
-    spikes = _spikes(seed, count=20)
-    x_start, x_end = 100, 900
-    y_min = 20.0
-
-    mu2 = _mu2_ops().delete_high_discharge_rate_spikes_in_roi(
-        pulse, spikes, FSAMP, x_start, x_end, y_min
-    )
-    mr = delete_high_discharge_rate_spikes_in_roi(pulse, spikes, FSAMP, x_start, x_end, y_min)
-    assert mr == mu2
-
-
-@pytest.mark.parametrize("seed", range(8))
-def test_remove_discharge_rate_outliers_parity(seed: int) -> None:
-    pulse = _pulse(seed)
-    spikes = _spikes(seed, count=25)
-
-    mu2 = _mu2_ops().remove_discharge_rate_outliers(pulse, spikes, FSAMP)
-    mr = remove_discharge_rate_outliers(pulse, spikes, FSAMP)
-    assert mr == mu2
-
-
-# ── Artifact mask consumption ───────────────────────────────────────────────
+# ── Artifact mask and peel-off ──────────────────────────────────────────────
 
 
 @pytest.mark.parametrize("seed", range(4))
 def test_build_manual_artifact_mask_parity(seed: int) -> None:
     rng = np.random.default_rng(2000 + seed)
     n = 5000
-    regions = sorted(
-        {
-            (
-                int(rng.integers(0, n)),
-                int(rng.integers(0, n)),
-            )
-            for _ in range(6)
-        }
-    )
+    regions = sorted({(int(rng.integers(0, n)), int(rng.integers(0, n))) for _ in range(6)})
 
-    mu2 = _mu2("muedit.decomp.preprocess").build_manual_artifact_mask(regions, n)
-    mr = build_manual_artifact_mask(regions, n)
-    if mu2 is None or mr is None:
-        assert (mu2 is None) == (mr is None)
+    theirs = _mu2("muedit.decomp.preprocess").build_manual_artifact_mask(regions, n)
+    ours = build_manual_artifact_mask(regions, n)
+    if theirs is None or ours is None:
+        assert (theirs is None) == (ours is None)
     else:
-        assert mr.tolist() == mu2.tolist()
+        np.testing.assert_array_equal(ours, theirs)
+
+
+@pytest.mark.parametrize("seed", range(4))
+def test_subtract_mu_waveforms_parity(seed: int) -> None:
+    rng = np.random.default_rng(seed)
+    x = rng.normal(size=(6, 2000)).astype(np.float32)
+    spikes = np.sort(rng.choice(np.arange(-10, 2010), 40, replace=False))
+    ours, theirs = x.copy(), x.copy()
+
+    subtract_mu_waveforms(ours, spikes, FSAMP, 0.025)
+    _mu2("muedit.decomp.algorithm").subtract_mu_waveforms(theirs, spikes, FSAMP, 0.025)
+    np.testing.assert_array_equal(ours, theirs)
 
 
 # ── Filter update (recomputation) ───────────────────────────────────────────
 
 
-def _compare_update(
-    seed: int,
-    spike_times: list[int] | None = None,
-    **kwargs: Any,
-) -> None:
-    emg, bad_mask, spikes = _emg(seed)
-    if spike_times is None:
-        spike_times = spikes
-    start, end = 0, 1000
+def _compare_update(seed: int, spike_times: list[int] | None = None, **kwargs: Any) -> None:
+    emg, discard_mask, spikes = _emg(seed)
+    spike_times = spikes if spike_times is None else spike_times
+    args = (emg, discard_mask, spike_times, FSAMP, 0, 1000)
 
-    pt_mu2, up_mu2 = _mu2_ops().update_motor_unit_filter_window(
-        emg, bad_mask, spike_times, FSAMP, start, end, nbextchan=1000, **kwargs
+    pt_theirs, up_theirs = _mu2("muedit.editing.operations").update_motor_unit_filter_window(
+        *args, nbextchan=1000, **kwargs
     )
-    pt_mr, up_mr = update_motor_unit_filter_window(
-        emg, bad_mask, spike_times, FSAMP, start, end, nbextchan=1000, **kwargs
-    )
-    assert up_mr == up_mu2
-    if pt_mu2 is None or pt_mr is None:
-        assert (pt_mu2 is None) == (pt_mr is None)
+    pt_ours, up_ours = update_motor_unit_filter_window(*args, nbextchan=1000, **kwargs)
+    np.testing.assert_array_equal(up_ours, up_theirs)
+    if pt_theirs is None or pt_ours is None:
+        assert (pt_theirs is None) == (pt_ours is None)
     else:
-        # Integer spike outputs must match exactly; the pulse train is allowed
-        # float-noise differences (BLAS reduction order), so compare loosely.
-        assert np.allclose(pt_mr, pt_mu2, rtol=1e-9, atol=1e-9)
+        np.testing.assert_array_equal(pt_ours, pt_theirs)
 
 
-@pytest.mark.parametrize("seed", range(4))
-def test_update_filter_baseline_parity(seed: int) -> None:
-    _compare_update(seed)
-
-
-@pytest.mark.parametrize("seed", range(4))
-def test_update_filter_peeloff_parity(seed: int) -> None:
-    other: list[list[int]] = [[300, 400, 600], [350, 500]]
-    _compare_update(seed, peeloff_spike_times=other, use_peeloff=True, peeloff_win=0.025)
-
-
-@pytest.mark.parametrize("seed", range(4))
-def test_update_filter_artifacts_parity(seed: int) -> None:
-    _compare_update(seed, artifact_times=[260, 700])
-
-
-@pytest.mark.parametrize("seed", range(4))
-def test_update_filter_lock_spikes_parity(seed: int) -> None:
-    _bad, spikes = _emg(seed)[1:]
-    locked = sorted({spikes[0], 400, 600})
-    _compare_update(seed, spike_times=locked, lock_spikes=True)
-
-
-@pytest.mark.parametrize("seed", range(4))
-def test_update_filter_artifact_mask_parity(seed: int) -> None:
+def _mask() -> np.ndarray:
     mask = np.zeros(1000, dtype=bool)
     mask[300:420] = True
-    _compare_update(seed, artifact_mask=mask)
+    return mask
+
+
+def _locked(seed: int) -> list[int]:
+    return sorted({_emg(seed)[2][0], 400, 600})
 
 
 @pytest.mark.parametrize("seed", range(4))
-def test_update_filter_mask_and_lock_parity(seed: int) -> None:
-    spikes = _emg(seed)[2]
-    locked = sorted({spikes[0], 400, 600})
-    mask = np.zeros(1000, dtype=bool)
-    mask[300:420] = True
-    _compare_update(seed, spike_times=locked, lock_spikes=True, artifact_mask=mask)
+class TestUpdateFilterParity:
+    def test_baseline(self, seed: int) -> None:
+        _compare_update(seed)
+
+    def test_peel_off(self, seed: int) -> None:
+        _compare_update(seed, peel_off_spike_times=[[300, 400, 600], [350, 500]])
+
+    def test_artifacts(self, seed: int) -> None:
+        _compare_update(seed, artifact_times=[260, 700])
+
+    def test_lock_spikes(self, seed: int) -> None:
+        _compare_update(seed, spike_times=_locked(seed), lock_spikes=True)
+
+    def test_artifact_mask(self, seed: int) -> None:
+        _compare_update(seed, artifact_mask=_mask())
+
+    def test_mask_and_lock(self, seed: int) -> None:
+        _compare_update(seed, spike_times=_locked(seed), lock_spikes=True, artifact_mask=_mask())
+
+    def test_mask_and_peel_off(self, seed: int) -> None:
+        _compare_update(seed, peel_off_spike_times=[[300, 400, 600]], artifact_mask=_mask())
+
+    def test_fully_masked(self, seed: int) -> None:
+        _compare_update(seed, artifact_mask=np.ones(1000, dtype=bool))
 
 
-@pytest.mark.parametrize("seed", range(4))
-def test_update_filter_mask_and_peeloff_parity(seed: int) -> None:
-    other: list[list[int]] = [[300, 400, 600]]
-    mask = np.zeros(1000, dtype=bool)
-    mask[300:420] = True
-    _compare_update(
-        seed,
-        peeloff_spike_times=other,
-        use_peeloff=True,
-        peeloff_win=0.025,
-        artifact_mask=mask,
+# ── File-format round trip ──────────────────────────────────────────────────
+
+
+def _save(out_path: Path, **fields: Any) -> None:
+    _mu2("muedit.decomp.decomposition_file").save_decomposition_npz(out_path, **fields)
+
+
+def test_decomposition_file_round_trip(tmp_path: Path) -> None:
+    """What MUedit2's saver writes, MUreplay's loader reads back."""
+    spike_times = [[10, 20, 30], [5, 15]]
+    artifact_mask = np.zeros(500, dtype=bool)
+    artifact_mask[100:150] = True
+    out_path = tmp_path / "sub-1_task-test_decomp.npz"
+    _save(
+        out_path,
+        pulse_trains=None,
+        spike_times=spike_times,
+        fsamp=2000.0,
+        grid_names=["Grid A", "Grid B"],
+        mu_grid_index=[0, 1],
+        muscle_names=["TA"],
+        parameters={"niter": 25},
+        total_samples=500,
+        artifact_mask=artifact_mask,
     )
 
+    payload = load_npz_payload(out_path.read_bytes())
+    assert payload["discharge_times"] == spike_times
+    assert payload["grid_names"] == ["Grid A", "Grid B"]
+    assert payload["mu_grid_index"] == [0, 1]
+    assert payload["fsamp"] == 2000.0
+    assert payload["total_samples"] == 500
+    assert payload["artifact_regions"] == [[100, 150]]
+    assert payload["artifact_samples"] == 50
+    # No pulse trains in the file: binary trains are drawn from the spikes,
+    # exactly as MUedit2's own loader does for spikes-only files.
+    assert len(payload["pulse_trains"]) == 2
+    for row, times in zip(payload["pulse_trains"], spike_times, strict=True):
+        assert {i for i, v in enumerate(row) if v == 1.0} == set(times)
 
-@pytest.mark.parametrize("seed", range(4))
-def test_update_filter_fully_masked_parity(seed: int) -> None:
-    mask = np.ones(1000, dtype=bool)
-    _compare_update(seed, artifact_mask=mask)
+
+# ── End to end ──────────────────────────────────────────────────────────────
+
+
+def _apply_diff(row: list[int], entry: dict[str, Any], added: str, removed: str) -> list[int]:
+    kept = set(row) - set(entry.get(removed) or [])
+    return sorted(v for v in kept | set(entry.get(added) or []) if v >= 0)
+
+
+def test_session_replay_matches_saved_edits() -> None:
+    """Replaying MUedit2's sample edit log reproduces its saved ``_edited.npz`` exactly.
+
+    Starts from the pre-edit decomposition and applies every logged step in order,
+    as the page does: recorded diffs for most steps, the filter engine for
+    ``update_filter``. Peel-off leaves out the MUs flagged or removed at that step.
+    """
+    edited_path = SESSION_DIR / f"{SESSION_ENTITY}_edited.npz"
+    if not edited_path.is_file():
+        pytest.skip("MUedit2 sample session (data/Test) not present")
+
+    history = json.loads(edited_path.with_suffix(".json").read_text(encoding="utf-8"))["history"]
+    payload = load_paired_from_path(edited_path)
+    mu_grid_index = payload["mu_grid_index"]
+    state = [list(row) for row in payload["discharge_times"]]  # the pre-edit decomposition
+    # The sidecar lists the uids that survived; the page numbers the file's MUs as MUedit2 does.
+    mu_uids = _mu2("muedit.editing.session").initial_mu_uids(mu_grid_index)
+    artifacts: list[list[int]] = [[] for _ in state]
+    flagged: set[int] = set()
+    removed: set[int] = set()
+
+    for entry in history:
+        kind = entry["type"]
+        if kind in ("remove_flagged", "remove_duplicates"):
+            removed |= {mu_uids.index(uid) for uid in entry.get("removed_mu_uids") or []}
+            continue
+        mu = mu_uids.index(entry["mu_uid"])
+        if kind == "flag_mu":
+            (flagged.add if entry.get("flagged", True) else flagged.discard)(mu)
+            continue
+        flagged.discard(mu)  # any edit to an MU clears its flag
+        if kind == "update_filter":
+            grid = mu_grid_index[mu]
+            resp = run_update_filter(
+                {
+                    "bids_root": str(MUEDIT2_ROOT / "data" / "Test"),
+                    "entity_label": SESSION_ENTITY,
+                    "distimes": state,
+                    "mu_index": mu,
+                    "grid_index": grid,
+                    "grid_name": payload["grid_names"][grid],
+                    "view_start": entry["view_start"],
+                    "view_end": entry["view_end"],
+                    "use_peeloff": bool(entry.get("use_peeloff")),
+                    "lock_spikes": bool(entry.get("lock_spikes")),
+                    "mu_grid_index": mu_grid_index,
+                    "inactive_mus": sorted(flagged | removed),
+                    "artifact_times": artifacts[mu],
+                    "artifact_regions": payload["artifact_regions"],
+                }
+            )
+            state[mu] = resp["distimes"]
+        else:
+            state[mu] = _apply_diff(state[mu], entry, "spikes_added", "spikes_removed")
+            artifacts[mu] = _apply_diff(
+                artifacts[mu], entry, "artifacts_added", "artifacts_removed"
+            )
+
+    with np.load(edited_path) as z:
+        offsets, spikes = z["spike_offsets"], z["spike_times"]
+        saved = [spikes[offsets[i] : offsets[i + 1]].tolist() for i in range(len(offsets) - 1)]
+    live = [state[i] for i in range(len(state)) if i not in removed]
+    assert live == saved

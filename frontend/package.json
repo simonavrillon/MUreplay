@@ -11,11 +11,14 @@
     "lint:fix": "eslint . --fix",
     "format": "prettier --write .",
     "format:check": "prettier --check .",
-    "typecheck": "tsc -p .",
-    "check": "npm run lint && npm run format:check && npm run typecheck"
+    "typecheck": "tsc -p . && tsc -p tsconfig.test.json",
+    "test": "node --test",
+    "test:coverage": "node --test --experimental-test-coverage",
+    "check": "npm run lint && npm run format:check && npm run typecheck && npm test"
   },
   "devDependencies": {
     "@eslint/js": "^9.39.4",
+    "@types/node": "^22.20.4",
     "eslint": "^9.39.4",
     "eslint-config-prettier": "^9.1.2",
     "globals": "^15.15.0",

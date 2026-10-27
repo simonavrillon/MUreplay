@@ -1,0 +1,17 @@
+{
+  // The tests run under Node, so they need its types -- which the root config
+  // withholds on purpose, so that frontend source cannot reach for `process`
+  // or `Buffer`. Checking them here is what keeps the hand-rolled fakes
+  // honest: a stand-in that drifts from the interface it stands in for fails
+  // the build rather than waiting for a test to trip over it.
+  //
+  // `noImplicitAny` is off because that is not the same job. Annotating every
+  // throwaway lambda in a stub would bury the tests in types without catching
+  // any drift; the assignability and null checks below do the catching.
+  "extends": "./tsconfig.json",
+  "compilerOptions": {
+    "types": ["node"],
+    "noImplicitAny": false
+  },
+  "include": ["test/**/*.js", "src/globals.d.ts"]
+}

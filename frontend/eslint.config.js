@@ -35,6 +35,16 @@ export default [
   { ignores: ["node_modules/**", "dist/**"] },
   js.configs.recommended,
   prettier,
+  // Tests run in Node's built-in test runner, so they see Node and browser
+  // globals (the http seam uses fetch/AbortSignal, which exist in both).
+  {
+    files: ["test/**/*.js"],
+    languageOptions: {
+      ecmaVersion: 2023,
+      sourceType: "module",
+      globals: { ...globals.node, ...globals.browser },
+    },
+  },
   {
     files: ["src/**/*.js", "app.js"],
     plugins: { filenames: filenamesPlugin },

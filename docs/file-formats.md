@@ -19,17 +19,29 @@ BIDS dataset root automatically.
 
 ## Decomposition format (`.npz`)
 
-MUreplay expects MUedit2-style NPZ content. These keys are read:
+MUreplay reads both NPZ layouts MUedit2 writes: schema v1 (older MUedit2,
+object arrays) and schema v2 (current MUedit2, marked by a
+`schema_version: 2` member, pickle-free). Both normalise to the same
+replay payload.
 
-- Required:
-  - `pulse_trains` (or `pulseTrains`)
-  - `discharge_times` (or `distimes`, `dischargeTimes`)
-- Optional:
-  - `fsamp` (or `fs`)
-  - `grid_names`
-  - `mu_grid_index`
-  - `mu_uids`
-  - `edit_history` (or `history`) if present in NPZ
+Discharge times come from either layout:
+
+- v1: `discharge_times` (or `distimes`, `dischargeTimes`)
+- v2: the CSR pair `spike_times` + `spike_offsets`
+
+Other keys read:
+
+- `pulse_trains` (or `pulseTrains`) — optional; when absent, binary pulse
+  trains are drawn from the discharge times, exactly as MUedit2's own loader
+  does for spikes-only files
+- `fsamp` (or `fs`)
+- `total_samples` (v2)
+- `grid_names` — a plain list in v1, JSON-encoded in one string in v2
+- `mu_grid_index`
+- `mu_uids`
+- `edit_history` (or `history`) if present in NPZ
+- Artifact regions: `artifact_mask` (per-sample boolean) in v1, or
+  `artifact_intervals` (JSON-encoded `[[start, end], ...]` sample pairs) in v2
 
 If `mu_uids` is missing, MUreplay generates ids from `mu_grid_index`.
 

@@ -89,7 +89,7 @@ The **step counter** (e.g. `Step 3 / 12`) and the status bar show the current ac
 
 | Step type | What MUreplay replays |
 |---|---|
-| `update_filter` | Reads the matching BIDS EMG file and runs the filter pipeline to recompute discharge times and the pulse train. The `use_peeloff` flag recorded in the history entry is honoured: when true, the waveform contributions of all other MUs on the same grid are subtracted from the whitened signal before the filter is recomputed. The `lock_spikes` flag is also honoured: when true, the original spikes in the window are realigned to their nearest detected peak (within ±10 samples) and merged with the newly detected spikes, so existing spikes are preserved rather than replaced. Any artifact markers present at that point in the session are also subtracted unconditionally. Requires `bids_root`, `entity_label`, `scipy`, and `pyedflib`. |
+| `update_filter` | Reads the matching BIDS EMG file and runs the filter pipeline to recompute discharge times and the pulse train. The `use_peeloff` flag recorded in the history entry is honoured: when true, the waveform contributions of the other live MUs on the same grid are subtracted from the whitened signal before the filter is recomputed (MUs flagged or removed earlier in the session are excluded, as in MUedit2). The `lock_spikes` flag is also honoured: when true, the original spikes in the window are realigned to their nearest detected peak (within ±10 samples) and merged with the newly detected spikes, so existing spikes are preserved rather than replaced. Any artifact markers present at that point in the session are also subtracted unconditionally. Requires `bids_root`, `entity_label`, `scipy`, and `pyedflib`. |
 | `add_spikes` | Finds peaks in the pulse train above a threshold within the ROI and adds them to the discharge times. |
 | `delete_spikes` | Removes discharge times that fall within a rectangular ROI. In MUedit2 this action also clears any artifact markers inside the same ROI; those are logged as a separate `delete_artifact` entry. |
 | `delete_dr` | Removes spikes whose discharge rate exceeds a threshold within the ROI. |
@@ -105,7 +105,7 @@ If `update_filter` cannot reach the BIDS source, the step is skipped and dischar
 
 ### Peel-off during filter replay
 
-When a `update_filter` history entry has `use_peeloff: true`, MUreplay subtracts the averaged MUAP waveforms of all other MUs on the same grid from the whitened signal before recomputing the filter — exactly as MUedit2 did when the edit was originally made. The peel-off flag is read from the history log and cannot be toggled during replay.
+When a `update_filter` history entry has `use_peeloff: true`, MUreplay subtracts the averaged MUAP waveforms of the other live MUs on the same grid from the whitened signal before recomputing the filter — exactly as MUedit2 did when the edit was originally made. MUs flagged or removed earlier in the session are left out of the peel-off. The peel-off flag is read from the history log and cannot be toggled during replay.
 
 ### Artifact markers
 

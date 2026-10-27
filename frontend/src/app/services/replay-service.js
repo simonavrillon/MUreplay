@@ -7,6 +7,7 @@
 import {
   applyLoggedDiffBackward,
   applyLoggedDiffForward,
+  inactiveMusBefore,
   isSpikeEditStep,
   stepMuKey,
 } from "../../replay/operations.js";
@@ -345,14 +346,17 @@ export function createReplayService(app) {
     const stepType = String(step.type || "").toLowerCase();
     if (stepType === "update_filter") {
       const pulse = state.pulseTrains[muIdx] || pulseForCurrentMu();
+      const gridIndex = state.muGridIndex[muIdx] || 0;
       const payload = {
         mu_index: muIdx,
         distimes: state.distimes,
         pulse_train: pulse,
         bids_root: getBidsRoot(),
         entity_label: getEntityLabel(),
-        grid_index: state.muGridIndex[muIdx] || 0,
+        grid_index: gridIndex,
+        grid_name: state.gridNames[gridIndex] || "",
         mu_grid_index: state.muGridIndex,
+        inactive_mus: inactiveMusBefore(state.history, stepIdx, state.muUids),
         view_start: step.viewStart ?? 0,
         view_end: step.viewEnd ?? pulse.length,
         nbextchan: getNbextchan(),
@@ -455,7 +459,16 @@ export function createReplayService(app) {
     state.pulseTrains[backup.muIdx] = backup.pulseTrain;
     if (Array.isArray(backup.artifactTimes)) {
       if (!state.artifactTimes) state.artifactTimes = [];
-      state.artifactTimes[backup.muIdx] = backup.artifactTimes;
+      // Only write the row back if there is a row either side. A session with
+      // no artifacts keeps `artifactTimes` empty, and restoring an empty row
+      // into it would grow one entry per MU an undo happens to pass through,
+      // leaving holes wherever it did not.
+      if (
+        backup.artifactTimes.length ||
+        state.artifactTimes[backup.muIdx] !== undefined
+      ) {
+        state.artifactTimes[backup.muIdx] = backup.artifactTimes;
+      }
     }
     const grid = state.muGridIndex[backup.muIdx] || 0;
     state.currentGrid = grid;

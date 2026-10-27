@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import csv
+import json
 from pathlib import Path
 
 import numpy as np
@@ -61,6 +62,33 @@ def select_grid_channels(channels_tsv: Path, grid_index: int) -> tuple[list[int]
     return channel_indices, np.asarray(bad_mask, dtype=int)
 
 
+def _declared_sample_count(sidecar: dict, fsamp: float) -> int | None:
+    """Sample count implied by the sidecar's ``RecordingDuration``, when usable.
+
+    A mirror of MUedit2's reader clamp: EDF/BDF stores whole data records, so
+    the writer zero-pads the last one; ``RecordingDuration`` is the only
+    record of where the signal really ends. Reading past it changes the
+    whole-signal notch and bandpass, which shifts borderline spike detection.
+    """
+    duration = sidecar.get("RecordingDuration")
+    if duration is None or fsamp <= 0:
+        return None
+    try:
+        n_samples = int(round(float(duration) * fsamp))
+    except (TypeError, ValueError):
+        return None
+    return n_samples if n_samples > 0 else None
+
+
+def _read_sidecar(emg_path: Path, entity_label: str) -> dict:
+    """Load the ``*_emg.json`` sidecar beside a recording, or ``{}`` if absent."""
+    json_path = emg_path.parent / f"{entity_label}_emg.json"
+    if not json_path.exists():
+        return {}
+    with json_path.open("r", encoding="utf-8") as f:
+        return json.load(f)
+
+
 def load_bids_emg_grid(
     bids_root: Path,
     entity_label: str,
@@ -80,10 +108,13 @@ def load_bids_emg_grid(
     reader = pyedflib.EdfReader(str(emg_path))
     try:
         fsamp = float(reader.getSampleFrequency(channel_indices[0]))
-        signals = [
-            reader.readSignal(ch_idx, start=read_start, n=read_n) for ch_idx in channel_indices
-        ]
-        data = np.vstack(signals)
+        n_stored = min(int(reader.getNSamples()[ch]) for ch in channel_indices)
+        declared = _declared_sample_count(_read_sidecar(emg_path, entity_label), fsamp)
+        n_available = n_stored if declared is None else min(n_stored, declared)
+        start = max(0, min(read_start, n_available))
+        n = n_available - start if read_n is None else max(0, min(read_n, n_available - start))
+        signals = [reader.readSignal(ch_idx, start=start, n=n) for ch_idx in channel_indices]
+        data = np.vstack(signals).astype(np.float32) if signals else np.zeros((0, 0), np.float32)
     finally:
         reader.close()
     return data, fsamp, bad_mask

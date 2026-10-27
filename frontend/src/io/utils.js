@@ -3,7 +3,7 @@
  */
 
 /**
- * @param {number[]} muGridIndex
+ * @param {(number | null | undefined)[]} muGridIndex
  * @returns {string[]}
  */
 export function buildMuUids(muGridIndex) {
@@ -18,7 +18,23 @@ export function buildMuUids(muGridIndex) {
 }
 
 /**
- * @param {string} filename
+ * Last path segment of `filePath`, for either separator.
+ *
+ * The backend hands back native paths, so a session opened on Windows carries
+ * backslashes. Splitting on "/" alone leaves the whole path as the "basename",
+ * which then reaches `inferEntityLabel` and travels on as the BIDS entity
+ * label.
+ *
+ * @param {string | null | undefined} filePath
+ * @returns {string}
+ */
+export function basename(filePath) {
+  const parts = String(filePath || "").split(/[\\/]/);
+  return parts[parts.length - 1] || "";
+}
+
+/**
+ * @param {string | null | undefined} filename
  * @returns {string}
  */
 export function inferEntityLabel(filename) {

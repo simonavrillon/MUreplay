@@ -48,20 +48,20 @@ def test_paired_load_from_edited_npz() -> None:
     assert Path(paired["decomp_npz"]).is_file()
     assert Path(paired["edited_json"]).is_file()
 
-    # The decomp NPZ holds 62 MUs; the sidecar lists 59 because three MUs were
+    # The decomp NPZ holds 36 MUs; the sidecar lists 34 because two MUs were
     # removed (remove_duplicates / remove_flagged) after the decomposition was
     # saved. MUreplay must surface both: full arrays plus the surviving ids.
     mu_count = len(payload["discharge_times"])
-    assert mu_count == 62
+    assert mu_count == 36
     assert len(payload["pulse_trains"]) == mu_count
     assert len(payload["mu_grid_index"]) == mu_count
-    assert len(payload["mu_uids"]) == 59
+    assert len(payload["mu_uids"]) == 34
     assert payload["mu_uids"][0] == "g0_mu0"
     assert payload["fsamp"] == pytest.approx(2000.0)
 
     history = payload["edit_history"]
-    assert isinstance(history, list) and len(history) == 200
-    assert {"add_spikes", "delete_spikes", "update_filter", "flag_mu"} <= {
+    assert isinstance(history, list) and len(history) == 98
+    assert {"add_spikes", "remove_outliers", "update_filter", "flag_mu"} <= {
         str(step.get("type")) for step in history
     }
 
@@ -76,7 +76,7 @@ def test_paired_load_from_decomp_npz_matches_edited_entry_point() -> None:
 
 
 def test_paired_load_for_both_subjects() -> None:
-    # sub-1 carries a 200-step edit history; sub-2 is an unedited session
+    # sub-1 carries a 98-step edit history; sub-2 is an unedited session
     # (empty history) and must still load cleanly.
     subject_dirs = sorted((BIDS_ROOT / "derivatives" / "muedit").glob("sub-*"))
     assert len(subject_dirs) == 2
