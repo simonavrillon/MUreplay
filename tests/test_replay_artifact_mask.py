@@ -1,16 +1,10 @@
-"""Artifact windows: regions rasterized to a mask, a mask turned back into regions, and region parsing."""
+"""Artifact windows: regions rasterized to a mask, a mask turned back into intervals."""
 
 from __future__ import annotations
 
-from typing import Any
-
 import numpy as np
 
-from mureplay.replay.artifact_mask import (
-    build_manual_artifact_mask,
-    mask_to_regions,
-    parse_artifact_regions,
-)
+from mureplay.replay.artifact_mask import build_manual_artifact_mask, mask_to_intervals
 
 # ── Rasterization ───────────────────────────────────────────────────────────
 
@@ -42,33 +36,21 @@ class TestBuildManualArtifactMask:
         assert build_manual_artifact_mask([(60, 70)], 50) is None
 
 
-# ── Regions ─────────────────────────────────────────────────────────────────
+# ── Intervals ───────────────────────────────────────────────────────────────
 
 
-class TestMaskToRegions:
+class TestMaskToIntervals:
     def test_regions_round_trip_through_the_mask(self) -> None:
         mask = np.zeros(100, dtype=bool)
         mask[5:15] = True
         mask[40:60] = True
-        regions = mask_to_regions(mask)
+        regions = mask_to_intervals(mask)
         assert regions == [[5, 15], [40, 60]]
 
         rebuilt = build_manual_artifact_mask([(s, e) for s, e in regions], 100)
         assert rebuilt is not None
         assert np.array_equal(rebuilt, mask)
 
-    def test_an_empty_mask_has_no_regions(self) -> None:
-        assert mask_to_regions(None) == []
-        assert mask_to_regions(np.zeros(10, dtype=bool)) == []
-
-
-class TestParseArtifactRegions:
-    def test_pairs_and_start_end_objects_both_parse(self) -> None:
-        raw: list[Any] = [[10, 20], {"start": 30, "end": 40}]
-        assert parse_artifact_regions(raw) == [(10, 20), (30, 40)]
-        assert parse_artifact_regions(None) == []
-        assert parse_artifact_regions([]) == []
-
-    def test_malformed_rows_are_skipped(self) -> None:
-        raw: list[Any] = [[10], "bad", {"start": 5}, [1, 2, 3], ["a", "b"], [50, 60]]
-        assert parse_artifact_regions(raw) == [(50, 60)]
+    def test_an_empty_mask_has_no_intervals(self) -> None:
+        assert mask_to_intervals(None) == []
+        assert mask_to_intervals(np.zeros(10, dtype=bool)) == []

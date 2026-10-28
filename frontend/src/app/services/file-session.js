@@ -7,7 +7,6 @@ import {
   normalizeEditedPayload,
   normalizeLogEntry,
 } from "../../api/payloads.js";
-import { basename } from "../../io/bids.js";
 import { setHistory } from "../../state/actions.js";
 import { getActiveReplayGroups } from "../../state/selectors.js";
 import { beginSession } from "../../state/transitions.js";
@@ -49,29 +48,23 @@ export function createFileSessionService(app) {
       beginSession(
         state,
         {
-          filename: parsed.source_filename || basename(filePath),
+          filename: String(parsed.source_filename),
           bidsRoot: parsed.bids_root || "",
           entityLabel: parsed.entity_label || "",
-          bidsEntityLabel: parsed.bids_entity_label || "",
         },
         payload,
       );
-      const log = Array.isArray(parsed.edit_history)
-        ? parsed.edit_history
-        : Array.isArray(parsed.history)
-          ? parsed.history
-          : [];
+      const log = Array.isArray(parsed.edit_history) ? parsed.edit_history : [];
       setHistory(
         state,
         log
-          .map((entry, i) => normalizeLogEntry(entry, i, state.muUids))
+          .map((entry) => normalizeLogEntry(entry, state.muUids))
           .filter((entry) => entry !== null),
-        [...log],
       );
       app.startReplay();
       app.setStatus("");
       app.setEditStatus(
-        `Loaded ${state.distimes.length} MUs + ${getActiveReplayGroups(state).length} replay steps`,
+        `Loaded ${state.spikeTimes.length} MUs + ${getActiveReplayGroups(state).length} replay steps`,
       );
     } catch (err) {
       handleError(err, app.setEditStatus, "Path load error");

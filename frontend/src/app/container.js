@@ -4,7 +4,6 @@
  */
 import { API_BASE } from "../config.js";
 import { createApiClient } from "../api/client.js";
-import { setDataRoot } from "../state/actions.js";
 import { state } from "../state/state.js";
 import { createReplayRenderer } from "../view/replay-renderer.js";
 import { createApp } from "./create-app.js";
@@ -38,12 +37,5 @@ export async function initializeApp() {
     app.setStatus("");
   } else {
     app.setStatus("Backend unreachable — please restart the app", "error");
-  }
-
-  try {
-    const cfg = await app.api.fetchConfig();
-    if (cfg?.bids_root) setDataRoot(state, String(cfg.bids_root));
-  } catch {
-    // Without it, a session whose file names no dataset cannot refit; the rest works.
   }
 }

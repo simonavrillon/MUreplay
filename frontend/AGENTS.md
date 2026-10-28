@@ -51,7 +51,7 @@ Architecture: [dev/architecture.md](../dev/architecture.md#frontend-shape). Wire
 - Each module opens with a comment stating its role and its rules (see
   `app/services/replay-service.js`). Elsewhere, comment only what the code can't say.
 - Reuse the names the backend, MUedit2 and other modules use for the same concept (`fsamp`,
-  `gridNames`, `muGridIndex`, `muUids`, `distimes`).
+  `gridNames`, `muGridIndex`, `muUids`, `spikeTimes`).
 - Write the simplest change that does the job.
 
 ## Tests

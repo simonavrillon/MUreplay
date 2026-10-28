@@ -8,7 +8,8 @@ from typing import Any
 import pytest
 from starlette.testclient import TestClient
 
-from mureplay.api.services.filter_service import emg_type, run_update_filter
+from mureplay.api.schemas import UpdateFilterPayload
+from mureplay.api.services.filter_service import grid_emg_type, run_update_filter
 from mureplay.io.loaders import load_paired_from_path
 from tests._api import API, error
 from tests.conftest import SAMPLE_ENTITY
@@ -19,8 +20,9 @@ def _step(**fields: Any) -> dict[str, Any]:
     return {
         "bids_root": "/bids",
         "entity_label": "sub-1",
-        "distimes": [[100]],
-        "mu_index": 0,
+        "spike_times": [[100]],
+        "mu": 0,
+        "mu_grid_index": [0],
         "view_start": 0,
         "view_end": 100,
         **fields,
@@ -32,9 +34,18 @@ def _step(**fields: Any) -> dict[str, Any]:
 
 class TestRejectedRequests:
     def test_an_unknown_mu_is_a_400_naming_the_field(self, client: TestClient) -> None:
-        err = error(client.post(f"{API}/edit/update-filter", json=_step(mu_index=99)), 400)
+        err = error(client.post(f"{API}/edit/update-filter", json=_step(mu=99)), 400)
         assert err["message"] == "MU index is out of range."
-        assert err["detail"] == {"field": "mu_index"}
+        assert err["detail"] == {"field": "mu"}
+
+    def test_a_short_grid_index_is_a_400_naming_the_field(self, client: TestClient) -> None:
+        resp = client.post(f"{API}/edit/update-filter", json=_step(mu_grid_index=[]))
+        assert error(resp, 400)["detail"] == {"field": "mu_grid_index"}
+
+    def test_a_missing_window_is_refused(self, client: TestClient) -> None:
+        step = _step()
+        del step["view_end"]
+        error(client.post(f"{API}/edit/update-filter", json=step), 422, "validation_error")
 
     def test_a_missing_recording_is_a_404_naming_the_dataset(
         self, client: TestClient, tmp_path: Path
@@ -62,13 +73,13 @@ class TestRejectedRequests:
 # ── Service ─────────────────────────────────────────────────────────────────
 
 
-class TestEmgType:
+class TestGridEmgType:
     @pytest.mark.parametrize(
         ("grid_name", "expected"),
         [("HD08MM1305", 1), ("Grid 3 MYOMRF-4x8", 2), ("MYOMNP-1x32", 2), ("", 1)],
     )
     def test_intramuscular_grids_take_the_wide_band(self, grid_name: str, expected: int) -> None:
-        assert emg_type(grid_name) == expected
+        assert grid_emg_type(grid_name) == expected
 
 
 class TestRunUpdateFilter:
@@ -80,20 +91,20 @@ class TestRunUpdateFilter:
         view_start = int(step["view_start"])
 
         result = run_update_filter(
-            {
-                "bids_root": str(sample_bids_root),
-                "entity_label": SAMPLE_ENTITY,
-                "mu_index": mu,
-                "distimes": payload["discharge_times"],
-                "pulse_train": payload["pulse_trains"][mu],
-                "grid_index": payload["mu_grid_index"][mu],
-                "mu_grid_index": payload["mu_grid_index"],
-                "view_start": view_start,
-                "view_end": min(int(step["view_end"]), view_start + 10000),
-                "use_peeloff": bool(step.get("use_peeloff")),
-                "lock_spikes": bool(step.get("lock_spikes")),
-            }
+            UpdateFilterPayload.model_validate(
+                {
+                    "bids_root": str(sample_bids_root),
+                    "entity_label": SAMPLE_ENTITY,
+                    "mu": mu,
+                    "spike_times": payload["spike_times"],
+                    "pulse_train": payload["pulse_trains"][mu],
+                    "mu_grid_index": payload["mu_grid_index"],
+                    "view_start": view_start,
+                    "view_end": min(int(step["view_end"]), view_start + 10000),
+                    "use_peeloff": bool(step.get("use_peeloff")),
+                    "lock_spikes": bool(step.get("lock_spikes")),
+                }
+            )
         )
-        assert result["fsamp"] == pytest.approx(2000.0)
-        assert result["distimes"] == sorted(set(result["distimes"]))
-        assert all(t >= 0 for t in result["distimes"])
+        assert result["spikes"] == sorted(set(result["spikes"]))
+        assert all(t >= 0 for t in result["spikes"])

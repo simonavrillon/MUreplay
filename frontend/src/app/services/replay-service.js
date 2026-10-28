@@ -35,8 +35,6 @@ import {
   currentStep,
   firstGridWithMu,
   getActiveReplayGroups,
-  getBidsRoot,
-  getEntityLabel,
   getReplayView,
   musForGrid,
   pulseForCurrentMu,
@@ -265,7 +263,7 @@ export function createReplayService(app) {
   function applyTimelineStep() {
     updateTimelineUi();
     const step = currentStep(state);
-    if (step && step.muIdx >= 0 && step.muIdx < state.distimes.length) {
+    if (step && step.muIdx >= 0 && step.muIdx < state.spikeTimes.length) {
       showMu(step.muIdx);
     }
     app.renderAll();
@@ -311,12 +309,12 @@ export function createReplayService(app) {
     const step = state.history[stepIdx];
     if (!step) return;
     const mu = resolveStepMuIndex(state, step);
-    if (mu < 0 || mu >= state.distimes.length) return;
+    if (mu < 0 || mu >= state.spikeTimes.length) return;
 
     pushReplayBackup(state, {
       stepIdx,
       muIdx: mu,
-      distimes: [...(state.distimes[mu] || [])],
+      spikes: [...(state.spikeTimes[mu] || [])],
       pulseTrain: [...(state.pulseTrains[mu] || [])],
       artifactTimes: [...(state.artifactTimes[mu] || [])],
     });
@@ -329,7 +327,7 @@ export function createReplayService(app) {
       });
     } else {
       setMuRows(state, mu, {
-        distimes: applyLoggedDiffForward(state.distimes[mu], step),
+        spikes: applyLoggedDiffForward(state.spikeTimes[mu], step),
       });
     }
     showMu(mu);
@@ -344,15 +342,14 @@ export function createReplayService(app) {
    */
   async function refitStep(stepIdx, step, mu) {
     const pulse = state.pulseTrains[mu] || pulseForCurrentMu(state);
-    const grid = state.muGridIndex[mu] || 0;
+    const grid = state.muGridIndex[mu];
     try {
       const out = await api.updateFilter({
-        mu_index: mu,
-        distimes: state.distimes,
+        mu,
+        spike_times: state.spikeTimes,
         pulse_train: pulse,
-        bids_root: getBidsRoot(state),
-        entity_label: getEntityLabel(state),
-        grid_index: grid,
+        bids_root: state.bidsRoot,
+        entity_label: state.entityLabel,
         grid_name: state.gridNames[grid] || "",
         mu_grid_index: state.muGridIndex,
         inactive_mus: inactiveMusBefore(state.history, stepIdx, state.muUids),
@@ -367,8 +364,8 @@ export function createReplayService(app) {
         artifact_regions: state.artifactRegions || [],
       });
       setMuRows(state, mu, {
-        distimes: Array.isArray(out.distimes)
-          ? out.distimes.map(Number).filter((n) => Number.isFinite(n))
+        spikes: Array.isArray(out.spikes)
+          ? out.spikes.map(Number).filter((n) => Number.isFinite(n))
           : undefined,
         pulseTrain: Array.isArray(out.pulse_train)
           ? out.pulse_train.map((n) => Number(n) || 0)
@@ -377,7 +374,7 @@ export function createReplayService(app) {
     } catch (err) {
       app.setEditStatus(`update_filter step fallback (${errorMessage(err)})`);
       setMuRows(state, mu, {
-        distimes: applyLoggedDiffForward(state.distimes[mu], step),
+        spikes: applyLoggedDiffForward(state.spikeTimes[mu], step),
       });
     }
   }
@@ -390,7 +387,7 @@ export function createReplayService(app) {
     if (!backup || backup.stepIdx !== stepIdx) {
       // No backup for this step: undo its logged diff instead.
       const mu = resolveStepMuIndex(state, step);
-      if (mu < 0 || mu >= state.distimes.length) return;
+      if (mu < 0 || mu >= state.spikeTimes.length) return;
       if (isArtifactStep(step)) {
         setMuRows(state, mu, {
           artifactTimes: applyArtifactDiffBackward(
@@ -400,7 +397,7 @@ export function createReplayService(app) {
         });
       } else {
         setMuRows(state, mu, {
-          distimes: applyLoggedDiffBackward(state.distimes[mu], step),
+          spikes: applyLoggedDiffBackward(state.spikeTimes[mu], step),
         });
       }
       return;
@@ -411,7 +408,7 @@ export function createReplayService(app) {
       backup.artifactTimes.length ||
       state.artifactTimes[backup.muIdx] !== undefined;
     setMuRows(state, backup.muIdx, {
-      distimes: backup.distimes,
+      spikes: backup.spikes,
       pulseTrain: backup.pulseTrain,
       artifactTimes: keepArtifacts ? backup.artifactTimes : undefined,
     });
@@ -437,7 +434,6 @@ export function createReplayService(app) {
     return {
       ...last,
       type: "spike_edits",
-      timestamp: `${first.timestamp} -> ${last.timestamp}`,
       viewStart: starts.length ? Math.min(...starts) : null,
       viewEnd: ends.length ? Math.max(...ends) : null,
       spikesAdded: [...new Set(steps.flatMap((s) => s.spikesAdded || []))],
@@ -543,7 +539,7 @@ export function createReplayService(app) {
    */
   function replayBase() {
     const base = {
-      distimes: state.distimes.map((row) => [...row]),
+      spikeTimes: state.spikeTimes.map((row) => [...row]),
       pulseTrains: state.pulseTrains,
       artifactTimes: state.artifactTimes,
     };
@@ -552,8 +548,8 @@ export function createReplayService(app) {
     for (let i = state.history.length - 1; i >= 0; i -= 1) {
       const step = state.history[i];
       const mu = resolveStepMuIndex(state, step);
-      if (mu < 0 || mu >= base.distimes.length) continue;
-      base.distimes[mu] = applyLoggedDiffBackward(base.distimes[mu], step);
+      if (mu < 0 || mu >= base.spikeTimes.length) continue;
+      base.spikeTimes[mu] = applyLoggedDiffBackward(base.spikeTimes[mu], step);
       if (isArtifactStep(step) && mu < base.artifactTimes.length) {
         base.artifactTimes[mu] = applyArtifactDiffBackward(
           base.artifactTimes[mu],

@@ -34,7 +34,7 @@ describe("applyLoggedDiffForward", () => {
     assert.deepEqual(result, [10, 40]);
   });
 
-  test("tolerates missing distimes and step fields", () => {
+  test("tolerates missing spikes and step fields", () => {
     assert.deepEqual(applyLoggedDiffForward(null, {}), []);
     assert.deepEqual(applyLoggedDiffForward([1, 2], {}), [1, 2]);
     assert.deepEqual(

@@ -3,12 +3,9 @@
  */
 /** @typedef {import("../app/context.js").JsonObject} JsonObject */
 /** @typedef {import("../app/context.js").Span} Span */
-/** @typedef {JsonObject} EditHistoryEntry Raw edit-log entry from the backend or sidecar. */
 
 /**
  * @typedef {object} EditLogEntry
- * @property {number} idx
- * @property {string} timestamp
  * @property {string} type
  * @property {string} muUid
  * @property {number} muIdx
@@ -28,7 +25,7 @@
  * @typedef {object} ReplayBackup
  * @property {number} stepIdx
  * @property {number} muIdx
- * @property {number[]} distimes
+ * @property {number[]} spikes
  * @property {number[]} pulseTrain
  * @property {number[]} artifactTimes
  */
@@ -51,11 +48,9 @@
 
 /**
  * @typedef {object} State
- * @property {string} editedFilename
- * @property {string} logFilename
  * @property {number} fsamp
  * @property {number[][]} pulseTrains
- * @property {number[][]} distimes
+ * @property {number[][]} spikeTimes
  * @property {string[]} gridNames
  * @property {number[]} muGridIndex
  * @property {string[]} muUids
@@ -66,8 +61,7 @@
  * @property {ReplayGroup[]} filteredReplayGroups
  * @property {boolean} isPlaying
  * @property {number | null} playTimer
- * @property {EditHistoryEntry[]} editHistory
- * @property {number[][]} replayBaseDistimes
+ * @property {number[][]} replayBaseSpikeTimes
  * @property {number[][]} replayBasePulseTrains
  * @property {number} replayPosition
  * @property {ReplayBackup[]} replayBackups
@@ -76,10 +70,8 @@
  * @property {RefitSettings} refitSettings
  * @property {Record<string, string>} muMarks
  * @property {string[]} muGhostUids Uids the log marks but the loaded file no longer has.
- * @property {string} bidsRoot The session's BIDS dataset, from the file's location.
- * @property {string} dataRoot The server's data root, used when the file names no dataset.
- * @property {string} entityLabel
- * @property {string} bidsEntityLabel
+ * @property {string} bidsRoot The session's BIDS dataset: the file's location, else the server's data root.
+ * @property {string} entityLabel The BIDS entity label of the session's recording.
  * @property {number[][]} artifactTimes
  * @property {number[][]} replayBaseArtifactTimes
  * @property {number[][]} artifactRegions
@@ -87,11 +79,9 @@
 
 /** @type {State} */
 export const state = {
-  editedFilename: "",
-  logFilename: "",
   fsamp: 2048,
   pulseTrains: [],
-  distimes: [],
+  spikeTimes: [],
   gridNames: [],
   muGridIndex: [],
   muUids: [],
@@ -102,8 +92,7 @@ export const state = {
   filteredReplayGroups: [],
   isPlaying: false,
   playTimer: null,
-  editHistory: [],
-  replayBaseDistimes: [],
+  replayBaseSpikeTimes: [],
   replayBasePulseTrains: [],
   replayPosition: 0,
   replayBackups: [],
@@ -117,9 +106,7 @@ export const state = {
   muMarks: {},
   muGhostUids: [],
   bidsRoot: "",
-  dataRoot: "",
   entityLabel: "",
-  bidsEntityLabel: "",
   artifactTimes: [],
   replayBaseArtifactTimes: [],
   artifactRegions: [],

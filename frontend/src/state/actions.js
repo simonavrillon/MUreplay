@@ -5,7 +5,6 @@
 
 /** @typedef {import("./state.js").State} State */
 /** @typedef {import("./state.js").EditLogEntry} EditLogEntry */
-/** @typedef {import("./state.js").EditHistoryEntry} EditHistoryEntry */
 /** @typedef {import("./state.js").ReplayBackup} ReplayBackup */
 /** @typedef {import("./state.js").ReplayGroup} ReplayGroup */
 /** @typedef {import("../app/context.js").Span} Span */
@@ -14,7 +13,7 @@
  * The decomposition a replay starts from, one row per MU.
  *
  * @typedef {object} ReplayBase
- * @property {number[][]} distimes
+ * @property {number[][]} spikeTimes
  * @property {number[][]} pulseTrains
  * @property {number[][]} artifactTimes
  */
@@ -86,10 +85,10 @@ export function popReplayBackup(state) {
  *
  * @param {State} state
  * @param {number} mu
- * @param {{ distimes?: number[], pulseTrain?: number[], artifactTimes?: number[] }} rows
+ * @param {{ spikes?: number[], pulseTrain?: number[], artifactTimes?: number[] }} rows
  */
-export function setMuRows(state, mu, { distimes, pulseTrain, artifactTimes }) {
-  if (distimes) state.distimes[mu] = distimes;
+export function setMuRows(state, mu, { spikes, pulseTrain, artifactTimes }) {
+  if (spikes) state.spikeTimes[mu] = spikes;
   if (pulseTrain) state.pulseTrains[mu] = pulseTrain;
   if (artifactTimes) state.artifactTimes[mu] = artifactTimes;
 }
@@ -97,11 +96,9 @@ export function setMuRows(state, mu, { distimes, pulseTrain, artifactTimes }) {
 /**
  * @param {State} state
  * @param {EditLogEntry[]} history
- * @param {EditHistoryEntry[]} editHistory The raw entries `history` was normalised from.
  */
-export function setHistory(state, history, editHistory) {
+export function setHistory(state, history) {
   state.history = history;
-  state.editHistory = editHistory;
 }
 
 /**
@@ -133,7 +130,7 @@ export function setFilteredReplayGroups(state, groups) {
  * @param {ReplayBase} base
  */
 export function setReplayBase(state, base) {
-  state.replayBaseDistimes = copyRows(base.distimes);
+  state.replayBaseSpikeTimes = copyRows(base.spikeTimes);
   state.replayBasePulseTrains = copyRows(base.pulseTrains);
   state.replayBaseArtifactTimes = copyRows(base.artifactTimes);
   restoreReplayBase(state);
@@ -148,18 +145,10 @@ export function restoreReplayBase(state) {
   state.replayBackups = [];
   state.replayPosition = 0;
   state.replayView = null;
-  if (state.replayBaseDistimes.length)
-    state.distimes = copyRows(state.replayBaseDistimes);
+  if (state.replayBaseSpikeTimes.length)
+    state.spikeTimes = copyRows(state.replayBaseSpikeTimes);
   if (state.replayBasePulseTrains.length)
     state.pulseTrains = copyRows(state.replayBasePulseTrains);
   if (state.replayBaseArtifactTimes.length)
     state.artifactTimes = copyRows(state.replayBaseArtifactTimes);
-}
-
-/**
- * @param {State} state
- * @param {string} root
- */
-export function setDataRoot(state, root) {
-  state.dataRoot = root;
 }

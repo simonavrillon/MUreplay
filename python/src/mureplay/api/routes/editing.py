@@ -16,4 +16,4 @@ router = APIRouter(prefix="/api/v1", tags=["editing"])
 @router.post("/edit/update-filter")
 def update_filter(payload: UpdateFilterPayload) -> dict[str, Any]:
     """Refit one MU's filter on the BIDS EMG in the logged window and return its discharges."""
-    return success_payload(run_update_filter(payload.model_dump()))
+    return success_payload(run_update_filter(payload))

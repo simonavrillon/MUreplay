@@ -2,9 +2,14 @@
 
 from __future__ import annotations
 
-from typing import Any, Literal
-
 from pydantic import BaseModel, Field
+
+from mureplay.replay.filter_update import (
+    DEFAULT_COMPUTE_DTYPE,
+    DEFAULT_NBEXTCHAN,
+    DEFAULT_PEEL_OFF_WIN_SEC,
+    ComputeDtype,
+)
 
 
 class LoadPairedFromPathPayload(BaseModel):
@@ -18,19 +23,18 @@ class UpdateFilterPayload(BaseModel):
 
     bids_root: str
     entity_label: str
-    distimes: list[list[int]] = Field(default_factory=list)
-    mu_index: int = 0
-    grid_index: int = 0
+    spike_times: list[list[int]]
+    mu: int
     grid_name: str = ""
-    view_start: int = 0
-    view_end: int = 0
-    nbextchan: int = Field(1000, ge=1)
+    view_start: int
+    view_end: int
+    nbextchan: int = Field(DEFAULT_NBEXTCHAN, ge=1)
     pulse_train: list[float] = Field(default_factory=list)
     use_peeloff: bool = False
-    peel_off_win: float = Field(0.025, gt=0)
-    compute_dtype: Literal["float32", "float64"] = "float32"
-    mu_grid_index: list[int] = Field(default_factory=list)
+    peel_off_win: float = Field(DEFAULT_PEEL_OFF_WIN_SEC, gt=0)
+    compute_dtype: ComputeDtype = DEFAULT_COMPUTE_DTYPE
+    mu_grid_index: list[int]
     inactive_mus: list[int] = Field(default_factory=list)
     artifact_times: list[int] = Field(default_factory=list)
     lock_spikes: bool = False
-    artifact_regions: list[Any] | None = None
+    artifact_regions: list[tuple[int, int]] = Field(default_factory=list)

@@ -53,16 +53,13 @@ class TestEnvelopes:
     def test_health_answers_ok(self, client: TestClient) -> None:
         assert ok(client.get(f"{API}/health")) == {"status": "ok"}
 
-    def test_config_names_the_data_root(self, client: TestClient) -> None:
-        assert ok(client.get(f"{API}/config"))["bids_root"]
-
     def test_unknown_route_uses_the_error_envelope(self, client: TestClient) -> None:
         assert error(client.get(f"{API}/no-such-endpoint"), 404)["message"] == "Not Found"
 
     def test_a_schema_violation_uses_the_validation_envelope(self, client: TestClient) -> None:
         resp = client.post(
             f"{API}/edit/update-filter",
-            json={"bids_root": "/bids", "entity_label": "sub-1", "mu_index": "not-an-int"},
+            json={"bids_root": "/bids", "entity_label": "sub-1", "mu": "not-an-int"},
         )
         error(resp, 422, "validation_error")
 

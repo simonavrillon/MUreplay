@@ -143,7 +143,7 @@ describe("apiFetch", () => {
 describe("apiJson", () => {
   test("unwraps the data envelope", async () => {
     stubBehavior = () => fakeResponse({ data: { unwrapped: true } });
-    const payload = await apiJson("http://api/config");
+    const payload = await apiJson("http://api/health");
     assert.deepEqual(payload, { unwrapped: true });
   });
 

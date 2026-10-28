@@ -17,9 +17,8 @@ change these only together with the other side, and with a test.
 | Route | Does |
 |---|---|
 | `GET /health` | answers while the server is up; the page waits on it at start |
-| `GET /config` | the data root the page falls back to for BIDS datasets |
-| `GET /dialog/open-file` | the path the user picks in the native file dialog |
-| `POST /load-paired-from-path` | the decomposition and edit log paired with a path ([file-formats.md](../docs/file-formats.md#how-files-are-paired)) |
+| `GET /dialog/open-file` | the path the user picks in the native file dialog, or `null` when cancelled |
+| `POST /load-paired-from-path` | the decomposition and edit log paired with a path ([file-formats.md](../docs/file-formats.md#how-files-are-paired)), complete: `fsamp`, `grid_names` and one `mu_grid_index` entry per MU are filled in when the file has none |
 | `POST /edit/update-filter` | refits one MU on the BIDS EMG, as a logged `update_filter` step did |
 
 ### Errors
@@ -43,12 +42,12 @@ page:
 
 | Field | Comes from |
 |---|---|
-| `distimes`, `mu_index`, `grid_index`, `mu_grid_index` | the replay at that step |
+| `spike_times`, `mu`, `mu_grid_index` | the replay at that step; the grid is `mu_grid_index[mu]`, as in MUedit2 |
 | `view_start`, `view_end`, `use_peeloff`, `lock_spikes` | the logged step |
 | `inactive_mus` | the MUs flagged or removed before the step (`inactiveMusBefore`); left out of peel-off |
 | `grid_name` | the decomposition's grid names; picks the bandpass |
 | `artifact_times`, `artifact_regions` | the MU's artifact markers at that step; the file's artifact windows |
-| `bids_root`, `entity_label` | the session's dataset and recording, inferred from the file's location |
+| `bids_root`, `entity_label` | the load response's: the dataset inferred from the file's location (else `MUREPLAY_DATA_ROOT`), and the decomposition's recording |
 | `nbextchan`, `peel_off_win`, `compute_dtype` | the decomposition's saved run `parameters`, as MUedit2's session refits with them (MUedit2's defaults when the file has none) |
 
 ## The edit log (MUedit2's format)
@@ -57,7 +56,7 @@ MUreplay reads MUedit2's `_edited.json` and never writes one. Its format is MUed
 for users in [file-formats.md](../docs/file-formats.md#the-edit-log-_editedjson). What the replay
 relies on:
 
-- Every MU step names its MU by `mu_uid`; `mu_idx`, when present, wins.
+- Every MU step names its MU by `mu_uid`.
 - Spike edits carry `spikes_added` / `spikes_removed`, artifact edits `artifacts_added` /
   `artifacts_removed`; applying them forward and backward is exact.
 - `update_filter` carries `view_start`, `view_end`, `use_peeloff`, `lock_spikes`, and its diff,

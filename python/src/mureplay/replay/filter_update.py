@@ -3,7 +3,7 @@
 from __future__ import annotations
 
 from collections.abc import Sequence
-from typing import Any
+from typing import Any, Literal, TypeAlias
 
 import numpy as np
 from numpy.typing import ArrayLike, DTypeLike
@@ -18,17 +18,10 @@ from mureplay.errors import MureplayError
 # primitives it calls, so a replayed step lands on the session's result;
 # tests/test_muedit2_parity.py fails when the two drift apart.
 
-#: Columns per covariance/whitening chunk, so one float64 chunk stays near 32 MiB.
-_CHUNK_BYTES = 32 * 1024 * 1024
-KMEANS_ITER: int = 10
-POSTPROC_MIN_ISI_SEC: float = 0.005
 DEFAULT_NBEXTCHAN: int = 1000
 DEFAULT_PEEL_OFF_WIN_SEC: float = 0.025
-ComputeDtype = Any  # "float32" | "float64"
+ComputeDtype: TypeAlias = Literal["float32", "float64"]
 DEFAULT_COMPUTE_DTYPE: ComputeDtype = "float32"
-NOTCH_WINDOW_HZ: float = 50.0
-#: Samples around an original spike searched for its peak when ``lock_spikes`` is set.
-_LOCK_RADIUS = 10
 #: Seconds cut from each end of the refit window: bandpass transients and the extension's padding.
 EDGE_SEC = 0.1
 
@@ -48,6 +41,8 @@ def spike_array(values: Any) -> np.ndarray:
 
 
 # ── Session preprocessing ───────────────────────────────────────────────────
+
+NOTCH_WINDOW_HZ: float = 50.0
 
 
 def _bandpass_coefficients(fsamp: float, emg_type: int) -> tuple[np.ndarray, np.ndarray]:
@@ -121,6 +116,9 @@ def emg_filter_inplace(signal: np.ndarray, fsamp: float, emg_type: int = 1) -> N
 
 
 # ── Extension, PCA and whitening ────────────────────────────────────────────
+
+#: Columns per covariance/whitening chunk, so one float64 chunk stays near 32 MiB.
+_CHUNK_BYTES = 32 * 1024 * 1024
 
 
 def extension_factor(nbextchan: int, n_channels: int) -> int:
@@ -262,6 +260,9 @@ def subtract_mu_waveforms(
 
 # ── Spike detection ─────────────────────────────────────────────────────────
 
+KMEANS_ITER: int = 10
+POSTPROC_MIN_ISI_SEC: float = 0.005
+
 
 def signed_square(x: np.ndarray) -> np.ndarray:
     """Signed-squared nonlinearity ``x * |x|`` used to build pulse trains."""
@@ -291,6 +292,9 @@ def split_by_amplitude(
 
 
 # ── Filter update ───────────────────────────────────────────────────────────
+
+#: Samples around an original spike searched for its peak when ``lock_spikes`` is set.
+_LOCK_RADIUS = 10
 
 
 def _in_window(times: np.ndarray, lo: int, hi: int) -> np.ndarray:

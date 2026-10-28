@@ -65,7 +65,10 @@ function editStatuses(app) {
 function loadPayload(overrides = {}) {
   return {
     pulse_trains: [[0, 1, 0, 1]],
-    discharge_times: [[100, 300]],
+    spike_times: [[100, 300]],
+    fsamp: 2048,
+    grid_names: ["Grid 1"],
+    mu_grid_index: [0],
     source_filename: "sub-01_edited.json",
     ...overrides,
   };
@@ -76,23 +79,19 @@ describe("onLoadByPath", () => {
     const app = createFakeApp({
       loadPayload: loadPayload({
         bids_root: "/data",
-        entity_label: "sub-01",
-        bids_entity_label: "sub-01_task-rest",
+        entity_label: "sub-01_task-rest",
       }),
     });
     const service = createFileSessionService(app);
     await service.onLoadByPath("/recordings/sub-01_edited.json");
 
     const { state } = app;
-    assert.equal(state.editedFilename, "sub-01_edited.json");
-    assert.equal(state.logFilename, "sub-01_edited.json");
     assert.equal(state.loadedFromDecomp, false);
     assert.equal(state.bidsRoot, "/data");
-    assert.equal(state.entityLabel, "sub-01");
-    assert.equal(state.bidsEntityLabel, "sub-01_task-rest");
+    assert.equal(state.entityLabel, "sub-01_task-rest");
     assert.equal(state.fsamp, 2048);
     assert.deepEqual(state.pulseTrains, [[0, 1, 0, 1]]);
-    assert.deepEqual(state.distimes, [[100, 300]]);
+    assert.deepEqual(state.spikeTimes, [[100, 300]]);
     assert.deepEqual(state.gridNames, ["Grid 1"]);
     assert.deepEqual(state.muGridIndex, [0]);
     assert.deepEqual(state.muUids, ["g0_mu0"]);
@@ -102,7 +101,6 @@ describe("onLoadByPath", () => {
       computeDtype: "float32",
     });
     // Nothing of a previous session's log or timeline survives the load.
-    assert.deepEqual(state.editHistory, []);
     assert.deepEqual(state.history, []);
     assert.deepEqual(state.replayGroups, []);
     assert.deepEqual(state.muMarks, {});
@@ -139,29 +137,6 @@ describe("onLoadByPath", () => {
     }
   });
 
-  test("falls back to the file basename", async () => {
-    const app = createFakeApp({
-      loadPayload: loadPayload({ source_filename: undefined }),
-    });
-    const service = createFileSessionService(app);
-    await service.onLoadByPath("/recordings/sub-02_edited.json");
-    assert.equal(app.state.editedFilename, "sub-02_edited.json");
-    assert.equal(app.state.logFilename, "sub-02_edited.json");
-  });
-
-  test("takes the basename of a Windows path too", async () => {
-    // The backend returns native paths, so a session opened on Windows arrives
-    // with backslashes. Keeping the whole path here would send it on as the
-    // BIDS entity label, which `getEntityLabel` infers from this filename.
-    const app = createFakeApp({
-      loadPayload: loadPayload({ source_filename: undefined }),
-    });
-    const service = createFileSessionService(app);
-    await service.onLoadByPath("C:\\data\\sub-03_edited.json");
-    assert.equal(app.state.editedFilename, "sub-03_edited.json");
-    assert.equal(app.state.logFilename, "sub-03_edited.json");
-  });
-
   test("imports an embedded edit history", async () => {
     const app = createFakeApp({
       loadPayload: loadPayload({
@@ -179,23 +154,11 @@ describe("onLoadByPath", () => {
     assert.equal(state.history[0].type, "add_spikes");
     assert.equal(state.history[0].muIdx, 0);
     assert.deepEqual(state.history[0].spikesAdded, [150]);
-    // The raw history is preserved verbatim alongside the normalized one.
-    assert.equal(state.editHistory.length, 2);
     // The replay starts once the log is in place.
     assert.deepEqual(
       app.calls.find((c) => c[0] === "startReplay"),
       ["startReplay", 1],
     );
-  });
-
-  test("also accepts a history field alias", async () => {
-    const app = createFakeApp({
-      loadPayload: loadPayload({ history: [{ action: "delete_spikes" }] }),
-    });
-    const service = createFileSessionService(app);
-    await service.onLoadByPath("/recordings/sub-01_edited.json");
-    assert.equal(app.state.history.length, 1);
-    assert.equal(app.state.history[0].type, "delete_spikes");
   });
 
   test("ignores blank paths without touching the API", async () => {

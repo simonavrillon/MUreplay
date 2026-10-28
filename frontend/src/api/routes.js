@@ -4,7 +4,6 @@
  */
 export const routes = {
   health: "/health",
-  config: "/config",
   loadPairedFromPath: "/load-paired-from-path",
   editUpdateFilter: "/edit/update-filter",
   dialogOpenFile: "/dialog/open-file",

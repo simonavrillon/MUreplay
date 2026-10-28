@@ -8,9 +8,12 @@ from typing import Any
 
 #: The files the replay opens: a decomposition, or the edit log beside it.
 _EXTENSIONS = ["npz", "json"]
+_PROMPT = "Select a decomposition (.npz) or its edit log (.json)"
+#: Seconds the dialog may stay open before the request gives up.
+_TIMEOUT_SEC = 120
 
 # Python snippet for tkinter — run in a subprocess so it owns the main thread,
-# which is required on Linux/Windows.
+# which is required on Linux/Windows. Its argv: the prompt, then the extensions.
 _TKINTER_SCRIPT = """\
 import sys
 try:
@@ -19,14 +22,10 @@ try:
     root = tk.Tk()
     root.withdraw()
     root.attributes('-topmost', True)
+    patterns = ' '.join('*.' + e for e in sys.argv[2:])
     path = filedialog.askopenfilename(
-        title='Select decomp NPZ or edited JSON',
-        filetypes=[
-            ('Decomp / log files', '*.npz *.json'),
-            ('NPZ files', '*.npz'),
-            ('JSON files', '*.json'),
-            ('All files', '*'),
-        ],
+        title=sys.argv[1],
+        filetypes=[('Decomposition or edit log', patterns), ('All files', '*')],
     )
     root.destroy()
     print(path or '', end='')
@@ -42,8 +41,7 @@ def _open_dialog_macos() -> str | None:
     script = (
         'tell application "System Events"\n'
         "  activate\n"
-        f'  set f to choose file with prompt "Select decomp NPZ or edited JSON" '
-        f"of type {ext_list}\n"
+        f'  set f to choose file with prompt "{_PROMPT}" of type {ext_list}\n'
         "  return POSIX path of f\n"
         "end tell"
     )
@@ -51,7 +49,7 @@ def _open_dialog_macos() -> str | None:
         ["osascript", "-e", script],
         capture_output=True,
         text=True,
-        timeout=120,
+        timeout=_TIMEOUT_SEC,
         check=False,
     )
     path = result.stdout.strip()
@@ -65,10 +63,10 @@ def _open_dialog_tkinter() -> str | None:
         # Suppress the console window that would briefly flash on Windows.
         kwargs["creationflags"] = subprocess.CREATE_NO_WINDOW
     result = subprocess.run(
-        [sys.executable, "-c", _TKINTER_SCRIPT],
+        [sys.executable, "-c", _TKINTER_SCRIPT, _PROMPT, *_EXTENSIONS],
         capture_output=True,
         text=True,
-        timeout=120,
+        timeout=_TIMEOUT_SEC,
         check=False,
         **kwargs,
     )

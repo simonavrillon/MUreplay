@@ -18,6 +18,7 @@ from typing import Any
 import numpy as np
 import pytest
 
+from mureplay.api.schemas import UpdateFilterPayload
 from mureplay.api.services.filter_service import INTRAMUSCULAR_GRIDS, run_update_filter
 from mureplay.io.loaders import load_npz_payload, load_paired_from_path
 from mureplay.replay.artifact_mask import build_manual_artifact_mask
@@ -203,14 +204,12 @@ class TestDecompositionFile:
             artifact_mask=artifact_mask,
         )
 
-        payload = load_npz_payload(out_path.read_bytes())
-        assert payload["discharge_times"] == spike_times
+        payload = load_npz_payload(out_path)
+        assert payload["spike_times"] == spike_times
         assert payload["grid_names"] == ["Grid A", "Grid B"]
         assert payload["mu_grid_index"] == [0, 1]
         assert payload["fsamp"] == 2000.0
-        assert payload["total_samples"] == 500
         assert payload["artifact_regions"] == [[100, 150]]
-        assert payload["artifact_samples"] == 50
         # No pulse trains in the file: binary trains are drawn from the spikes, as MUedit2 does.
         assert len(payload["pulse_trains"]) == 2
         for row, times in zip(payload["pulse_trains"], spike_times, strict=True):
@@ -235,7 +234,7 @@ class TestSessionReplay:
         payload = load_paired_from_path(muedit2_session)
         run = payload["parameters"]
         mu_grid_index = payload["mu_grid_index"]
-        state = [list(row) for row in payload["discharge_times"]]
+        state = [list(row) for row in payload["spike_times"]]
         # The log lists the uids that survived; the page numbers the file's MUs as MUedit2 does.
         mu_uids = _mu2("muedit.editing.session").initial_mu_uids(mu_grid_index)
         artifacts: list[list[int]] = [[] for _ in state]
@@ -255,28 +254,29 @@ class TestSessionReplay:
             if kind == "update_filter":
                 grid = mu_grid_index[mu]
                 resp = run_update_filter(
-                    {
-                        "bids_root": str(MUEDIT2_ROOT / "data" / "Test"),
-                        "entity_label": SAMPLE_ENTITY,
-                        "distimes": state,
-                        "mu_index": mu,
-                        "grid_index": grid,
-                        "grid_name": payload["grid_names"][grid],
-                        "view_start": entry["view_start"],
-                        "view_end": entry["view_end"],
-                        "use_peeloff": bool(entry.get("use_peeloff")),
-                        "lock_spikes": bool(entry.get("lock_spikes")),
-                        "mu_grid_index": mu_grid_index,
-                        "inactive_mus": sorted(flagged | removed),
-                        "artifact_times": artifacts[mu],
-                        "artifact_regions": payload["artifact_regions"],
-                        # MUedit2's session refits with the run's saved settings.
-                        "nbextchan": run["nbextchan"],
-                        "peel_off_win": run["peel_off_win"],
-                        "compute_dtype": run["compute_dtype"],
-                    }
+                    UpdateFilterPayload.model_validate(
+                        {
+                            "bids_root": str(MUEDIT2_ROOT / "data" / "Test"),
+                            "entity_label": SAMPLE_ENTITY,
+                            "spike_times": state,
+                            "mu": mu,
+                            "grid_name": payload["grid_names"][grid],
+                            "view_start": entry["view_start"],
+                            "view_end": entry["view_end"],
+                            "use_peeloff": bool(entry.get("use_peeloff")),
+                            "lock_spikes": bool(entry.get("lock_spikes")),
+                            "mu_grid_index": mu_grid_index,
+                            "inactive_mus": sorted(flagged | removed),
+                            "artifact_times": artifacts[mu],
+                            "artifact_regions": payload["artifact_regions"],
+                            # MUedit2's session refits with the run's saved settings.
+                            "nbextchan": run["nbextchan"],
+                            "peel_off_win": run["peel_off_win"],
+                            "compute_dtype": run["compute_dtype"],
+                        }
+                    )
                 )
-                state[mu] = resp["distimes"]
+                state[mu] = resp["spikes"]
             else:
                 state[mu] = _apply_diff(state[mu], entry, "spikes_added", "spikes_removed")
                 artifacts[mu] = _apply_diff(

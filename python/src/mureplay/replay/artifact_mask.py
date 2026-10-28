@@ -1,8 +1,6 @@
-"""Artifact windows MUedit2 saved: a mask turned into ``[start, end)`` regions for the page, and back."""
+"""Artifact windows MUedit2 saved: a mask turned into ``[start, end)`` intervals for the page, and back."""
 
 from __future__ import annotations
-
-from typing import Any
 
 import numpy as np
 
@@ -26,7 +24,7 @@ def build_manual_artifact_mask(
     return mask if mask.any() else None
 
 
-def mask_to_regions(mask: np.ndarray | None) -> list[list[int]]:
+def mask_to_intervals(mask: np.ndarray | None) -> list[list[int]]:
     """Convert a boolean sample mask into contiguous ``[start, end)`` ranges."""
     if mask is None or not mask.any():
         return []
@@ -34,21 +32,3 @@ def mask_to_regions(mask: np.ndarray | None) -> list[list[int]]:
     starts = np.flatnonzero(diff == 1)
     ends = np.flatnonzero(diff == -1)
     return [[int(s), int(e)] for s, e in zip(starts, ends, strict=True)]
-
-
-def parse_artifact_regions(raw: Any) -> list[tuple[int, int]]:
-    """Normalize payload artifact regions (``[s, e]`` pairs or ``{start, end}`` dicts)."""
-    regions: list[tuple[int, int]] = []
-    for row in raw or []:
-        pair: tuple[Any, Any] | None = None
-        if isinstance(row, (list, tuple)) and len(row) == 2:
-            pair = (row[0], row[1])
-        elif isinstance(row, dict) and "start" in row and "end" in row:
-            pair = (row["start"], row["end"])
-        if pair is None:
-            continue
-        try:
-            regions.append((int(pair[0]), int(pair[1])))
-        except (TypeError, ValueError):
-            continue
-    return regions

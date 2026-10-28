@@ -33,10 +33,6 @@ export function createApiClient({ apiJson, API_BASE }) {
       return `${API_BASE}${routes.health}`;
     },
 
-    fetchConfig() {
-      return apiJson(`${API_BASE}${routes.config}`);
-    },
-
     /** @param {string} filePath */
     loadPairedFromPath(filePath) {
       return postJson(`${API_BASE}${routes.loadPairedFromPath}`, {

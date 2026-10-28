@@ -1,15 +1,15 @@
-"""Replay routes: health, config, and file loading endpoints."""
+"""Replay routes: health, and loading a session."""
 
 from __future__ import annotations
 
+from pathlib import Path
 from typing import Any
 
 from fastapi import APIRouter
 
 from mureplay.api.common import success_payload
-from mureplay.api.config import DATA_ROOT
 from mureplay.api.schemas import LoadPairedFromPathPayload
-from mureplay.api.services.load_service import load_from_path
+from mureplay.io import loaders
 
 router = APIRouter(prefix="/api/v1", tags=["replay"])
 
@@ -20,13 +20,7 @@ def health() -> dict[str, Any]:
     return success_payload({"status": "ok"})
 
 
-@router.get("/config")
-def config() -> dict[str, Any]:
-    """The data root the page falls back to for BIDS datasets."""
-    return success_payload({"bids_root": str(DATA_ROOT)})
-
-
 @router.post("/load-paired-from-path")
 def load_paired_from_path(payload: LoadPairedFromPathPayload) -> dict[str, Any]:
     """Load the decomposition and edit log paired with the chosen file."""
-    return success_payload(load_from_path(payload.file_path))
+    return success_payload(loaders.load_paired_from_path(Path(payload.file_path)))

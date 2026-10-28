@@ -49,9 +49,16 @@ The older layout with `decomp/` directly under `<dataset>/sub-XX/` works too. Wh
 file is not inside a `sub-*` folder, MUreplay reads the EMG from `MUREPLAY_DATA_ROOT` (`data/`
 in the MUreplay folder by default; see [cli.md](cli.md#environment-variables)).
 
-From the recording, MUreplay reads the grid's channels in `_channels.tsv` order (`group` =
-`Grid<n>`, channels with `status` `bad` left out of the filter), and stops at the
-`RecordingDuration` the `_emg.json` sidecar declares: EDF/BDF pad their last data record.
+From the recording, MUreplay reads a grid's channels as MUedit2 does:
+
+- a grid is the EMG rows of `_channels.tsv` that share a `group`; grids are numbered by
+  `Grid<n>` when every group is named that way, else in the order they are first listed;
+- each row is read from the EDF/BDF signal with the same `name`, or by position when the names
+  don't all match;
+- channels with `status` `bad` are left out of the filter;
+- reading stops at the `RecordingDuration` the `_emg.json` sidecar declares (EDF/BDF pad their
+  last data record). A sidecar higher in the dataset, such as `task-<task>_emg.json` at its
+  root, applies too; the recording's own wins.
 
 ## The decomposition (`.npz`)
 
@@ -60,7 +67,7 @@ v2 (current MUedit2, marked by `schema_version: 2`, pickle-free). Both give the 
 
 | Key | v1 | v2 |
 |---|---|---|
-| discharge times | `discharge_times` (or `distimes`) | the CSR pair `spike_times` + `spike_offsets` |
+| discharge times | `discharge_times` | the CSR pair `spike_times` + `spike_offsets` |
 | pulse trains | `pulse_trains` | `pulse_trains`, optional |
 | sampling rate | `fsamp` | `fsamp` |
 | grids | `grid_names` (a list), `mu_grid_index` | `grid_names` (JSON in one string), `mu_grid_index` |

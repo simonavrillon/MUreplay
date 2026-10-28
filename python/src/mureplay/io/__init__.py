@@ -1,1 +1,1 @@
-"""File input/output domain: NPZ/JSON loading, BIDS EMG reading, dialogs, saving."""
+"""File input: decomposition and edit-log loading, and BIDS EMG reading for the refit."""

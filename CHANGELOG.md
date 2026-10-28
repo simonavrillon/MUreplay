@@ -23,11 +23,24 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   current MUedit2 sessions saved.
 - Peel-off in a recomputed filter step leaves out the motor units that were flagged or removed
   at that point of the session, as MUedit2 does.
+- The file dialog asks for a decomposition (`.npz`) or its edit log (`.json`).
 - Filter steps are recomputed with the settings the decomposition was run with (channel
   extension, peel-off window and precision), as MUedit2's editor does, rather than with its
   defaults.
 - The EMG is read up to the recording duration its BIDS sidecar declares, not into the padding
   of the file's last data record.
+- A filter step reads its grid from the BIDS recording as MUedit2 does: channels are matched to
+  the EDF/BDF signals by name, grids need not be named `Grid<n>`, and an `_emg.json` higher in
+  the dataset applies too.
+- Sessions open faster: only the parts of the decomposition the replay shows are read.
+- The API names discharge times `spike_times` (one MU's: `spikes`), as MUedit2 does; the load
+  response drops `source_kind`, `paired_files`, `artifact_samples`, `total_samples` and
+  `bids_entity_label`, and its `entity_label` is now the decomposition's; the refit response
+  drops `fsamp`.
+- The refit request names its MU `mu`, as MUedit2 does, and takes the grid from
+  `mu_grid_index`; it drops `mu_idx` and `grid_index`. The load response falls back to
+  `MUREPLAY_DATA_ROOT` for `bids_root` itself, so `GET /config` is gone, and the file dialog
+  answers with `path` alone.
 
 ### Removed
 
@@ -35,6 +48,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - The `MUREPLAY_BACKEND_PORT` and `MUREPLAY_FRONTEND_PORT` settings: the one server takes
   `MUREPLAY_PORT`.
 - The conda `environment.yml`: setup runs through `uv`.
+- Edit-log fields MUedit2 never writes: `mu_idx` (a step's unit comes from its `mu_uid`),
+  `time`, `action`, `op`, `start`/`end`, and discharge lists written as text.
 
 ### Fixed
 

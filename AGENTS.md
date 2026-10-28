@@ -31,9 +31,9 @@ has its own `AGENTS.md` with its conventions; read it before editing there.
 
 ```text
 python/src/mureplay/   backend
-  api/                 HTTP routes, schemas, services (load, filter refit, file dialog), app factory
+  api/                 HTTP routes, schemas, services (filter refit, file dialog), app factory
   io/                  BIDS EMG reader, decomposition + edit-log loading and pairing
-  replay/              the update_filter refit (a mirror of MUedit2's), artifact masks, operations
+  replay/              the update_filter refit (a mirror of MUedit2's), artifact masks
 frontend/              vanilla JS app (no framework)
   src/app/             context, services (file session, replay, ui), stages
   src/state/           state, actions, selectors, transitions
@@ -131,22 +131,27 @@ npm run check                     # eslint, prettier --check, tsc, node --test
 
 ## Glossary
 
-Use these terms in code, UI text and docs alike. MUedit2's terms carry over unchanged.
+Use these terms in code, UI text and docs alike. MUedit2's terms carry over unchanged. Python
+names and JSON keys are snake_case; the frontend writes the same name in camelCase
+(`spike_times` → `spikeTimes`).
 
 | Term | Meaning | In code |
 |---|---|---|
 | MU, motor unit | one decomposed source | `mu`, `n_mu` |
-| discharge times | the samples an MU fires at (say "discharges" in docs and UI) | `distimes` (frontend, API), `spike_times` (refit) |
-| pulse train | an MU's source signal, from which discharges are picked | `pulse_trains` / `pulseTrains` |
+| discharge times | the samples an MU fires at (say "discharges" in docs and UI) | `spike_times` (one array per MU), `spikes` (one MU's array) |
+| recording length | samples in the whole recording, or in the array at hand | `total_samples`, `n_samples` |
+| pulse train (IPT) | an MU's source signal, from which discharges are picked | `pulse_trains` |
 | grid | one electrode array; a recording can hold several | `grid_names`, `mu_grid_index` |
+| BIDS dataset | the dataset a session belongs to, holding the raw EMG | `bids_root` |
+| entity label | the BIDS name of a recording, such as `sub-1_ses-1_task-x_run-1` | `entity_label` |
 | uid | an MU's stable id in the edit log, numbered per grid | `mu_uid` (`g<grid>_mu<n>`) |
 | edit log | the `_edited.json` beside a decomposition: MUedit2's history | `history`, `edit_history` |
 | step | one entry of the edit log | `EditLogEntry` |
 | timeline step | what the timeline shows: a step, or a run of spike edits on one MU merged | `ReplayGroup` |
 | refit | replaying an `update_filter` step on the BIDS EMG | `run_update_filter` |
 | replay base | the decomposition the replay starts from, at step 0 | `replayBase*` |
-| artifact window | a time range excluded from the decomposition | `artifact_regions` |
-| artifact marker | a peak marked as an artifact on one MU | `artifact_times` |
+| artifact window | a time range excluded from the decomposition | `artifact_regions`, `artifact_intervals` |
+| artifact marker | a peak marked as an artifact on one MU | `artifacts`, `artifact_times` |
 
 ## Before you finish
 

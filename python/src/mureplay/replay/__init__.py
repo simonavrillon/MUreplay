@@ -1,1 +1,1 @@
-"""Replay domain: edit-step operations and update_filter recomputation."""
+"""Replay domain: the update_filter refit and artifact windows."""

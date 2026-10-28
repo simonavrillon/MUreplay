@@ -23,21 +23,21 @@ function applyDiff(row, added, removed) {
 }
 
 /**
- * @param {number[] | null | undefined} distimes
+ * @param {number[] | null | undefined} spikes
  * @param {{ spikesAdded?: number[], spikesRemoved?: number[] }} step
  * @returns {number[]}
  */
-export function applyLoggedDiffForward(distimes, step) {
-  return applyDiff(distimes, step.spikesAdded, step.spikesRemoved);
+export function applyLoggedDiffForward(spikes, step) {
+  return applyDiff(spikes, step.spikesAdded, step.spikesRemoved);
 }
 
 /**
- * @param {number[] | null | undefined} distimes
+ * @param {number[] | null | undefined} spikes
  * @param {{ spikesAdded?: number[], spikesRemoved?: number[] }} step
  * @returns {number[]}
  */
-export function applyLoggedDiffBackward(distimes, step) {
-  return applyDiff(distimes, step.spikesRemoved, step.spikesAdded);
+export function applyLoggedDiffBackward(spikes, step) {
+  return applyDiff(spikes, step.spikesRemoved, step.spikesAdded);
 }
 
 /**

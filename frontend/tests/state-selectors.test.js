@@ -4,10 +4,8 @@ import assert from "node:assert/strict";
 import {
   artifactTimesForCurrentMu,
   currentStep,
-  distimesForCurrentMu,
+  spikesForCurrentMu,
   firstGridWithMu,
-  getBidsRoot,
-  getEntityLabel,
   getReplayView,
   isCurrentMuStep,
   musForGrid,
@@ -25,7 +23,7 @@ function stateWith(fields) {
   return /** @type {any} */ ({
     muGridIndex: [],
     muUids: [],
-    distimes: [],
+    spikeTimes: [],
     pulseTrains: [],
     artifactTimes: [],
     filteredReplayGroups: [],
@@ -67,8 +65,8 @@ describe("resolveStepMuIndex", () => {
 
 describe("currentStep", () => {
   test("reports the group behind the playhead", () => {
-    const first = entry({ timestamp: "first", muIdx: 0 });
-    const second = entry({ timestamp: "second", muIdx: 1 });
+    const first = entry({ muIdx: 0 });
+    const second = entry({ muIdx: 1 });
     const groups = [first, second].map((displayStep, i) => ({
       indices: [i],
       type: "spike_edits",
@@ -87,9 +85,9 @@ describe("currentStep", () => {
 
 describe("pulseForCurrentMu", () => {
   test("synthesizes a train when none was loaded", () => {
-    const state = stateWith({ distimes: [[2, 5]], pulseTrains: [[]] });
+    const state = stateWith({ spikeTimes: [[2, 5]], pulseTrains: [[]] });
     assert.deepEqual(pulseForCurrentMu(state), [0, 0, 1, 0, 0, 1]);
-    assert.deepEqual(distimesForCurrentMu(state), [2, 5]);
+    assert.deepEqual(spikesForCurrentMu(state), [2, 5]);
     assert.deepEqual(artifactTimesForCurrentMu(state), []);
   });
 });
@@ -99,23 +97,5 @@ describe("getReplayView", () => {
     assert.deepEqual(getReplayView(stateWith({}), 100), { start: 0, end: 100 });
     const zoomed = stateWith({ replayView: { start: 10, end: 20 } });
     assert.deepEqual(getReplayView(zoomed, 100), { start: 10, end: 20 });
-  });
-});
-
-describe("getBidsRoot and getEntityLabel", () => {
-  test("fall back to the data root and the file name", () => {
-    const state = stateWith({
-      bidsRoot: "",
-      dataRoot: "/data",
-      bidsEntityLabel: "",
-      entityLabel: "",
-      editedFilename: "sub-01_task-x_edited.npz",
-    });
-    assert.equal(getBidsRoot(state), "/data");
-    assert.equal(getEntityLabel(state), "sub-01_task-x");
-    state.bidsRoot = "/session";
-    state.bidsEntityLabel = "sub-02_task-y";
-    assert.equal(getBidsRoot(state), "/session");
-    assert.equal(getEntityLabel(state), "sub-02_task-y");
   });
 });

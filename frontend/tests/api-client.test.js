@@ -30,18 +30,6 @@ describe("healthUrl", () => {
   });
 });
 
-describe("fetchConfig", () => {
-  test("issues a GET against the config route", async () => {
-    const { apiJson, calls } = createRecordingApiJson({
-      data: { fsamp: 2048 },
-    });
-    const client = createApiClient({ apiJson, API_BASE });
-    await client.fetchConfig();
-    assert.equal(calls[0].url, `${API_BASE}${routes.config}`);
-    assert.equal(calls[0].options, undefined);
-  });
-});
-
 describe("loadPairedFromPath", () => {
   test("posts the file path as JSON", async () => {
     const { apiJson, calls } = createRecordingApiJson();
@@ -70,7 +58,7 @@ describe("updateFilter", () => {
   test("posts the payload with a raised timeout", async () => {
     const { apiJson, calls } = createRecordingApiJson();
     const client = createApiClient({ apiJson, API_BASE });
-    const payload = { mu_idx: 0, cutoff: 20 };
+    const payload = { mu: 0, cutoff: 20 };
     await client.updateFilter(payload);
     const call = calls[0];
     assert.equal(call.url, `${API_BASE}${routes.editUpdateFilter}`);

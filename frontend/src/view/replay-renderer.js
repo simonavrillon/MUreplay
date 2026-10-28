@@ -7,7 +7,7 @@ import { COLORS } from "../config.js";
 import {
   artifactTimesForCurrentMu,
   currentStep,
-  distimesForCurrentMu,
+  spikesForCurrentMu,
   getReplayView,
   isCurrentMuStep,
   pulseForCurrentMu,
@@ -41,7 +41,7 @@ export function createReplayRenderer({ els, state }) {
 
   function renderPulse() {
     const pulse = pulseForCurrentMu(state);
-    const spikes = distimesForCurrentMu(state);
+    const spikes = spikesForCurrentMu(state);
     const viewRange = getViewRange(pulse.length);
     const step = currentStep(state);
     const selections = [];
@@ -212,7 +212,7 @@ export function createReplayRenderer({ els, state }) {
   }
 
   function renderFiringRate() {
-    const spikes = distimesForCurrentMu(state);
+    const spikes = spikesForCurrentMu(state);
     const pulse = pulseForCurrentMu(state);
     const total = pulse.length || (spikes.length ? extent(spikes).max + 1 : 0);
     const viewRange = getViewRange(total);
@@ -333,7 +333,7 @@ export function createReplayRenderer({ els, state }) {
       });
     }
 
-    const spikes = distimesForCurrentMu(state);
+    const spikes = spikesForCurrentMu(state);
     ctx.fillStyle = COLORS.timelineSpikes;
     spikes.forEach((s) => {
       if (s >= 0 && s < total)

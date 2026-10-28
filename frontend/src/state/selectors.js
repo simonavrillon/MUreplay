@@ -1,7 +1,6 @@
 /**
  * Reads of `state` that need derivation; use these where one exists.
  */
-import { entityLabelFromFilename } from "../io/bids.js";
 import { clamp } from "../replay/operations.js";
 import { extent } from "../signal/series.js";
 
@@ -82,8 +81,8 @@ export function isCurrentMuStep(state, step) {
  * @param {State} state
  * @returns {number[]}
  */
-export function distimesForCurrentMu(state) {
-  const row = state.distimes[state.currentMu];
+export function spikesForCurrentMu(state) {
+  const row = state.spikeTimes[state.currentMu];
   return Array.isArray(row) ? row : [];
 }
 
@@ -104,7 +103,7 @@ export function artifactTimesForCurrentMu(state) {
 export function pulseForCurrentMu(state) {
   const pulse = state.pulseTrains[state.currentMu];
   if (Array.isArray(pulse) && pulse.length) return pulse;
-  const spikes = distimesForCurrentMu(state);
+  const spikes = spikesForCurrentMu(state);
   if (!spikes.length) return [];
   const synthetic = new Array(extent(spikes).max + 1).fill(0);
   spikes.forEach((s) => {
@@ -123,26 +122,4 @@ export function pulseForCurrentMu(state) {
 export function getReplayView(state, total) {
   const view = state.replayView;
   return view && view.end > view.start ? view : { start: 0, end: total };
-}
-
-/**
- * The BIDS dataset a filter refit reads the EMG from.
- *
- * @param {State} state
- */
-export function getBidsRoot(state) {
-  return state.bidsRoot || state.dataRoot;
-}
-
-/**
- * The BIDS entity label of the session's recording.
- *
- * @param {State} state
- */
-export function getEntityLabel(state) {
-  return (
-    state.bidsEntityLabel ||
-    state.entityLabel ||
-    entityLabelFromFilename(state.editedFilename)
-  );
 }

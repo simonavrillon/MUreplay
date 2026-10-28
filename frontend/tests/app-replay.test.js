@@ -37,11 +37,9 @@ after(() => Object.assign(globalThis, saved));
  */
 function makeState(overrides = {}) {
   return {
-    editedFilename: "sub-01_edited.json",
-    logFilename: "sub-01_edited.json",
     fsamp: 2048,
     pulseTrains: [],
-    distimes: [],
+    spikeTimes: [],
     gridNames: ["Grid 1"],
     muGridIndex: [],
     muUids: [],
@@ -52,8 +50,7 @@ function makeState(overrides = {}) {
     filteredReplayGroups: [],
     isPlaying: false,
     playTimer: null,
-    editHistory: [],
-    replayBaseDistimes: [],
+    replayBaseSpikeTimes: [],
     replayBasePulseTrains: [],
     replayPosition: 0,
     replayBackups: [],
@@ -67,9 +64,7 @@ function makeState(overrides = {}) {
     muMarks: {},
     muGhostUids: [],
     bidsRoot: "/data",
-    dataRoot: "",
     entityLabel: "sub-01",
-    bidsEntityLabel: "",
     artifactTimes: [],
     replayBaseArtifactTimes: [],
     artifactRegions: [],
@@ -86,8 +81,6 @@ function makeState(overrides = {}) {
  */
 function step(fields) {
   return {
-    idx: 0,
-    timestamp: "t",
     type: "add_spikes",
     muUid: "",
     muIdx: -1,
@@ -145,7 +138,7 @@ function createHarness(opts = {}) {
 /** A deep snapshot of everything a replay step is allowed to touch. */
 function snapshot(state) {
   return JSON.stringify({
-    distimes: state.distimes,
+    spikeTimes: state.spikeTimes,
     pulseTrains: state.pulseTrains,
     artifactTimes: state.artifactTimes,
   });
@@ -179,7 +172,7 @@ describe("rebuildReplayGroups", () => {
   test("collapses a run of spike edits on one MU", () => {
     const app = createHarness({
       state: {
-        distimes: [[10], [10]],
+        spikeTimes: [[10], [10]],
         pulseTrains: [
           [0, 1],
           [0, 1],
@@ -187,19 +180,17 @@ describe("rebuildReplayGroups", () => {
         muGridIndex: [0, 0],
         muUids: ["g0_mu0", "g0_mu1"],
         history: [
-          step({ idx: 0, type: "add_spikes", muIdx: 0, spikesAdded: [20] }),
+          step({ type: "add_spikes", muIdx: 0, spikesAdded: [20] }),
           step({
-            idx: 1,
             type: "delete_spikes",
             muIdx: 0,
             spikesRemoved: [10],
           }),
           // A different MU breaks the run.
-          step({ idx: 2, type: "add_spikes", muIdx: 1, spikesAdded: [30] }),
+          step({ type: "add_spikes", muIdx: 1, spikesAdded: [30] }),
           // So does a step that is not a spike edit.
-          step({ idx: 3, type: "update_filter", muIdx: 1 }),
+          step({ type: "update_filter", muIdx: 1 }),
           step({
-            idx: 4,
             type: "remove_outliers",
             muIdx: 1,
             spikesRemoved: [30],
@@ -222,22 +213,18 @@ describe("rebuildReplayGroups", () => {
   test("a merged group reports the union of its steps", () => {
     const app = createHarness({
       state: {
-        distimes: [[10]],
+        spikeTimes: [[10]],
         pulseTrains: [[0, 1]],
         muGridIndex: [0],
         muUids: ["g0_mu0"],
         history: [
           step({
-            idx: 0,
-            timestamp: "t1",
             muIdx: 0,
             spikesAdded: [20],
             viewStart: 100,
             viewEnd: 400,
           }),
           step({
-            idx: 1,
-            timestamp: "t2",
             type: "delete_spikes",
             muIdx: 0,
             spikesRemoved: [10],
@@ -250,7 +237,6 @@ describe("rebuildReplayGroups", () => {
 
     const display = app.state.replayGroups[0].displayStep;
     assert.equal(display.type, "spike_edits");
-    assert.equal(display.timestamp, "t1 -> t2");
     assert.equal(display.groupedCount, 2);
     assert.deepEqual(display.spikesAdded, [20]);
     assert.deepEqual(display.spikesRemoved, [10]);
@@ -265,7 +251,7 @@ describe("getActiveReplayGroups", () => {
   test("keeps only the current MU's groups", () => {
     const app = createHarness({
       state: {
-        distimes: [[10], [10]],
+        spikeTimes: [[10], [10]],
         pulseTrains: [
           [0, 1],
           [0, 1],
@@ -273,8 +259,8 @@ describe("getActiveReplayGroups", () => {
         muGridIndex: [0, 0],
         muUids: ["g0_mu0", "g0_mu1"],
         history: [
-          step({ idx: 0, muIdx: 0, spikesAdded: [20] }),
-          step({ idx: 1, muIdx: 1, spikesAdded: [30] }),
+          step({ muIdx: 0, spikesAdded: [20] }),
+          step({ muIdx: 1, spikesAdded: [30] }),
         ],
       },
     });
@@ -291,14 +277,13 @@ describe("getActiveReplayGroups", () => {
   test("groups belonging to a removed MU drop out of the timeline", () => {
     const app = createHarness({
       state: {
-        distimes: [[10]],
+        spikeTimes: [[10]],
         pulseTrains: [[0, 1]],
         muGridIndex: [0],
         muUids: ["g0_mu0"],
         history: [
-          step({ idx: 0, muUid: "g0_mu0", muIdx: 0, spikesAdded: [20] }),
+          step({ muUid: "g0_mu0", muIdx: 0, spikesAdded: [20] }),
           step({
-            idx: 1,
             type: "remove_duplicates",
             muUid: "",
             raw: { removed_mu_uids: ["g0_mu0"] },
@@ -319,14 +304,13 @@ describe("seeking the timeline", () => {
   test("forward applies each group's diffs in order", async () => {
     const app = createHarness({
       state: {
-        distimes: [[10, 30]],
+        spikeTimes: [[10, 30]],
         pulseTrains: [[0, 1, 0, 1]],
         muGridIndex: [0],
         muUids: ["g0_mu0"],
         history: [
-          step({ idx: 0, type: "add_spikes", muIdx: 0, spikesAdded: [20] }),
+          step({ type: "add_spikes", muIdx: 0, spikesAdded: [20] }),
           step({
-            idx: 1,
             type: "update_filter",
             muIdx: 0,
             spikesRemoved: [10],
@@ -335,36 +319,33 @@ describe("seeking the timeline", () => {
       },
     });
 
-    assert.deepEqual(app.state.distimes[0], [10, 30]);
+    assert.deepEqual(app.state.spikeTimes[0], [10, 30]);
     await seekTo(app, 1);
-    assert.deepEqual(app.state.distimes[0], [10, 20, 30]);
+    assert.deepEqual(app.state.spikeTimes[0], [10, 20, 30]);
     assert.equal(app.state.replayPosition, 1);
   });
 
   test("a step applied then undone restores the arrays exactly", async () => {
     const app = createHarness({
       state: {
-        distimes: [[10, 30, 50]],
+        spikeTimes: [[10, 30, 50]],
         pulseTrains: [[0.5, 0.25, 0.75]],
         artifactTimes: [[7]],
         muGridIndex: [0],
         muUids: ["g0_mu0"],
         history: [
           step({
-            idx: 0,
             type: "add_spikes",
             muIdx: 0,
             spikesAdded: [20],
             spikesRemoved: [30],
           }),
           step({
-            idx: 1,
             type: "add_artifact",
             muIdx: 0,
             artifactsAdded: [99],
           }),
           step({
-            idx: 2,
             type: "delete_spikes",
             muIdx: 0,
             spikesRemoved: [50],
@@ -379,7 +360,7 @@ describe("seeking the timeline", () => {
 
     await seekTo(app, total);
     assert.notEqual(snapshot(app.state), before);
-    assert.deepEqual(app.state.distimes[0], [10, 20]);
+    assert.deepEqual(app.state.spikeTimes[0], [10, 20]);
     assert.deepEqual(app.state.artifactTimes[0], [7, 99]);
 
     await seekTo(app, 0);
@@ -392,27 +373,24 @@ describe("seeking the timeline", () => {
   test("stepping forward and back one group at a time round-trips", async () => {
     const app = createHarness({
       state: {
-        distimes: [[10, 30, 50]],
+        spikeTimes: [[10, 30, 50]],
         pulseTrains: [[0.5, 0.25]],
         artifactTimes: [[7, 42]],
         muGridIndex: [0],
         muUids: ["g0_mu0"],
         history: [
-          step({ idx: 0, type: "add_spikes", muIdx: 0, spikesAdded: [20, 40] }),
+          step({ type: "add_spikes", muIdx: 0, spikesAdded: [20, 40] }),
           step({
-            idx: 1,
             type: "delete_artifact",
             muIdx: 0,
             artifactsRemoved: [7],
           }),
           step({
-            idx: 2,
             type: "remove_outliers",
             muIdx: 0,
             spikesRemoved: [50],
           }),
           step({
-            idx: 3,
             type: "add_artifact",
             muIdx: 0,
             artifactsAdded: [77],
@@ -431,7 +409,7 @@ describe("seeking the timeline", () => {
   test("artifact steps apply and undo on their own MU's list", async () => {
     const app = createHarness({
       state: {
-        distimes: [[10], [10]],
+        spikeTimes: [[10], [10]],
         pulseTrains: [
           [0, 1],
           [0, 1],
@@ -442,7 +420,6 @@ describe("seeking the timeline", () => {
         currentMu: 1,
         history: [
           step({
-            idx: 0,
             type: "add_artifact",
             muIdx: 1,
             artifactsAdded: [50, 300],
@@ -465,7 +442,7 @@ describe("seeking the timeline", () => {
   test("a step carrying only a uid lands on that uid's MU", async () => {
     const app = createHarness({
       state: {
-        distimes: [[10], [10]],
+        spikeTimes: [[10], [10]],
         pulseTrains: [
           [0, 1],
           [0, 1],
@@ -474,31 +451,31 @@ describe("seeking the timeline", () => {
         muUids: ["g0_mu0", "g0_mu1"],
         history: [
           // muIdx is unresolved, as it is for any log keyed by uid alone.
-          step({ idx: 0, muUid: "g0_mu1", muIdx: -1, spikesAdded: [20] }),
+          step({ muUid: "g0_mu1", muIdx: -1, spikesAdded: [20] }),
         ],
       },
     });
     app.onMuChange({ target: { value: "1" } });
 
     await seekTo(app, 1);
-    assert.deepEqual(app.state.distimes[1], [10, 20]);
-    assert.deepEqual(app.state.distimes[0], [10], "MU 0 must not be touched");
+    assert.deepEqual(app.state.spikeTimes[1], [10, 20]);
+    assert.deepEqual(app.state.spikeTimes[0], [10], "MU 0 must not be touched");
   });
 
   test("a step naming no MU at all is skipped, not applied to MU 0", async () => {
     const app = createHarness({
       state: {
-        distimes: [[10]],
+        spikeTimes: [[10]],
         pulseTrains: [[0, 1]],
         muGridIndex: [0],
         muUids: ["g0_mu0"],
-        history: [step({ idx: 0, muUid: "", muIdx: -1, spikesAdded: [20] })],
+        history: [step({ muUid: "", muIdx: -1, spikesAdded: [20] })],
       },
     });
 
     // The group is filtered out of the timeline entirely.
     assert.equal(getActiveReplayGroups(app.state).length, 0);
-    assert.deepEqual(app.state.distimes[0], [10]);
+    assert.deepEqual(app.state.spikeTimes[0], [10]);
   });
 
   test("a seek requested mid-flight runs once the first one finishes", async () => {
@@ -507,10 +484,10 @@ describe("seeking the timeline", () => {
     const app = createHarness({
       updateFilter: () =>
         new Promise((resolve) => {
-          gates.push(() => resolve({ distimes: [1], pulse_train: [1] }));
+          gates.push(() => resolve({ spikes: [1], pulse_train: [1] }));
         }),
       state: {
-        distimes: [[10], [10], [10]],
+        spikeTimes: [[10], [10], [10]],
         pulseTrains: [
           [0, 1],
           [0, 1],
@@ -519,8 +496,8 @@ describe("seeking the timeline", () => {
         muGridIndex: [0, 0, 0],
         muUids: ["g0_mu0", "g0_mu1", "g0_mu2"],
         history: [
-          step({ idx: 0, type: "update_filter", muIdx: 0 }),
-          step({ idx: 1, type: "add_spikes", muIdx: 0, spikesAdded: [20] }),
+          step({ type: "update_filter", muIdx: 0 }),
+          step({ type: "add_spikes", muIdx: 0, spikesAdded: [20] }),
         ],
       },
     });
@@ -545,7 +522,7 @@ describe("seeking the timeline", () => {
     await flush();
     // The parked target is picked up by the run in flight.
     assert.equal(app.state.replayPosition, 2);
-    assert.deepEqual(app.state.distimes[0], [1, 20]);
+    assert.deepEqual(app.state.spikeTimes[0], [1, 20]);
     assert.equal(app.filterCalls.length, 1);
     assert.equal(app.state.replayBackups.length, 2, "one backup per step");
   });
@@ -557,15 +534,14 @@ describe("seeking the timeline", () => {
     const app = createHarness({
       state: {
         loadedFromDecomp: false,
-        distimes: [[10, 20]],
+        spikeTimes: [[10, 20]],
         pulseTrains: [[0, 1]],
         artifactTimes: [[50]],
         muGridIndex: [0],
         muUids: ["g0_mu0"],
         history: [
-          step({ idx: 0, type: "add_spikes", muIdx: 0, spikesAdded: [20] }),
+          step({ type: "add_spikes", muIdx: 0, spikesAdded: [20] }),
           step({
-            idx: 1,
             type: "add_artifact",
             muIdx: 0,
             artifactsAdded: [50],
@@ -574,41 +550,36 @@ describe("seeking the timeline", () => {
       },
     });
 
-    assert.deepEqual(app.state.replayBaseDistimes[0], [10]);
+    assert.deepEqual(app.state.replayBaseSpikeTimes[0], [10]);
     assert.deepEqual(app.state.replayBaseArtifactTimes[0], []);
-    assert.deepEqual(app.state.distimes[0], [10]);
+    assert.deepEqual(app.state.spikeTimes[0], [10]);
     assert.deepEqual(app.state.artifactTimes[0], []);
   });
 
   // --- normalizer to engine -------------------------------------------------
   test("a uid-keyed log replays onto the MUs it names", async () => {
-    // The whole path, from the JSON on disk to the rewritten spike trains. The
-    // entries carry `mu_idx: null`, which is what a log serialized from a
-    // producer that left the index unset looks like; only `mu_uid` identifies
-    // the MU, and taking that null as index 0 would pile every edit onto the
-    // first motor unit.
+    // The whole path, from the JSON on disk to the rewritten spike trains:
+    // MUedit2's entries name their MU by `mu_uid` alone.
     const muUids = ["g0_mu0", "g0_mu1", "g0_mu2"];
     const raw = [
       {
         type: "add_spikes",
-        mu_idx: null,
         mu_uid: "g0_mu2",
         spikes_added: [20],
       },
       {
         type: "delete_spikes",
-        mu_idx: null,
         mu_uid: "g0_mu2",
-        spikes_removed: "10",
+        spikes_removed: [10],
       },
     ];
     const history = raw
-      .map((entry, i) => normalizeLogEntry(entry, i, muUids))
+      .map((entry) => normalizeLogEntry(entry, muUids))
       .filter((entry) => entry !== null);
 
     const app = createHarness({
       state: {
-        distimes: [[10], [10], [10]],
+        spikeTimes: [[10], [10], [10]],
         pulseTrains: [
           [0, 1],
           [0, 1],
@@ -626,9 +597,9 @@ describe("seeking the timeline", () => {
     assert.equal(getActiveReplayGroups(app.state).length, 1);
 
     await seekTo(app, 1);
-    assert.deepEqual(app.state.distimes[2], [20]);
-    assert.deepEqual(app.state.distimes[0], [10], "MU 0 must not be touched");
-    assert.deepEqual(app.state.distimes[1], [10]);
+    assert.deepEqual(app.state.spikeTimes[2], [20]);
+    assert.deepEqual(app.state.spikeTimes[0], [10], "MU 0 must not be touched");
+    assert.deepEqual(app.state.spikeTimes[1], [10]);
 
     await seekTo(app, 0);
     assert.equal(snapshot(app.state), before);
@@ -640,17 +611,17 @@ describe("update_filter", () => {
   test("sends the logged window and stores the recomputed arrays", async () => {
     const app = createHarness({
       updateFilter: async () => ({
-        distimes: [10, 25],
+        spikes: [10, 25],
         pulse_train: [0.1, 0.9],
       }),
       state: {
-        distimes: [[10, 30]],
+        spikeTimes: [[10, 30]],
         pulseTrains: [[0, 1, 0, 1]],
         artifactTimes: [[5]],
         artifactRegions: [[1, 2]],
         muGridIndex: [0],
         muUids: ["g0_mu0"],
-        bidsEntityLabel: "sub-01_task-rest",
+        entityLabel: "sub-01_task-rest",
         refitSettings: {
           nbextchan: 500,
           peelOffWin: 0.03,
@@ -658,7 +629,6 @@ describe("update_filter", () => {
         },
         history: [
           step({
-            idx: 0,
             type: "update_filter",
             muIdx: 0,
             viewStart: 100,
@@ -674,7 +644,7 @@ describe("update_filter", () => {
 
     assert.equal(app.filterCalls.length, 1);
     const payload = app.filterCalls[0];
-    assert.equal(payload.mu_index, 0);
+    assert.equal(payload.mu, 0);
     assert.equal(payload.bids_root, "/data");
     assert.equal(payload.entity_label, "sub-01_task-rest");
     assert.equal(payload.view_start, 100);
@@ -690,30 +660,30 @@ describe("update_filter", () => {
     assert.equal(payload.peel_off_win, 0.03);
     assert.equal(payload.compute_dtype, "float64");
 
-    assert.deepEqual(app.state.distimes[0], [10, 25]);
+    assert.deepEqual(app.state.spikeTimes[0], [10, 25]);
     assert.deepEqual(app.state.pulseTrains[0], [0.1, 0.9]);
   });
 
   test("undoing update_filter restores the arrays the API replaced", async () => {
     const app = createHarness({
       updateFilter: async () => ({
-        distimes: [999],
+        spikes: [999],
         pulse_train: [0.42],
       }),
       state: {
-        distimes: [[10, 30]],
+        spikeTimes: [[10, 30]],
         pulseTrains: [[0, 1, 0, 1]],
         // One row per MU, as the loader produces; update_filter leaves it alone.
         artifactTimes: [[5]],
         muGridIndex: [0],
         muUids: ["g0_mu0"],
-        history: [step({ idx: 0, type: "update_filter", muIdx: 0 })],
+        history: [step({ type: "update_filter", muIdx: 0 })],
       },
     });
 
     const before = snapshot(app.state);
     await seekTo(app, 1);
-    assert.deepEqual(app.state.distimes[0], [999]);
+    assert.deepEqual(app.state.spikeTimes[0], [999]);
     // The logged diff cannot invert a server recomputation, so the undo has to
     // come from the backup taken before the call.
     await seekTo(app, 0);
@@ -726,13 +696,12 @@ describe("update_filter", () => {
         throw new Error("backend down");
       },
       state: {
-        distimes: [[10, 30]],
+        spikeTimes: [[10, 30]],
         pulseTrains: [[0, 1, 0, 1]],
         muGridIndex: [0],
         muUids: ["g0_mu0"],
         history: [
           step({
-            idx: 0,
             type: "update_filter",
             muIdx: 0,
             spikesAdded: [20],
@@ -744,7 +713,7 @@ describe("update_filter", () => {
 
     const before = snapshot(app.state);
     await seekTo(app, 1);
-    assert.deepEqual(app.state.distimes[0], [10, 20]);
+    assert.deepEqual(app.state.spikeTimes[0], [10, 20]);
     assert.ok(
       app.statuses.some((s) =>
         /update_filter step fallback.*backend down/.test(s),
@@ -762,13 +731,13 @@ describe("updateTimelineUi", () => {
   test("reflects the position on the controls", async () => {
     const app = createHarness({
       state: {
-        distimes: [[10]],
+        spikeTimes: [[10]],
         pulseTrains: [[0, 1]],
         muGridIndex: [0],
         muUids: ["g0_mu0"],
         history: [
-          step({ idx: 0, muIdx: 0, spikesAdded: [20] }),
-          step({ idx: 1, type: "update_filter", muIdx: 0 }),
+          step({ muIdx: 0, spikesAdded: [20] }),
+          step({ type: "update_filter", muIdx: 0 }),
         ],
       },
     });
@@ -788,7 +757,7 @@ describe("updateTimelineUi", () => {
   test("the timeline controls are disabled when the MU has no steps", () => {
     const app = createHarness({
       state: {
-        distimes: [[10]],
+        spikeTimes: [[10]],
         pulseTrains: [[0, 1]],
         muGridIndex: [0],
         muUids: ["g0_mu0"],
@@ -804,14 +773,13 @@ describe("startReplay", () => {
   test("opens on the first selectable MU of the first grid", () => {
     const app = createHarness({
       state: {
-        distimes: [[1], [1], [1]],
+        spikeTimes: [[1], [1], [1]],
         pulseTrains: [[0], [0], [0]],
         muGridIndex: [1, 1, 0],
         muUids: ["g1_mu0", "g1_mu1", "g0_mu0"],
         gridNames: ["Grid 1", "Grid 2"],
         history: [
           step({
-            idx: 0,
             type: "remove_duplicates",
             raw: { removed_mu_uids: ["g1_mu0"] },
           }),
@@ -829,7 +797,7 @@ describe("adjustReplayView", () => {
   test("zooms around the centre and stays in bounds", () => {
     const app = createHarness({
       state: {
-        distimes: [[10]],
+        spikeTimes: [[10]],
         pulseTrains: [new Array(1000).fill(0)],
         muGridIndex: [0],
         muUids: ["g0_mu0"],
