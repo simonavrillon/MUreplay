@@ -18,7 +18,8 @@ body {
   border: none;
 }
 
-.hidden {
+/* Wins over any class that sets display. */
+[hidden] {
   display: none !important;
 }
 

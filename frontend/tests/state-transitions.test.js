@@ -1,0 +1,49 @@
+// Opening a session: what a new file replaces in the state.
+import { test, describe } from "node:test";
+import assert from "node:assert/strict";
+import { beginSession } from "../src/state/transitions.js";
+
+describe("beginSession", () => {
+  test("replaces the file and keeps nothing of the previous session's log", () => {
+    const state = /** @type {any} */ ({
+      history: [{}],
+      editHistory: [{}],
+      replayGroups: [{}],
+      filteredReplayGroups: [{}],
+      muMarks: { g0_mu0: "flagged" },
+      muGhostUids: ["g0_mu9"],
+    });
+    beginSession(
+      state,
+      {
+        filename: "b_edited.npz",
+        bidsRoot: "/b",
+        entityLabel: "b",
+        bidsEntityLabel: "b",
+      },
+      {
+        fsamp: 2000,
+        pulseTrains: [[0]],
+        distimes: [[1]],
+        gridNames: ["G"],
+        muGridIndex: [0],
+        muUids: ["g0_mu0"],
+        artifactTimes: [],
+        artifactRegions: [],
+      },
+    );
+    assert.equal(state.editedFilename, "b_edited.npz");
+    assert.equal(state.bidsRoot, "/b");
+    assert.deepEqual(state.distimes, [[1]]);
+    for (const key of [
+      "history",
+      "editHistory",
+      "replayGroups",
+      "filteredReplayGroups",
+      "muGhostUids",
+    ]) {
+      assert.deepEqual(state[key], [], key);
+    }
+    assert.deepEqual(state.muMarks, {});
+  });
+});

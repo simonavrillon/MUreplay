@@ -13,13 +13,12 @@ import { createFileSessionService } from "../src/app/services/file-session.js";
  *   loadError?: Error,
  *   dialogResult?: any,
  *   dialogError?: Error,
- *   musForGrid?: (gridIdx: number) => number[],
  * }} [opts]
  */
 /**
  * @typedef {import("../src/app/context.js").App & {
  *   calls: any[],
- *   state: import("../src/app/state.js").State,
+ *   state: import("../src/state/state.js").State,
  * }} FakeApp
  */
 
@@ -29,7 +28,7 @@ function createFakeApp(opts = {}) {
   const app = {
     // The service populates state; it starts empty so a test sees exactly
     // what was written rather than what the fixture pre-filled.
-    state: /** @type {import("../src/app/state.js").State} */ (
+    state: /** @type {import("../src/state/state.js").State} */ (
       /** @type {unknown} */ ({})
     ),
     calls,
@@ -47,18 +46,7 @@ function createFakeApp(opts = {}) {
     },
     setEditStatus: (text) => calls.push(["editStatus", text]),
     setStatus: (text) => calls.push(["status", text]),
-    initializeReplayFromLoadedData: () => calls.push(["initReplay"]),
-    firstGridWithMu: () => 0,
-    musForGrid: opts.musForGrid ?? (() => [0]),
-    fillGridSelect: () => calls.push(["fillGrid"]),
-    fillMuSelect: () => calls.push(["fillMu"]),
-    stopPlay: () => calls.push(["stopPlay"]),
-    updateTimelineUi: () => calls.push(["updateTimeline"]),
-    applyTimelineStep: () => calls.push(["applyStep"]),
-    renderAll: () => calls.push(["renderAll"]),
-    rebuildReplayGroups: () => calls.push(["rebuildGroups"]),
-    resetReplayForCurrentMu: () => calls.push(["resetReplay"]),
-    getActiveReplayGroups: () => [],
+    startReplay: () => calls.push(["startReplay", app.state.history.length]),
   };
   // Partial on purpose: the service reaches only for the members above, and
   // this cast is the single place that says so. Add a call the service makes
@@ -108,44 +96,25 @@ describe("onLoadByPath", () => {
     assert.deepEqual(state.gridNames, ["Grid 1"]);
     assert.deepEqual(state.muGridIndex, [0]);
     assert.deepEqual(state.muUids, ["g0_mu0"]);
-    // Replay state is reset for the freshly loaded data.
+    // Nothing of a previous session's log or timeline survives the load.
     assert.deepEqual(state.editHistory, []);
     assert.deepEqual(state.history, []);
     assert.deepEqual(state.replayGroups, []);
-    assert.equal(state.currentGrid, 0);
-    assert.equal(state.currentMu, 0);
+    assert.deepEqual(state.muMarks, {});
   });
 
-  test("drives the replay UI through the app context", async () => {
+  test("starts the replay through the app context", async () => {
     const app = createFakeApp({ loadPayload: loadPayload() });
     const service = createFileSessionService(app);
     await service.onLoadByPath("/recordings/sub-01_edited.json");
 
-    const names = app.calls.map((c) => c[0]);
-    assert.ok(names.includes("initReplay"));
-    assert.ok(names.includes("fillGrid"));
-    assert.ok(names.includes("fillMu"));
-    assert.ok(names.includes("stopPlay"));
-    assert.ok(names.includes("updateTimeline"));
-    assert.ok(names.includes("applyStep"));
-    assert.ok(names.includes("renderAll"));
+    assert.ok(app.calls.some((c) => c[0] === "startReplay"));
     // The final status summarizes the loaded session.
     const statuses = editStatuses(app);
     assert.match(
       statuses[statuses.length - 1],
       /Loaded 1 MUs \+ 0 replay steps/,
     );
-  });
-
-  test("picks the first MU of the first grid with MUs", async () => {
-    const app = createFakeApp({
-      loadPayload: loadPayload(),
-      musForGrid: () => [2, 5],
-    });
-    const service = createFileSessionService(app);
-    await service.onLoadByPath("/recordings/sub-01_edited.json");
-    assert.equal(app.state.currentMu, 2);
-    assert.equal(app.state.currentGrid, 0);
   });
 
   test("falls back to the file basename", async () => {
@@ -190,10 +159,11 @@ describe("onLoadByPath", () => {
     assert.deepEqual(state.history[0].spikesAdded, [150]);
     // The raw history is preserved verbatim alongside the normalized one.
     assert.equal(state.editHistory.length, 2);
-    // The replay pipeline is rebuilt for the imported history.
-    const names = app.calls.map((c) => c[0]);
-    assert.ok(names.includes("rebuildGroups"));
-    assert.ok(names.includes("resetReplay"));
+    // The replay starts once the log is in place.
+    assert.deepEqual(
+      app.calls.find((c) => c[0] === "startReplay"),
+      ["startReplay", 1],
+    );
   });
 
   test("also accepts a history field alias", async () => {

@@ -15,28 +15,24 @@ function createApp(els = {}) {
 }
 
 describe("setStatus", () => {
-  test("writes text and toggles the hidden class", () => {
+  test("writes text and hides the line while it is empty", () => {
     const status = fakeElement();
     const ui = createUiService(createApp({ status }));
     ui.setStatus("Loading...");
     assert.equal(status.textContent, "Loading...");
-    assert.equal(status.classList.has("hidden"), false);
+    assert.equal(status.hidden, false);
     ui.setStatus("");
     assert.equal(status.textContent, "");
-    assert.equal(status.classList.has("hidden"), true);
+    assert.equal(status.hidden, true);
   });
 
-  test("applies a tone and clears the previous one", () => {
+  test("sets the tone the stylesheet colours by, muted by default", () => {
     const status = fakeElement();
-    status.classList.add("muted");
     const ui = createUiService(createApp({ status }));
-    ui.setStatus("Saved", "success");
-    assert.equal(status.classList.has("success"), true);
-    assert.equal(status.classList.has("muted"), false);
-    assert.equal(status.classList.has("error"), false);
-    // A call without a tone keeps the current tone classes untouched.
-    ui.setStatus("Saved again");
-    assert.equal(status.classList.has("success"), true);
+    ui.setStatus("Backend unreachable", "error");
+    assert.equal(status.dataset.tone, "error");
+    ui.setStatus("Connecting");
+    assert.equal(status.dataset.tone, "muted");
   });
 
   test("tolerates a missing status element", () => {

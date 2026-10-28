@@ -66,13 +66,13 @@
 }
 
 .status-pill[data-tone="error"] {
-  color: #d62728;
-  border-color: #d62728;
+  color: var(--danger);
+  border-color: var(--danger);
 }
 
 .status-pill[data-tone="success"] {
-  color: #2ca02c;
-  border-color: #2ca02c;
+  color: var(--success);
+  border-color: var(--success);
 }
 
 .pill-toggle {
@@ -80,7 +80,7 @@
   padding: 9px 12px;
   border-radius: 6px;
   border: 1px solid var(--border);
-  background: #303030;
+  background: var(--surface);
   color: var(--text);
   font-weight: var(--fw-bold);
   font-size: var(--fs-md);
@@ -151,7 +151,7 @@
 }
 
 .mu-controls select {
-  background: #303030;
+  background: var(--surface);
   border: 1px solid var(--border);
   color: var(--text);
   padding: 6px 10px;

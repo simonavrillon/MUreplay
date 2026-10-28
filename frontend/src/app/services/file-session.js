@@ -1,17 +1,28 @@
 /**
- * File session service: file loading via native dialog and path.
- * Handles payload normalization and state population on load.
+ * File session service: opening a session, from the native dialog or a path.
+ * The loaded decomposition replaces the shown one through `beginSession`; its
+ * log, normalised, then starts the replay.
  */
 import {
   normalizeEditedPayload,
   normalizeLogEntry,
 } from "../../api/payloads.js";
-import { basename, buildMuUids } from "../../io/utils.js";
+import { basename } from "../../io/bids.js";
+import { setHistory } from "../../state/actions.js";
+import { getActiveReplayGroups } from "../../state/selectors.js";
+import { beginSession } from "../../state/transitions.js";
+import { handleError } from "./error-service.js";
+
+/** @typedef {import("../context.js").FileSessionService} FileSessionService */
 
 /**
  * @param {import("../context.js").App} app
+ * @returns {FileSessionService}
  */
 export function createFileSessionService(app) {
+  const { state } = app;
+
+  /** @type {FileSessionService["onOpenDialog"]} */
   async function onOpenDialog() {
     try {
       app.setEditStatus("Opening file dialog...");
@@ -23,72 +34,47 @@ export function createFileSessionService(app) {
       }
       await onLoadByPath(path);
     } catch (err) {
-      app.setEditStatus(
-        `Dialog error: ${err instanceof Error ? err.message : err}`,
-      );
+      handleError(err, app.setEditStatus, "Dialog error");
     }
   }
 
-  /**
-   * @param {string} filePath
-   */
+  /** @type {FileSessionService["onLoadByPath"]} */
   async function onLoadByPath(filePath) {
     filePath = (filePath || "").trim();
     if (!filePath) return;
     try {
       app.setEditStatus("Loading...");
       const parsed = await app.api.loadPairedFromPath(filePath);
-      const normalized = normalizeEditedPayload(parsed, buildMuUids);
-      const { state } = app;
-      state.editedFilename = parsed.source_filename || basename(filePath);
-      state.logFilename = state.editedFilename;
-      state.loadedFromDecomp = true;
-      state.bidsRoot = parsed.bids_root || "";
-      state.entityLabel = parsed.entity_label || "";
-      state.bidsEntityLabel = parsed.bids_entity_label || "";
-      state.fsamp = normalized.fsamp;
-      state.pulseTrains = normalized.pulseTrains;
-      state.distimes = normalized.distimes;
-      state.gridNames = normalized.gridNames;
-      state.muGridIndex = normalized.muGridIndex;
-      state.muUids = normalized.muUids;
-      state.artifactTimes = normalized.artifactTimes;
-      state.artifactRegions = normalized.artifactRegions;
-      state.editHistory = [];
-      state.history = [];
-      state.replayGroups = [];
-      app.initializeReplayFromLoadedData();
-      state.currentGrid = app.firstGridWithMu();
-      const mus = app.musForGrid(state.currentGrid);
-      state.currentMu = mus.length ? mus[0] : 0;
-      app.fillGridSelect();
-      app.fillMuSelect();
-      const embeddedHistory = Array.isArray(parsed.edit_history)
+      const payload = normalizeEditedPayload(parsed);
+      beginSession(
+        state,
+        {
+          filename: parsed.source_filename || basename(filePath),
+          bidsRoot: parsed.bids_root || "",
+          entityLabel: parsed.entity_label || "",
+          bidsEntityLabel: parsed.bids_entity_label || "",
+        },
+        payload,
+      );
+      const log = Array.isArray(parsed.edit_history)
         ? parsed.edit_history
         : Array.isArray(parsed.history)
           ? parsed.history
           : [];
-      if (embeddedHistory.length) {
-        state.history = embeddedHistory
-          .map((e, i) => normalizeLogEntry(e, i, state.muUids))
-          .filter((entry) => entry !== null);
-        state.editHistory = [...embeddedHistory];
-        app.rebuildReplayGroups();
-        app.initializeReplayFromLoadedData();
-        app.resetReplayForCurrentMu();
-      }
-      app.stopPlay();
-      app.updateTimelineUi();
-      app.applyTimelineStep();
-      app.renderAll();
+      setHistory(
+        state,
+        log
+          .map((entry, i) => normalizeLogEntry(entry, i, state.muUids))
+          .filter((entry) => entry !== null),
+        [...log],
+      );
+      app.startReplay();
       app.setStatus("");
       app.setEditStatus(
-        `Loaded ${state.distimes.length} MUs + ${app.getActiveReplayGroups().length} replay steps`,
+        `Loaded ${state.distimes.length} MUs + ${getActiveReplayGroups(state).length} replay steps`,
       );
     } catch (err) {
-      app.setEditStatus(
-        `Path load error: ${err instanceof Error ? err.message : err}`,
-      );
+      handleError(err, app.setEditStatus, "Path load error");
     }
   }
 

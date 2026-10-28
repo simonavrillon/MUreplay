@@ -1,12 +1,14 @@
-import { createUiService } from "./services/ui.js";
+/**
+ * Builds the app context: the core singletons with every service's members
+ * merged in; see `context.js` for how it is shared.
+ */
 import { createFileSessionService } from "./services/file-session.js";
 import { createReplayService } from "./services/replay-service.js";
+import { createUiService } from "./services/ui.js";
 
 /** @typedef {import("./context.js").App} App */
 
 /**
- * Build the application context; see `context.js` for how it is shared.
- *
  * @param {import("./context.js").Core} core
  * @returns {App}
  */

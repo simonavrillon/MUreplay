@@ -22,11 +22,16 @@
   --plot-qc-max: 260px;
   --plot-edit-min: 200px;
   --plot-edit-max: 460px;
+  --surface: #303030;
+  --danger: #d62728;
+  --success: #2ca02c;
   --mu-4: #e7c1ff;
   --artifact: #ff8c66;
   /* Replay timeline slider: steps that added or removed discharges. */
   --timeline-added: #4ce38a;
   --timeline-removed: #ff7a7a;
+  --timeline-thumb: #f5f5f5;
+  --timeline-thumb-outline: #111111;
 
   /* Canvas plots; src/config.js reads these by name. */
   --plot-trace-2: #f5f5f5;

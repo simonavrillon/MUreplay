@@ -29,8 +29,12 @@ export function fakeElement() {
   const classes = new Set();
   return {
     textContent: "",
+    title: "",
     value: "",
     disabled: false,
+    hidden: false,
+    /** @type {Record<string, string>} */
+    dataset: {},
     classes,
     classList: {
       /** @param {...string} names */

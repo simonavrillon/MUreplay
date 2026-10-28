@@ -4,6 +4,7 @@ import assert from "node:assert/strict";
 import {
   applyLoggedDiffBackward,
   applyLoggedDiffForward,
+  clamp,
   inactiveMusBefore,
   isSpikeEditStep,
   stepMuKey,
@@ -118,5 +119,24 @@ describe("inactiveMusBefore", () => {
       { type: "remove_flagged", raw: { removed_mu_uids: ["g9_mu9"] } },
     ];
     assert.deepEqual(inactiveMusBefore(history, 3, ["g0_mu0"]), []);
+  });
+});
+
+describe("clamp", () => {
+  test("constrains a value to the range", () => {
+    assert.equal(clamp(5, 0, 10), 5);
+    assert.equal(clamp(-1, 0, 10), 0);
+    assert.equal(clamp(11, 0, 10), 10);
+    assert.equal(clamp(0, 0, 10), 0);
+    assert.equal(clamp(10, 0, 10), 10);
+  });
+
+  test("collapses to the low bound when the bounds are reversed", () => {
+    // Not a supported call, but worth pinning: `max(lo, min(hi, v))` returns
+    // `lo` for every input once lo > hi, so reversed bounds do not silently
+    // behave like the range read the other way round.
+    assert.equal(clamp(11, 10, 0), 10);
+    assert.equal(clamp(-1, 10, 0), 10);
+    assert.equal(clamp(5, 10, 0), 10);
   });
 });

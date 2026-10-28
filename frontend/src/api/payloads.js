@@ -1,15 +1,14 @@
 /**
- * Payload normalization helpers for MUreplay.
- * Converts backend JSON payloads into the stable frontend state shape.
+ * Backend JSON normalised at the boundary: a loaded session and its log
+ * entries become the shapes the state holds.
  */
 
 /** @typedef {import("../app/context.js").JsonObject} JsonObject */
 
 /**
  * @param {JsonObject} source
- * @param {(muGridIndex: number[]) => string[]} [buildMuUids]
  */
-export function normalizeEditedPayload(source, buildMuUids) {
+export function normalizeEditedPayload(source) {
   const pulseTrains = source.pulse_trains || source.pulseTrains;
   const distimes = source.discharge_times || source.distimes;
   if (!Array.isArray(pulseTrains) || !Array.isArray(distimes)) {
@@ -30,9 +29,7 @@ export function normalizeEditedPayload(source, buildMuUids) {
   const muUids =
     Array.isArray(source.mu_uids) && source.mu_uids.length === muCount
       ? source.mu_uids.map((v) => String(v))
-      : buildMuUids
-        ? buildMuUids(muGridIndex)
-        : [];
+      : buildMuUids(muGridIndex);
 
   const artifactTimes = Array.isArray(source.artifact_times)
     ? source.artifact_times.map((row) =>
@@ -56,6 +53,23 @@ export function normalizeEditedPayload(source, buildMuUids) {
     artifactTimes,
     artifactRegions,
   };
+}
+
+/**
+ * MU uids as MUedit2 numbers the MUs of a file that has none: per grid, from 0.
+ *
+ * @param {(number | null | undefined)[]} muGridIndex
+ * @returns {string[]}
+ */
+export function buildMuUids(muGridIndex) {
+  /** @type {Record<number, number>} */
+  const counts = {};
+  return muGridIndex.map((gridIdx) => {
+    const k = Number(gridIdx) || 0;
+    const n = counts[k] || 0;
+    counts[k] = n + 1;
+    return `g${k}_mu${n}`;
+  });
 }
 
 /**

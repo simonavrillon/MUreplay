@@ -1,7 +1,13 @@
 // The fetch seam: error messages, envelopes, timeouts and the backend wait.
 import { test, describe } from "node:test";
 import assert from "node:assert/strict";
-import { apiFetch, apiJson, waitForBackend } from "../src/app/http.js";
+import {
+  ApiError,
+  RequestTimeout,
+  apiFetch,
+  apiJson,
+  waitForBackend,
+} from "../src/app/http.js";
 
 /**
  * What a stubbed fetch may hand back: a Response stand-in, a promise for one,
@@ -72,51 +78,51 @@ describe("apiFetch", () => {
     );
   });
 
-  test("appends a string detail to the message", async () => {
+  test("carries the status, code and field of the error envelope", async () => {
     stubBehavior = () =>
       fakeResponse(
-        { error: { message: "bad request" }, detail: "bad path" },
         {
-          status: 400,
+          error: {
+            code: "http_404",
+            message: "File not found: /x.npz.",
+            detail: { field: "file_path" },
+          },
         },
+        { status: 404 },
       );
-    await assert.rejects(
-      apiFetch("http://api/load"),
-      /^Error: bad request: bad path$/,
-    );
+    const err = await apiFetch("http://api/load").catch((e) => e);
+    assert.ok(err instanceof ApiError);
+    assert.equal(err.message, "File not found: /x.npz.");
+    assert.equal(err.status, 404);
+    assert.equal(err.code, "http_404");
+    assert.equal(err.field, "file_path");
   });
 
   test("formats FastAPI validation details with location", async () => {
     stubBehavior = () =>
       fakeResponse(
         {
-          error: { message: "validation failed" },
-          detail: [{ loc: ["body", "file_path"], msg: "field required" }],
+          error: {
+            code: "validation_error",
+            message: "Request validation failed",
+            detail: [{ loc: ["body", "file_path"], msg: "field required" }],
+          },
         },
         { status: 422 },
       );
     await assert.rejects(
       apiFetch("http://api/load"),
-      /^Error: validation failed: body\.file_path field required$/,
+      /^ApiError: Request validation failed: body\.file_path field required$/,
     );
   });
 
   test("falls back to the HTTP status on unparseable bodies", async () => {
     stubBehavior = () =>
       fakeResponse("<html>oops</html>", { status: 500, jsonError: true });
-    await assert.rejects(apiFetch("http://api/load"), /^Error: HTTP 500$/);
+    await assert.rejects(apiFetch("http://api/load"), /^ApiError: HTTP 500$/);
   });
 
-  test("surfaces backend detail objects without a message field", async () => {
-    stubBehavior = () =>
-      fakeResponse({ detail: { reason: "server exploded" } }, { status: 500 });
-    await assert.rejects(
-      apiFetch("http://api/load"),
-      /^Error: HTTP 500: server exploded$/,
-    );
-  });
-
-  test("reports timeouts as a plain error", async () => {
+  test("reports a timeout as RequestTimeout", async () => {
     stubBehavior = (_url, init) =>
       new Promise((_resolve, reject) => {
         init.signal.addEventListener("abort", () => {
@@ -125,10 +131,7 @@ describe("apiFetch", () => {
           reject(err);
         });
       });
-    await assert.rejects(
-      apiFetch("http://api/slow", {}, 25),
-      /^Error: Request timed out$/,
-    );
+    await assert.rejects(apiFetch("http://api/slow", {}, 25), RequestTimeout);
   });
 
   test("rethrows non-timeout failures untouched", async () => {

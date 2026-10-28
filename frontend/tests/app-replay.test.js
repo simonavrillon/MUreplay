@@ -3,6 +3,7 @@ import { test, after, describe } from "node:test";
 import assert from "node:assert/strict";
 import { createReplayService } from "../src/app/services/replay-service.js";
 import { normalizeLogEntry } from "../src/api/payloads.js";
+import { getActiveReplayGroups } from "../src/state/selectors.js";
 import { fakeElement, fakeSelect, installDom } from "./_dom.js";
 
 /**
@@ -32,7 +33,7 @@ installDom();
 after(() => Object.assign(globalThis, saved));
 
 /**
- * @param {Partial<import("../src/app/state.js").State>} [overrides]
+ * @param {Partial<import("../src/state/state.js").State>} [overrides]
  */
 function makeState(overrides = {}) {
   return {
@@ -61,6 +62,7 @@ function makeState(overrides = {}) {
     muMarks: {},
     muGhostUids: [],
     bidsRoot: "/data",
+    dataRoot: "",
     entityLabel: "sub-01",
     bidsEntityLabel: "",
     artifactTimes: [],
@@ -75,7 +77,7 @@ function makeState(overrides = {}) {
  * what it is actually exercising. This mirrors what `normalizeLogEntry`
  * produces; the two meet in the round-trip test at the bottom.
  *
- * @param {Partial<import("../src/app/state.js").EditLogEntry>} fields
+ * @param {Partial<import("../src/state/state.js").EditLogEntry>} fields
  */
 function step(fields) {
   return {
@@ -98,11 +100,11 @@ function step(fields) {
 }
 
 /**
- * Build the service over a fake context, then run the load sequence
- * `file-session.js` performs so the replay starts from a real base.
+ * Build the service over a fake context and start the replay, as
+ * `file-session.js` does once a session has loaded.
  *
  * @param {{
- *   state?: Partial<import("../src/app/state.js").State>,
+ *   state?: Partial<import("../src/state/state.js").State>,
  *   updateFilter?: (payload: any) => Promise<any>,
  * }} [opts]
  */
@@ -127,22 +129,11 @@ function createHarness(opts = {}) {
       app.statuses.push(text);
     },
     setStatus() {},
+    renderAll() {},
     filterCalls,
   });
   Object.assign(app, createReplayService(app));
-
-  app.initializeReplayFromLoadedData();
-  state.currentGrid = app.firstGridWithMu();
-  const mus = app.musForGrid(state.currentGrid);
-  state.currentMu = mus.length ? mus[0] : 0;
-  app.fillGridSelect();
-  app.fillMuSelect();
-  if (state.history.length) {
-    app.rebuildReplayGroups();
-    app.initializeReplayFromLoadedData();
-    app.resetReplayForCurrentMu();
-  }
-  app.updateTimelineUi();
+  app.startReplay();
   return app;
 }
 
@@ -284,12 +275,12 @@ describe("getActiveReplayGroups", () => {
     });
 
     assert.equal(app.state.replayGroups.length, 2);
-    assert.equal(app.getActiveReplayGroups().length, 1);
-    assert.deepEqual(app.getActiveReplayGroups()[0].indices, [0]);
+    assert.equal(getActiveReplayGroups(app.state).length, 1);
+    assert.deepEqual(getActiveReplayGroups(app.state)[0].indices, [0]);
 
     // Switching MU switches the timeline with it.
     app.onMuChange({ target: { value: "1" } });
-    assert.deepEqual(app.getActiveReplayGroups()[0].indices, [1]);
+    assert.deepEqual(getActiveReplayGroups(app.state)[0].indices, [1]);
   });
 
   test("groups belonging to a removed MU drop out of the timeline", () => {
@@ -378,7 +369,7 @@ describe("seeking the timeline", () => {
     });
 
     const before = snapshot(app.state);
-    const total = app.getActiveReplayGroups().length;
+    const total = getActiveReplayGroups(app.state).length;
     assert.equal(total, 3);
 
     await seekTo(app, total);
@@ -426,7 +417,7 @@ describe("seeking the timeline", () => {
     });
 
     const before = snapshot(app.state);
-    const total = app.getActiveReplayGroups().length;
+    const total = getActiveReplayGroups(app.state).length;
     for (let pos = 1; pos <= total; pos += 1) await seekTo(app, pos);
     for (let pos = total - 1; pos >= 0; pos -= 1) await seekTo(app, pos);
     assert.equal(snapshot(app.state), before);
@@ -501,7 +492,7 @@ describe("seeking the timeline", () => {
     });
 
     // The group is filtered out of the timeline entirely.
-    assert.equal(app.getActiveReplayGroups().length, 0);
+    assert.equal(getActiveReplayGroups(app.state).length, 0);
     assert.deepEqual(app.state.distimes[0], [10]);
   });
 
@@ -627,7 +618,7 @@ describe("seeking the timeline", () => {
 
     const before = snapshot(app.state);
     // Both entries are spike edits on one MU, so they replay as a single group.
-    assert.equal(app.getActiveReplayGroups().length, 1);
+    assert.equal(getActiveReplayGroups(app.state).length, 1);
 
     await seekTo(app, 1);
     assert.deepEqual(app.state.distimes[2], [20]);
@@ -795,66 +786,28 @@ describe("updateTimelineUi", () => {
   });
 });
 
-describe("currentStep", () => {
-  test("reports the group behind the playhead", async () => {
-    const app = createHarness({
-      state: {
-        distimes: [[10]],
-        pulseTrains: [[0, 1]],
-        muGridIndex: [0],
-        muUids: ["g0_mu0"],
-        history: [
-          step({ idx: 0, timestamp: "first", muIdx: 0, spikesAdded: [20] }),
-          step({
-            idx: 1,
-            type: "update_filter",
-            timestamp: "second",
-            muIdx: 0,
-          }),
-        ],
-      },
-    });
-
-    assert.equal(app.currentStep(), null, "no step applied yet");
-    await seekTo(app, 1);
-    assert.equal(app.currentStep().timestamp, "first");
-    assert.equal(app.isCurrentMuStep(app.currentStep()), true);
-    assert.equal(app.isCurrentMuStep(null), false);
-  });
-});
-
-describe("musForGrid and firstGridWithMu", () => {
-  test("read the grid assignment", () => {
+describe("startReplay", () => {
+  test("opens on the first selectable MU of the first grid", () => {
     const app = createHarness({
       state: {
         distimes: [[1], [1], [1]],
         pulseTrains: [[0], [0], [0]],
-        muGridIndex: [2, 0, 2],
-        muUids: ["g2_mu0", "g0_mu0", "g2_mu1"],
-        gridNames: ["Grid 1", "Grid 2", "Grid 3"],
+        muGridIndex: [1, 1, 0],
+        muUids: ["g1_mu0", "g1_mu1", "g0_mu0"],
+        gridNames: ["Grid 1", "Grid 2"],
+        history: [
+          step({
+            idx: 0,
+            type: "remove_duplicates",
+            raw: { removed_mu_uids: ["g1_mu0"] },
+          }),
+        ],
       },
     });
-    assert.deepEqual(app.musForGrid(2), [0, 2]);
-    assert.deepEqual(app.musForGrid(0), [1]);
-    assert.deepEqual(app.musForGrid(1), []);
-    // Insertion order of the grid set, not numeric order.
-    assert.equal(app.firstGridWithMu(), 2);
-  });
-});
-
-describe("pulseForCurrentMu", () => {
-  test("synthesizes a train when none was loaded", () => {
-    const app = createHarness({
-      state: {
-        distimes: [[2, 5]],
-        pulseTrains: [[]],
-        muGridIndex: [0],
-        muUids: ["g0_mu0"],
-      },
-    });
-    assert.deepEqual(app.pulseForCurrentMu(), [0, 0, 1, 0, 0, 1]);
-    assert.deepEqual(app.distimesForCurrentMu(), [2, 5]);
-    assert.deepEqual(app.artifactTimesForCurrentMu(), []);
+    // g1_mu0 is the first MU of the first grid, but the log removed it.
+    assert.equal(app.state.currentGrid, 1);
+    assert.equal(app.state.currentMu, 1);
+    assert.equal(app.els.editMuSelect.value, "1");
   });
 });
 

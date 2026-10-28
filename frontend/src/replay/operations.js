@@ -1,19 +1,22 @@
 /**
- * Replay operations: spike/artifact diff application for forward/backward replay.
- * These are pure functions that manipulate distimes arrays based on logged diffs.
+ * Replay operations: pure functions that apply a logged step's diff forward or
+ * backward, and the predicates the replay engine groups steps with.
  */
 
 /**
- * @param {number[] | null | undefined} distimes
- * @param {{ spikesAdded?: number[], spikesRemoved?: number[] }} step
+ * `row` with `removed` taken out and then `added` put in: sorted, unique, finite and non-negative.
+ *
+ * @param {number[] | null | undefined} row
+ * @param {number[] | undefined} added
+ * @param {number[] | undefined} removed
  * @returns {number[]}
  */
-export function applyLoggedDiffForward(distimes, step) {
-  const current = new Set((distimes || []).map((n) => Number(n)));
-  const added = Array.isArray(step.spikesAdded) ? step.spikesAdded : [];
-  const removed = Array.isArray(step.spikesRemoved) ? step.spikesRemoved : [];
-  removed.forEach((n) => current.delete(Number(n)));
-  added.forEach((n) => current.add(Number(n)));
+function applyDiff(row, added, removed) {
+  const current = new Set((row || []).map((n) => Number(n)));
+  (Array.isArray(removed) ? removed : []).forEach((n) =>
+    current.delete(Number(n)),
+  );
+  (Array.isArray(added) ? added : []).forEach((n) => current.add(Number(n)));
   return [...current]
     .filter((n) => Number.isFinite(n) && n >= 0)
     .sort((a, b) => a - b);
@@ -24,15 +27,45 @@ export function applyLoggedDiffForward(distimes, step) {
  * @param {{ spikesAdded?: number[], spikesRemoved?: number[] }} step
  * @returns {number[]}
  */
+export function applyLoggedDiffForward(distimes, step) {
+  return applyDiff(distimes, step.spikesAdded, step.spikesRemoved);
+}
+
+/**
+ * @param {number[] | null | undefined} distimes
+ * @param {{ spikesAdded?: number[], spikesRemoved?: number[] }} step
+ * @returns {number[]}
+ */
 export function applyLoggedDiffBackward(distimes, step) {
-  const current = new Set((distimes || []).map((n) => Number(n)));
-  const added = Array.isArray(step.spikesAdded) ? step.spikesAdded : [];
-  const removed = Array.isArray(step.spikesRemoved) ? step.spikesRemoved : [];
-  added.forEach((n) => current.delete(Number(n)));
-  removed.forEach((n) => current.add(Number(n)));
-  return [...current]
-    .filter((n) => Number.isFinite(n) && n >= 0)
-    .sort((a, b) => a - b);
+  return applyDiff(distimes, step.spikesRemoved, step.spikesAdded);
+}
+
+/**
+ * @param {number[] | null | undefined} artifactTimes
+ * @param {{ artifactsAdded?: number[], artifactsRemoved?: number[] }} step
+ * @returns {number[]}
+ */
+export function applyArtifactDiffForward(artifactTimes, step) {
+  return applyDiff(artifactTimes, step.artifactsAdded, step.artifactsRemoved);
+}
+
+/**
+ * @param {number[] | null | undefined} artifactTimes
+ * @param {{ artifactsAdded?: number[], artifactsRemoved?: number[] }} step
+ * @returns {number[]}
+ */
+export function applyArtifactDiffBackward(artifactTimes, step) {
+  return applyDiff(artifactTimes, step.artifactsRemoved, step.artifactsAdded);
+}
+
+/**
+ * Whether a step edits artifact markers rather than discharges.
+ *
+ * @param {{ type?: string } | null | undefined} step
+ */
+export function isArtifactStep(step) {
+  const type = String(step?.type || "").toLowerCase();
+  return type === "add_artifact" || type === "delete_artifact";
 }
 
 /**
@@ -92,4 +125,16 @@ export function stepMuKey(step) {
   if (Number.isFinite(step?.muIdx) && step.muIdx >= 0)
     return `idx:${step.muIdx}`;
   return "unknown";
+}
+
+/**
+ * `v` held inside `[lo, hi]`; reversed bounds collapse to `lo`.
+ *
+ * @param {number} v
+ * @param {number} lo
+ * @param {number} hi
+ * @returns {number}
+ */
+export function clamp(v, lo, hi) {
+  return Math.max(lo, Math.min(hi, v));
 }

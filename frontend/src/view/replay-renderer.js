@@ -1,25 +1,27 @@
 /**
- * Replay renderer: orchestrates pulse train, firing rate, and timeline canvases.
- * Ported from the original charts.js createCharts function.
+ * Replay renderer: draws the current MU's firing rate, pulse train and
+ * timeline from the state it is given.
  */
 
 import { COLORS } from "../config.js";
+import {
+  artifactTimesForCurrentMu,
+  currentStep,
+  distimesForCurrentMu,
+  getReplayView,
+  isCurrentMuStep,
+  pulseForCurrentMu,
+} from "../state/selectors.js";
+import { extent } from "../signal/series.js";
 import { drawSeries } from "./plots.js";
-import { extent } from "../io/utils.js";
+
+/** Pixels the timeline bar is inset by, matching the plots' axis gutter. */
+export const TIMELINE_PADDING = { left: 38, right: 8 };
 
 /**
- * @param {object} deps
- * @param {import("../app/dom.js").Els} deps.els
- * @param {import("../app/state.js").State} deps.state
- * @param {() => import("../app/state.js").EditLogEntry | null} deps.currentStep
- * @param {(step: import("../app/state.js").EditLogEntry | null) => boolean} deps.isCurrentMuStep
- * @param {() => number[]} deps.pulseForCurrentMu
- * @param {() => number[]} deps.distimesForCurrentMu
- * @param {() => number[]} deps.artifactTimesForCurrentMu
+ * @param {{ els: import("../app/dom.js").Els, state: import("../state/state.js").State }} deps
  */
-export function createReplayRenderer(deps) {
-  const { els, state } = deps;
-
+export function createReplayRenderer({ els, state }) {
   /**
    * @param {number} total
    */
@@ -38,14 +40,14 @@ export function createReplayRenderer(deps) {
   }
 
   function renderPulse() {
-    const pulse = deps.pulseForCurrentMu();
-    const spikes = deps.distimesForCurrentMu();
+    const pulse = pulseForCurrentMu(state);
+    const spikes = distimesForCurrentMu(state);
     const viewRange = getViewRange(pulse.length);
-    const step = deps.currentStep();
+    const step = currentStep(state);
     const selections = [];
     if (
       step &&
-      deps.isCurrentMuStep(step) &&
+      isCurrentMuStep(state, step) &&
       step.viewStart != null &&
       step.viewEnd != null &&
       step.viewEnd > step.viewStart
@@ -117,11 +119,11 @@ export function createReplayRenderer(deps) {
 
     if (step && pulse && pulse.length > 0) {
       const added =
-        deps.isCurrentMuStep(step) && Array.isArray(step.spikesAdded)
+        isCurrentMuStep(state, step) && Array.isArray(step.spikesAdded)
           ? step.spikesAdded
           : [];
       const removed =
-        deps.isCurrentMuStep(step) && Array.isArray(step.spikesRemoved)
+        isCurrentMuStep(state, step) && Array.isArray(step.spikesRemoved)
           ? step.spikesRemoved
           : [];
       if (added.length || removed.length) {
@@ -167,7 +169,7 @@ export function createReplayRenderer(deps) {
       }
     }
 
-    const artifacts = deps.artifactTimesForCurrentMu();
+    const artifacts = artifactTimesForCurrentMu(state);
     if (artifacts.length && pulse && pulse.length > 0) {
       const canvasEl = els.editPulseCanvas;
       const ctx = canvasEl?.getContext("2d");
@@ -210,8 +212,8 @@ export function createReplayRenderer(deps) {
   }
 
   function renderFiringRate() {
-    const spikes = deps.distimesForCurrentMu();
-    const pulse = deps.pulseForCurrentMu();
+    const spikes = distimesForCurrentMu(state);
+    const pulse = pulseForCurrentMu(state);
     const total = pulse.length || (spikes.length ? extent(spikes).max + 1 : 0);
     const viewRange = getViewRange(total);
     if (!total) {
@@ -251,11 +253,11 @@ export function createReplayRenderer(deps) {
       }
     }
 
-    const step = deps.currentStep();
+    const step = currentStep(state);
     const selections = [];
     if (
       step &&
-      deps.isCurrentMuStep(step) &&
+      isCurrentMuStep(state, step) &&
       step.viewStart != null &&
       step.viewEnd != null &&
       step.viewEnd > step.viewStart
@@ -282,18 +284,6 @@ export function createReplayRenderer(deps) {
     );
   }
 
-  const TIMELINE_PAD_L = 38;
-  const TIMELINE_PAD_R = 8;
-
-  /**
-   * @param {number} total
-   */
-  function timelineView(total) {
-    return state.replayView && state.replayView.end > state.replayView.start
-      ? state.replayView
-      : { start: 0, end: total };
-  }
-
   function renderTimeline() {
     const canvas = els.editTimelineCanvas;
     if (!canvas) return;
@@ -304,19 +294,19 @@ export function createReplayRenderer(deps) {
     canvas.height = 20;
     ctx.clearRect(0, 0, w, 20);
 
-    const pulse = deps.pulseForCurrentMu();
+    const pulse = pulseForCurrentMu(state);
     const total = pulse?.length || 0;
     if (!total) return;
 
-    const bw = Math.max(1, w - TIMELINE_PAD_L - TIMELINE_PAD_R);
+    const bw = Math.max(1, w - TIMELINE_PADDING.left - TIMELINE_PADDING.right);
     const barTop = 4;
     const barH = 12;
 
     ctx.fillStyle = COLORS.timelineTrack;
-    ctx.fillRect(TIMELINE_PAD_L, barTop, bw, barH);
+    ctx.fillRect(TIMELINE_PADDING.left, barTop, bw, barH);
 
-    const step = deps.currentStep();
-    if (step && deps.isCurrentMuStep(step)) {
+    const step = currentStep(state);
+    if (step && isCurrentMuStep(state, step)) {
       const added = Array.isArray(step.spikesAdded) ? step.spikesAdded : [];
       const removed = Array.isArray(step.spikesRemoved)
         ? step.spikesRemoved
@@ -325,7 +315,7 @@ export function createReplayRenderer(deps) {
       added.forEach((s) => {
         if (s >= 0 && s < total)
           ctx.fillRect(
-            TIMELINE_PAD_L + Math.round((s / total) * bw),
+            TIMELINE_PADDING.left + Math.round((s / total) * bw),
             barTop,
             2,
             barH,
@@ -335,7 +325,7 @@ export function createReplayRenderer(deps) {
       removed.forEach((s) => {
         if (s >= 0 && s < total)
           ctx.fillRect(
-            TIMELINE_PAD_L + Math.round((s / total) * bw),
+            TIMELINE_PADDING.left + Math.round((s / total) * bw),
             barTop,
             2,
             barH,
@@ -343,21 +333,21 @@ export function createReplayRenderer(deps) {
       });
     }
 
-    const spikes = deps.distimesForCurrentMu();
+    const spikes = distimesForCurrentMu(state);
     ctx.fillStyle = COLORS.timelineSpikes;
     spikes.forEach((s) => {
       if (s >= 0 && s < total)
         ctx.fillRect(
-          TIMELINE_PAD_L + Math.round((s / total) * bw),
+          TIMELINE_PADDING.left + Math.round((s / total) * bw),
           barTop,
           2,
           barH,
         );
     });
 
-    const view = timelineView(total);
-    const x1 = TIMELINE_PAD_L + (Math.max(0, view.start) / total) * bw;
-    const x2 = TIMELINE_PAD_L + (Math.min(total, view.end) / total) * bw;
+    const view = getReplayView(state, total);
+    const x1 = TIMELINE_PADDING.left + (Math.max(0, view.start) / total) * bw;
+    const x2 = TIMELINE_PADDING.left + (Math.min(total, view.end) / total) * bw;
     const ww = Math.max(4, x2 - x1);
     ctx.fillStyle = COLORS.timelineViewFill;
     ctx.fillRect(x1, barTop - 2, ww, barH + 4);
@@ -366,77 +356,5 @@ export function createReplayRenderer(deps) {
     ctx.strokeRect(x1 + 0.5, barTop - 1.5, Math.max(3, ww - 1), barH + 3);
   }
 
-  function bindTimeline() {
-    const canvas = els.editTimelineCanvas;
-    if (!canvas) return;
-
-    let dragging = false;
-    let startClientX = 0;
-    let dragViewStart = 0;
-    let didMove = false;
-
-    const getTotal = () => deps.pulseForCurrentMu().length;
-
-    /**
-     * @param {number} s
-     * @param {number} e2
-     * @param {number} total
-     */
-    const applyView = (s, e2, total) => {
-      if (s < 0) {
-        e2 -= s;
-        s = 0;
-      }
-      if (e2 > total) {
-        s = Math.max(0, s - (e2 - total));
-        e2 = total;
-      }
-      if (e2 <= s) e2 = Math.min(total, s + 1);
-      state.replayView = { start: s, end: e2 };
-      renderAll();
-    };
-
-    canvas.addEventListener("mousedown", (e) => {
-      const total = getTotal();
-      if (!total) return;
-      dragging = true;
-      didMove = false;
-      startClientX = e.clientX;
-      dragViewStart = timelineView(total).start;
-    });
-
-    window.addEventListener("mousemove", (e) => {
-      if (!dragging) return;
-      if (Math.abs(e.clientX - startClientX) > 3) didMove = true;
-      if (!didMove) return;
-      const total = getTotal();
-      if (!total) return;
-      const rect = canvas.getBoundingClientRect();
-      const bw = Math.max(1, rect.width - TIMELINE_PAD_L - TIMELINE_PAD_R);
-      const delta = Math.round(((e.clientX - startClientX) / bw) * total);
-      const view = timelineView(total);
-      const span = view.end - view.start;
-      applyView(dragViewStart + delta, dragViewStart + delta + span, total);
-    });
-
-    window.addEventListener("mouseup", (e) => {
-      if (!dragging) return;
-      dragging = false;
-      if (didMove) return;
-      const total = getTotal();
-      if (!total) return;
-      const view = timelineView(total);
-      const span = view.end - view.start;
-      const rect = canvas.getBoundingClientRect();
-      const bw = Math.max(1, rect.width - TIMELINE_PAD_L - TIMELINE_PAD_R);
-      const frac = Math.max(
-        0,
-        Math.min(1, (e.clientX - rect.left - TIMELINE_PAD_L) / bw),
-      );
-      const s = Math.round(frac * total - span / 2);
-      applyView(s, s + span, total);
-    });
-  }
-
-  return { renderAll, bindTimeline };
+  return { renderAll };
 }

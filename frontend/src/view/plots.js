@@ -1,10 +1,9 @@
 /**
- * Canvas drawing primitives shared by all replay renderers.
- * Ported from the original charts.js drawSeries function.
+ * Canvas drawing primitives: a series with its axes, markers and selections.
  */
 
 import { COLORS, canvasFont } from "../config.js";
-import { extent } from "../io/utils.js";
+import { extent } from "../signal/series.js";
 
 /**
  * @typedef {object} DrawSeriesOptions

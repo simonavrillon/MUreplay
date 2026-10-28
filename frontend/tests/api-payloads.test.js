@@ -2,6 +2,7 @@
 import { test, describe } from "node:test";
 import assert from "node:assert/strict";
 import {
+  buildMuUids,
   normalizeEditedPayload,
   normalizeLogEntry,
 } from "../src/api/payloads.js";
@@ -41,7 +42,7 @@ describe("normalizeEditedPayload", () => {
     assert.equal(normalized.fsamp, 2048);
     assert.deepEqual(normalized.gridNames, ["Grid 1"]);
     assert.deepEqual(normalized.muGridIndex, [0]);
-    assert.deepEqual(normalized.muUids, []);
+    assert.deepEqual(normalized.muUids, ["g0_mu0"]);
     assert.deepEqual(normalized.artifactTimes, []);
     assert.deepEqual(normalized.artifactRegions, []);
   });
@@ -80,10 +81,10 @@ describe("normalizeEditedPayload", () => {
   });
 
   test("builds mu uids when absent", () => {
-    const normalized = normalizeEditedPayload(
-      { ...minimalPayload(), mu_grid_index: [1] },
-      (gridIndex) => gridIndex.map((g) => `g${g}_mu0`),
-    );
+    const normalized = normalizeEditedPayload({
+      ...minimalPayload(),
+      mu_grid_index: [1],
+    });
     assert.deepEqual(normalized.muUids, ["g1_mu0"]);
   });
 
@@ -252,5 +253,19 @@ describe("normalizeLogEntry", () => {
     const raw = { type: "update_filter", comment: "keep" };
     const entry = normalized(raw, 0, []);
     assert.equal(entry.raw, raw);
+  });
+});
+
+describe("buildMuUids", () => {
+  test("numbers MUs per grid", () => {
+    assert.deepEqual(buildMuUids([0, 0, 1]), ["g0_mu0", "g0_mu1", "g1_mu0"]);
+    assert.deepEqual(buildMuUids([]), []);
+    // Non-numeric entries fall back to grid 0.
+    assert.deepEqual(buildMuUids([null, undefined]), ["g0_mu0", "g0_mu1"]);
+  });
+
+  test("counts independently per grid index", () => {
+    const uids = buildMuUids([2, 0, 2, 2, 0]);
+    assert.deepEqual(uids, ["g2_mu0", "g0_mu0", "g2_mu1", "g2_mu2", "g0_mu1"]);
   });
 });

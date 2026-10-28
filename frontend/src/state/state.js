@@ -1,4 +1,8 @@
-/** @typedef {import("./context.js").JsonObject} JsonObject */
+/**
+ * The app state: its shape (typedefs) and the single `state` object.
+ */
+/** @typedef {import("../app/context.js").JsonObject} JsonObject */
+/** @typedef {import("../app/context.js").Span} Span */
 /** @typedef {JsonObject} EditHistoryEntry Raw edit-log entry from the backend or sidecar. */
 
 /**
@@ -58,11 +62,12 @@
  * @property {number[][]} replayBasePulseTrains
  * @property {number} replayPosition
  * @property {ReplayBackup[]} replayBackups
- * @property {{ start: number, end: number } | null} replayView
+ * @property {Span | null} replayView
  * @property {boolean} loadedFromDecomp
  * @property {Record<string, string>} muMarks
- * @property {string[]} [muGhostUids]
- * @property {string} bidsRoot
+ * @property {string[]} muGhostUids Uids the log marks but the loaded file no longer has.
+ * @property {string} bidsRoot The session's BIDS dataset, from the file's location.
+ * @property {string} dataRoot The server's data root, used when the file names no dataset.
  * @property {string} entityLabel
  * @property {string} bidsEntityLabel
  * @property {number[][]} artifactTimes
@@ -95,7 +100,9 @@ export const state = {
   replayView: null,
   loadedFromDecomp: false,
   muMarks: {},
+  muGhostUids: [],
   bidsRoot: "",
+  dataRoot: "",
   entityLabel: "",
   bidsEntityLabel: "",
   artifactTimes: [],
