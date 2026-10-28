@@ -21,6 +21,8 @@ const SHORTCUTS = {
   ArrowUp: (app) => app.adjustReplayView("zoom_in"),
   ArrowDown: (app) => app.adjustReplayView("zoom_out"),
   " ": (app) => app.togglePlay(),
+  b: (app) => app.moveStep(-1),
+  n: (app) => app.moveStep(1),
   "<": (app) => app.goToMu("prev"),
   ">": (app) => app.goToMu("next"),
 };
@@ -42,6 +44,8 @@ export function setupReplayEvents(app) {
     const active = document.activeElement;
     if (active && ["INPUT", "TEXTAREA", "SELECT"].includes(active.tagName))
       return;
+    // Cmd+N, Ctrl+B and the like stay the browser's.
+    if (event.metaKey || event.ctrlKey || event.altKey) return;
     const shortcut = SHORTCUTS[event.code === "Space" ? " " : event.key];
     if (!shortcut) return;
     shortcut(app);
@@ -58,7 +62,7 @@ export function setupReplayEvents(app) {
  */
 function bindTimelineBar(app) {
   const { els, state } = app;
-  const canvas = els.timelineCanvas;
+  const canvas = els.editTimelineCanvas;
 
   let dragging = false;
   let didMove = false;

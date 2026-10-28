@@ -26,10 +26,10 @@ pick a file ──> load + pair (backend) ──> start the replay ──> step 
 
 | Part | Frontend | Backend |
 |---|---|---|
-| Open | `app/services/file-session.js`, `state/transitions.js` | `routes/dialog.py`, `routes/replay.py`, `io/loaders.py` |
+| Open | `app/services/file-session.js`, `state/transitions.js`, `view/settings-renderer.js` | `routes/dialog.py`, `routes/replay.py`, `io/loaders.py`, `io/bids.py: read_sidecar_meta` |
 | Replay | `app/services/replay-service.js`, `replay/operations.js` | — |
 | Refit | `replay-service.js: refitStep` | `routes/editing.py`, `services/filter_service.py`, `replay/filter_update.py`, `io/bids.py` |
-| Draw | `view/replay-renderer.js`, `view/plots.js` | — |
+| Draw | `view/replay-renderer.js`, `view/plots.js` (MUedit2's `drawTrace`) | — |
 
 ## The page replays; the server refits
 
@@ -42,7 +42,7 @@ match the session by construction.
 `lock_spikes`) and the diff it produced, and MUreplay recomputes the step on the BIDS EMG, so a
 reviewer sees the filter actually rerun. That needs the raw recording, SciPy and the refit
 code, so it runs on the server (`/edit/update-filter`). If the refit fails (the EMG has moved,
-say), the page falls back to the step's logged diff and says so on the status line.
+say), the page falls back to the step's logged diff and says so in the status.
 
 Decisions worth knowing before changing this area:
 

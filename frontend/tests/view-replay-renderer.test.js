@@ -31,9 +31,9 @@ function render(logEntry) {
     replayPosition: 1,
   };
   const els = {
-    pulseTrainCanvas: fakeCanvas({ width: 346, height: 128 }),
-    dischargeRateCanvas: fakeCanvas({ width: 346, height: 128 }),
-    timelineCanvas: fakeCanvas({ width: 1046, height: 20 }),
+    editPulseCanvas: fakeCanvas({ width: 346, height: 128 }),
+    editDrCanvas: fakeCanvas({ width: 346, height: 128 }),
+    editTimelineCanvas: fakeCanvas({ width: 1046, height: 20 }),
   };
   createReplayRenderer({
     els: /** @type {any} */ (els),
@@ -56,10 +56,16 @@ describe("the timeline bar", () => {
       spikes_added: [200],
       spikes_removed: [400],
     });
-    assert.deepEqual(tickXs(els.timelineCanvas, COLORS.timelineAdded), [200]);
-    assert.deepEqual(tickXs(els.timelineCanvas, COLORS.timelineRemoved), [400]);
     assert.deepEqual(
-      tickXs(els.timelineCanvas, COLORS.timelineSpikes),
+      tickXs(els.editTimelineCanvas, COLORS.timelineAdded),
+      [200],
+    );
+    assert.deepEqual(
+      tickXs(els.editTimelineCanvas, COLORS.timelineRemoved),
+      [400],
+    );
+    assert.deepEqual(
+      tickXs(els.editTimelineCanvas, COLORS.timelineSpikes),
       [100, 200, 300],
     );
   });
@@ -70,14 +76,17 @@ describe("the timeline bar", () => {
       mu_uid: "g0_mu0",
       artifacts_added: [500],
     });
-    assert.deepEqual(tickXs(els.timelineCanvas, COLORS.timelineAdded), [500]);
+    assert.deepEqual(
+      tickXs(els.editTimelineCanvas, COLORS.timelineAdded),
+      [500],
+    );
   });
 });
 
 describe("the discharge rate plot", () => {
   test("puts one dot between each pair of discharges, at its rate", () => {
     const els = render({ type: "flag_mu", mu_uid: "g0_mu0" });
-    const arcs = els.dischargeRateCanvas.ctx.calls.filter(
+    const arcs = els.editDrCanvas.ctx.calls.filter(
       (c) => c.op === "arc" && c.fillStyle === COLORS.discharge,
     );
     // Discharges 100 samples apart at 1000 Hz: 10 pps, the top of the plot.

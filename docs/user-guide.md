@@ -16,15 +16,37 @@ can step backward and forward as often as you like.
 
 ## Open a session
 
-Click **Load log file** (top right) and pick one of the files MUedit2 saved for the recording:
+Click **Load log file** (top left) and pick one of the files MUedit2 saved for the recording:
 `<entity>_decomp.npz`, `<entity>_edited.npz` or `<entity>_edited.json`. They usually sit in
 `<dataset>/derivatives/muedit/sub-XX/[ses-YY]/decomp/`.
 
 Whichever you pick, MUreplay opens the decomposition MUedit2 started from (`_decomp.npz`) with
 the edit log beside it (`_edited.json`), and finds the original EMG recording in the dataset for
-the filter steps. The status line under the selectors then reports what was loaded, for example
+the filter steps. The status at the top right then reports what was loaded, for example
 `Loaded 36 MUs and 4 replay steps.` The full pairing rules are in
 [file-formats.md](file-formats.md#how-files-are-paired).
+
+### Pages
+
+The buttons at the top centre switch pages, as MUedit2's do:
+
+| Page | Shows |
+|---|---|
+| **Research** | the replay: the plots and the timeline this guide describes |
+| **Clinic** | coming soon: a page of the metrics clinicians use, from the same session |
+
+### Session settings
+
+The rail on the left holds the fields of MUedit2's settings panel, filled from the session: click
+an icon, or the panel button at the top, to open it. Every field is read-only.
+
+| Section | Shows |
+|---|---|
+| **Session info** | the decomposition file; the project (the dataset's folder) and the subject, session, acquisition, run and task from the file name; the participant from `participants.tsv`; the placement, reference, ground, hardware and power line from the recording's `_emg.json`; one **Muscle Grid N** per grid from its `channels.tsv`; and **Fs (Hz)** |
+| **Decomposition settings** | the run settings MUedit2 saved in the decomposition: **Iterations**, **Analysis windows**, **Duplicates thresh**, **Peeloff** and its **Window (ms)**, and **Post-processing** |
+| **Quality filters** | the **SIL threshold**, and the **COV tool** with its **COV threshold** |
+
+A field the session's files do not record is left blank.
 
 ---
 
@@ -36,7 +58,7 @@ and next unit of the grid. The two plots show the unit:
 | Plot | Shows |
 |---|---|
 | **Firing rate (pps)** | the instantaneous discharge rate, one dot per pair of discharges |
-| **Pulse train / discharge times** | the pulse train, with a dot on each discharge |
+| **Pulse train** | the pulse train, with a dot on each discharge |
 
 ### Motor unit marks
 
@@ -61,18 +83,28 @@ consecutive spike edits on the same unit is one timeline step.
 
 | Control | Action |
 |---|---|
-| **Previous step** (`⏮`) | Undo one step |
-| **Next step** (`⏭`) | Apply one step |
-| The slider | Jump to any step |
-| **Play or pause** (`▶` / `⏸`) | Apply the steps one after another |
+| **Previous step** | Undo one step |
+| **Play** / **Pause** | Apply the steps one after another |
+| **Next step** | Apply one step |
+| The step line | Click or drag to jump to any step |
 
-The counter beside them reads `Step 3 / 12`, and the status line says what the last step did,
-for example `Applied step 3 of 12: update_filter.` The plots mark the current step's window
-and, on the pulse train, its added (green) and removed (red) discharges.
+The toolbar buttons show their name when you point at them, as MUedit2's do. The step line
+draws its dots as MUedit2's live decomposition run does. The white dot on the left is step 0,
+the decomposition as loaded. Then comes one dot per timeline step. The steps applied so far are
+filled, and the line is filled up to them. The current step is ringed, and the steps still to
+come are dimmed rings. Point at the line to see the current step's number and type.
+
+Beside the bar, a summary reads like the line counts of a commit on GitHub: `Step 3 / 12
++38 −12`, then five squares. It gives the steps applied, then the discharges those steps added
+(green) and removed (red) on the selected unit; the squares split between green and red in
+proportion, and stay grey while nothing has changed. The
+status at the top right says what the last step did, for example
+`Applied step 3 of 12: update_filter.` The plots mark the current step's window and, on the
+pulse train, its added (green) and removed (red) discharges.
 
 ### Timeline colours
 
-The slider's track is coloured by what each step did to the selected unit:
+The step line's dots are coloured by what each step did to the selected unit:
 
 | Colour | Step type |
 |---|---|
@@ -91,7 +123,7 @@ The slider's track is coloured by what each step did to the selected unit:
 | `delete_spikes` | Removes the discharges the edit removed. When the box also covered artifact markers, MUedit2 logged a separate `delete_artifact` step. |
 | `delete_dr` | Removes the discharges the edit removed. |
 | `remove_outliers` | Removes the discharges the edit removed. |
-| `update_filter` | Recomputes the unit's filter over the logged window on the original EMG, as MUedit2 did, and redetects its discharges there; the pulse train is updated too. **Peel-off** (`use_peeloff`) first subtracts the other units of the grid that were live at that point, and **Lock spikes** (`lock_spikes`) keeps the existing discharges, moved to their nearest peak. The unit's artifact markers are always subtracted. If the EMG cannot be read, the step's logged result is applied instead and the status line says, in red, `Replayed step … from the edit log: could not recompute the filter`. |
+| `update_filter` | Recomputes the unit's filter over the logged window on the original EMG, as MUedit2 did, and redetects its discharges there; the pulse train is updated too. **Peel-off** (`use_peeloff`) first subtracts the other units of the grid that were live at that point, and **Lock spikes** (`lock_spikes`) keeps the existing discharges, moved to their nearest peak. The unit's artifact markers are always subtracted. If the EMG cannot be read, the step's logged result is applied instead and the status says, in red, `Replayed step … from the edit log: could not recompute the filter`. |
 | `add_artifact` | Marks the peaks as artifacts, shown as orange dots on the pulse train. They change no discharge, but every later `update_filter` on the unit subtracts them. |
 | `delete_artifact` | Removes those artifact markers. |
 | `flag_mu` | Flags the unit for removal (`✕` in the dropdown). |
@@ -121,6 +153,7 @@ click it to centre the view there.
 | `←` / `→` | Scroll the view left / right |
 | `↑` / `↓` | Zoom in / out |
 | `Space` | Play / pause |
+| `B` / `N` | Previous / next step |
 | `<` / `>` | Previous / next motor unit |
 
 Shortcuts are ignored while a dropdown has the focus: after choosing a unit, click a plot

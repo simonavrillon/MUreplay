@@ -1,14 +1,10 @@
-/* Replay stage: MU selects, the timeline toolbar and slider, the two plot cards. */
+/* Research stage, laid out like MUedit2's edit page: the MU selects, the
+   replay toolbar and step line, the two plot cards and the navigation timeline. */
 
 .edit-top-row {
   display: flex;
   flex-direction: column;
-  gap: 14px;
-  align-items: stretch;
-}
-
-.stage-edit .chart-card {
-  padding: 12px;
+  gap: 4px;
 }
 
 .edit-full {
@@ -16,21 +12,11 @@
   margin-top: 10px;
   flex: 1 1 0;
   min-height: 0;
+  overflow: hidden;
 }
 
-#editDrCard {
-  flex-grow: 1;
-}
-
-#editPulseCard {
-  flex-grow: 2;
-}
-
-#dischargeRateCanvas,
-#pulseTrainCanvas {
-  flex: 1 1 auto;
-  min-height: 0;
-  height: 100%;
+.stage-edit .chart-card {
+  padding: 4px 12px 12px;
 }
 
 .edit-controls-row {
@@ -50,12 +36,12 @@
   background: var(--surface);
   border: 1px solid var(--border);
   color: var(--text);
-  border-radius: 6px;
+  border-radius: var(--radius-sm);
   min-width: 160px;
-  height: 40px;
+  height: var(--control-h);
   padding: 0 12px;
   font-size: var(--fs-md);
-  font-weight: var(--fw-bold);
+  font-weight: var(--fw-semibold);
   line-height: 1;
 }
 
@@ -64,85 +50,360 @@
   width: 110px;
 }
 
-/* ── Timeline toolbar ── */
-
-.timeline-toolbar {
+.edit-toolbar {
   display: flex;
-  align-items: center;
-  gap: 4px;
-  flex: 1;
+  flex-direction: row;
+  gap: 6px;
+  flex: 0 0 auto;
 }
 
-.pill-toggle {
-  height: 40px;
-  width: 36px;
-  min-width: 36px;
-  padding: 0;
+.edit-toolbar-row {
+  display: flex;
+  gap: 6px;
+  flex-wrap: nowrap;
+  white-space: nowrap;
+}
+
+.edit-toolbar-group {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  padding-right: 8px;
+  margin-right: 2px;
+  border-right: 1px solid var(--border);
+}
+
+.edit-toolbar-group:last-child {
+  border-right: none;
+  padding-right: 0;
+  margin-right: 0;
+}
+
+.edit-toolbar-row .pill-toggle {
+  width: auto;
+  margin-top: 0;
+  flex: 0 0 auto;
+  height: var(--control-h);
   display: inline-flex;
   align-items: center;
   justify-content: center;
-  border-radius: 6px;
-  border: 1px solid var(--border);
-  background: var(--surface);
-  color: var(--text);
-  font-weight: var(--fw-bold);
   font-size: var(--fs-md);
-  letter-spacing: 0.02em;
-  cursor: pointer;
+  font-weight: var(--fw-semibold);
+  line-height: 1;
+}
+
+.edit-toolbar-row .pill-toggle:disabled {
+  opacity: 0.45;
+  cursor: not-allowed;
+}
+
+.edit-toolbar-row .pill-toggle svg {
+  width: 20px;
+  height: 20px;
+  flex: 0 0 20px;
+}
+
+.edit-toolbar-row .pill-toggle span {
+  display: inline-block;
+  /* Tall enough for descenders: the expanding labels clip to their own box. */
+  line-height: 1.4;
+}
+
+.edit-toolbar-row .icon-expand-btn {
+  max-width: 44px;
+  padding: 0 12px;
+  gap: 0;
+  overflow: hidden;
+  white-space: nowrap;
   transition:
+    max-width 0.2s ease,
+    gap 0.2s ease,
+    color 0.15s ease,
     border-color 0.15s ease,
     background 0.15s ease;
 }
 
-.pill-toggle:focus {
+.edit-toolbar-row .icon-expand-btn span {
+  max-width: 0;
+  opacity: 0;
+  overflow: hidden;
+  white-space: nowrap;
+  transition:
+    max-width 0.2s ease,
+    opacity 0.15s ease;
+}
+
+.edit-toolbar-row .icon-expand-btn:hover:enabled,
+.edit-toolbar-row .icon-expand-btn:focus-visible,
+.edit-toolbar-row .icon-expand-btn.is-running {
+  max-width: 220px;
+  gap: 8px;
+  color: var(--mu-4);
+  border-color: var(--mu-4);
+  background: var(--mu-4-dim);
+}
+
+.edit-toolbar-row .icon-expand-btn:hover:enabled span,
+.edit-toolbar-row .icon-expand-btn:focus-visible span,
+.edit-toolbar-row .icon-expand-btn.is-running span {
+  max-width: 200px;
+  opacity: 1;
+}
+
+/* Play shows while stopped, Pause while playing. */
+#playPauseBtn .when-running,
+#playPauseBtn.is-running .when-stopped {
+  display: none;
+}
+
+#playPauseBtn.is-running .when-running {
+  display: inline-block;
+}
+
+/* ── Replay step line: dots as MUedit2's live run draws them, then the diff summary ── */
+
+.replay-bar {
+  flex: 1;
+  min-width: 0;
+  display: flex;
+  align-items: center;
+  gap: 12px;
+}
+
+.replay-track {
+  position: relative;
+  flex: 1;
+  min-width: 0;
+  height: var(--control-h);
+  padding: 0 10px;
+  display: flex;
+  align-items: center;
+  border-radius: var(--radius-sm);
+}
+
+.replay-track:has(#timelineSlider:focus-visible) {
   outline: 2px solid var(--accent);
   outline-offset: 2px;
 }
 
-#timelineSlider {
-  flex: 1 1 auto;
+/* The dots' centres sit where the slider's thumb stops: inset by half its
+   width (--dot-inset), then evenly spaced. */
+.timeline-steps {
+  --dot-inset: 6px;
+  position: relative;
+  flex: 1;
   min-width: 0;
-  height: 40px;
+  height: 14px;
+  padding: 0 calc(var(--dot-inset) - 4px);
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+}
+
+/* The line through the dots, filled up to the playhead. */
+.timeline-steps::before,
+.timeline-steps::after {
+  content: "";
+  position: absolute;
+  left: var(--dot-inset);
+  top: 50%;
+  height: 2px;
+  margin-top: -1px;
+  border-radius: 1px;
+}
+
+.timeline-steps::before {
+  right: var(--dot-inset);
+  background: var(--border);
+}
+
+.timeline-steps::after {
+  width: calc((100% - 2 * var(--dot-inset)) * var(--progress, 0));
+  background: var(--muted);
+  transition: width 0.2s ease;
+}
+
+/* 8px, as the run's dots, shrinking when there are too many to fit. */
+.timeline-dot {
+  --dot-color: var(--muted);
+  position: relative;
+  z-index: 1;
+  flex: 0 0 auto;
+  width: min(8px, calc(80% / var(--steps, 1)));
+  aspect-ratio: 1;
+  border-radius: 50%;
+  border: 1px solid var(--dot-color);
+  background: var(--bg);
+  opacity: 0.45;
+  transition: opacity 0.2s ease;
+}
+
+.timeline-dot.is-done {
+  background: var(--dot-color);
+  opacity: 1;
+}
+
+.timeline-dot.is-current {
+  box-shadow:
+    0 0 0 2px var(--bg),
+    0 0 0 3px var(--dot-color);
+  animation: run-pop 0.45s ease-out;
+}
+
+.timeline-dot[data-kind="start"] {
+  --dot-color: var(--text);
+}
+
+.timeline-dot[data-kind="add"] {
+  --dot-color: var(--plot-timeline-added);
+}
+
+.timeline-dot[data-kind="remove"] {
+  --dot-color: var(--plot-timeline-removed);
+}
+
+.timeline-dot[data-kind="split_add_remove"] {
+  --dot-color: var(--plot-timeline-added);
+}
+
+.timeline-dot[data-kind="split_add_remove"].is-done {
+  background: linear-gradient(
+    to right,
+    var(--plot-timeline-added) 50%,
+    var(--plot-timeline-removed) 50%
+  );
+}
+
+.timeline-dot[data-kind="update_filter"] {
+  --dot-color: var(--accent);
+}
+
+.timeline-dot[data-kind="artifact"] {
+  --dot-color: var(--artifact);
+}
+
+/* MUedit2's run-pop: a new dot lands large with a halo and settles. */
+@keyframes run-pop {
+  0% {
+    transform: scale(2.2);
+    box-shadow: 0 0 0 4px color-mix(in srgb, var(--dot-color) 35%, transparent);
+  }
+  100% {
+    transform: scale(1);
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .timeline-dot.is-current {
+    animation: none;
+  }
+}
+
+/* Over the dots, invisible: it takes the pointer and the keyboard. Its thumb
+   is 2 x --dot-inset wide, so each value lands on a dot's centre. */
+#timelineSlider {
+  position: absolute;
+  inset: 0 10px;
+  width: calc(100% - 20px);
+  height: 100%;
+  margin: 0;
+  opacity: 0;
+  cursor: pointer;
   -webkit-appearance: none;
   appearance: none;
-  background: transparent;
-}
-
-#timelineSlider::-webkit-slider-runnable-track {
-  height: 40px;
-  border-radius: 6px;
-  background: var(--timeline-gradient, var(--border));
-  border: 1px solid var(--border);
-}
-
-#timelineSlider::-moz-range-track {
-  height: 40px;
-  border-radius: 6px;
-  background: var(--timeline-gradient, var(--border));
-  border: 1px solid var(--border);
 }
 
 #timelineSlider::-webkit-slider-thumb {
   -webkit-appearance: none;
-  appearance: none;
-  width: 3px;
-  height: 34px;
-  border-radius: 2px;
-  background: var(--timeline-thumb);
-  border: none;
-  margin-top: 2px;
-  box-shadow:
-    0 0 0 1px var(--timeline-thumb-outline),
-    0 0 0 2px var(--timeline-thumb-halo);
+  width: 12px;
+  height: 12px;
 }
 
 #timelineSlider::-moz-range-thumb {
-  width: 3px;
-  height: 34px;
-  border-radius: 2px;
-  background: var(--timeline-thumb);
+  width: 12px;
+  height: 12px;
   border: none;
-  box-shadow:
-    0 0 0 1px var(--timeline-thumb-outline),
-    0 0 0 2px var(--timeline-thumb-halo);
+}
+
+#timelineSlider:disabled {
+  cursor: default;
+}
+
+.replay-summary {
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+  font-size: var(--fs-sm);
+  font-variant-numeric: tabular-nums;
+  white-space: nowrap;
+}
+
+#timelineCounter {
+  color: var(--muted);
+}
+
+.diff-added,
+.diff-removed {
+  font-weight: var(--fw-semibold);
+}
+
+.diff-added {
+  color: var(--plot-timeline-added);
+}
+
+.diff-removed {
+  color: var(--plot-timeline-removed);
+}
+
+.diff-squares {
+  display: inline-flex;
+  gap: 1px;
+}
+
+.diff-square {
+  width: 8px;
+  height: 8px;
+  border-radius: 1px;
+  background: var(--border);
+}
+
+.diff-square[data-kind="added"] {
+  background: var(--plot-timeline-added);
+}
+
+.diff-square[data-kind="removed"] {
+  background: var(--plot-timeline-removed);
+}
+
+/* ── Plots ── */
+
+/* 1.2 : 2, as MUedit2's edit page splits them. */
+#editDrCard {
+  flex-grow: 1.2;
+}
+
+#editPulseCard {
+  flex-grow: 2;
+}
+
+/* Sized by the card alone: the backing store, scaled to the screen's pixel
+   density, must not feed back into the layout. */
+#editDrCanvas,
+#editPulseCanvas {
+  flex: 1 1 0;
+  min-height: 0;
+}
+
+.edit-timeline-canvas {
+  width: 100%;
+  height: 20px;
+  flex: 0 0 20px;
+  display: block;
+  cursor: grab;
+  border-radius: 3px;
+  touch-action: pan-y;
+}
+
+.edit-timeline-canvas:active {
+  cursor: grabbing;
 }

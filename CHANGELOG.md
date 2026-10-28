@@ -9,15 +9,28 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Added
 
+- `B` and `N` step back and forward through the replay.
+- A settings rail on the left, as in MUedit2, shows the session's fields read-only: the BIDS
+  entities, participant, placement and hardware from the dataset's sidecars, and the run's
+  decomposition settings and quality filters.
+- **Research** and **Clinic** buttons at the top centre switch pages. Research is the replay;
+  Clinic is a placeholder for an upcoming page of clinical metrics.
 - Decompositions saved in MUedit2's schema v2 `.npz` format open, as older v1 files still do.
 - Filter steps on intramuscular grids are recomputed with the intramuscular bandpass
   (100–4400 Hz), as MUedit2 does.
 
 ### Changed
 
+- The page looks like MUedit2's: its font, header, buttons and status, at the top right. The
+  two plots are drawn as on MUedit2's edit page, and the pulse train's plot is named
+  **Pulse train**.
+- The timeline slider is now a step line: one dot per step, coloured by what it did and drawn
+  as in MUedit2's live run, filled up to the current step. Beside it, a GitHub-style summary counts the discharges the
+  replayed steps added and removed on the unit: `Step 4 / 7 +22 −23`.
+
 - Status messages are plain sentences: a failed load reads "Could not load the session: …", and
   a filter step that could not be recomputed says it was replayed from the edit log instead.
-- Errors on the status line under the selectors show in red.
+- Errors on the status show in red.
 - The bar under the pulse train also marks the artifact markers the current step added or
   removed, as MUedit2's does.
 - The app and its API run as one server, at <http://127.0.0.1:8000>; the launchers start it with

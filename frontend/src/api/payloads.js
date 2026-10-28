@@ -53,7 +53,75 @@ export function normalizeSessionPayload(raw) {
       peelOffWin: raw.refit_settings.peel_off_win,
       computeDtype: raw.refit_settings.compute_dtype,
     },
+    parameters: normalizeParameters(raw.parameters ?? {}),
+    sidecarMeta: normalizeSidecarMeta(raw.sidecar_meta ?? {}),
     editHistory,
+  };
+}
+
+/**
+ * The run settings the settings panel shows; a key the file lacks is undefined.
+ *
+ * @param {JsonObject} raw
+ */
+function normalizeParameters(raw) {
+  return {
+    /** @type {number | undefined} */
+    niter: raw.niter,
+    /** @type {number | undefined} */
+    nwindows: raw.nwindows,
+    /** @type {number | undefined} */
+    duplicatesthresh: raw.duplicatesthresh,
+    /** @type {boolean | number | undefined} */
+    peelOffEnabled: raw.peel_off_enabled,
+    /** @type {number | undefined} Seconds. */
+    peelOffWin: raw.peel_off_win,
+    /** @type {boolean | number | undefined} */
+    useAdaptive: raw.use_adaptive,
+    /** @type {boolean | number | undefined} */
+    fullTrace: raw.full_trace,
+    /** @type {number | undefined} */
+    silThr: raw.sil_thr,
+    /** @type {boolean | number | undefined} */
+    covFilter: raw.covfilter,
+    /** @type {number | undefined} */
+    covThr: raw.cov_thr,
+  };
+}
+
+/**
+ * The participant, placement and hardware fields the recording's BIDS
+ * sidecars record, as the user wrote them: any value may be missing or odd.
+ *
+ * @param {JsonObject} raw
+ */
+function normalizeSidecarMeta(raw) {
+  const participant = raw.participant_meta ?? {};
+  return {
+    participantMeta: {
+      /** @type {unknown} */
+      age: participant.age,
+      /** @type {unknown} */
+      sex: participant.sex,
+      /** @type {unknown} */
+      handedness: participant.handedness,
+    },
+    /** @type {unknown} */
+    manufacturer: raw.manufacturer,
+    /** @type {unknown} */
+    manufacturersModelName: raw.manufacturers_model_name,
+    /** @type {unknown} */
+    powerlineFreq: raw.powerline_freq,
+    /** @type {unknown} */
+    placementScheme: raw.placement_scheme,
+    /** @type {unknown} */
+    placementSchemeDescription: raw.placement_scheme_description,
+    /** @type {unknown} */
+    groundLocation: raw.ground_location,
+    /** @type {unknown} */
+    referenceLocation: raw.reference_location,
+    /** @type {unknown[]} */
+    muscleNames: Array.isArray(raw.muscle_names) ? raw.muscle_names : [],
   };
 }
 

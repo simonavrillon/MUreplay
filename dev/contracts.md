@@ -17,7 +17,7 @@ change these only together with the other side, and with a test.
 | Route | Does |
 |---|---|
 | `GET /dialog/open-file` | the path the user picks in the native file dialog, or `null` when cancelled |
-| `POST /load-paired-from-path` | the decomposition and edit log paired with a path ([file-formats.md](../docs/file-formats.md#how-files-are-paired)), complete: `fsamp`, `grid_names` and one `mu_grid_index` entry per MU are filled in when the file has none, and `refit_settings` holds the run's `nbextchan`, `peel_off_win` and `compute_dtype`, with MUedit2's defaults where the file's `parameters` have none |
+| `POST /load-paired-from-path` | the decomposition and edit log paired with a path ([file-formats.md](../docs/file-formats.md#how-files-are-paired)), complete: `fsamp`, `grid_names` and one `mu_grid_index` entry per MU are filled in when the file has none, and `refit_settings` holds the run's `nbextchan`, `peel_off_win` and `compute_dtype`, with MUedit2's defaults where the file's `parameters` have none. `parameters` holds the run settings the settings rail shows, those the file has as plain values; `sidecar_meta` the participant, placement and hardware fields of the BIDS sidecars (`io/bids.py:read_sidecar_meta`, MUedit2's), empty when they cannot be read |
 | `POST /edit/update-filter` | refits one MU on the BIDS EMG, as a logged `update_filter` step did |
 
 ### Errors

@@ -145,9 +145,7 @@ def read_bids_emg_grid(
     """One grid over the whole recording as float32 rows, with its sampling rate and discard mask."""
     emg_path = _resolve_bids_emg_path(bids_root, entity_label)
     channels_tsv = _resolve_bids_channels_tsv(emg_path, entity_label)
-    with channels_tsv.open("r", encoding="utf-8") as f:
-        # BIDS TSV has no quoting: a cell starting with '"' is plain text.
-        rows = list(csv.DictReader(f, delimiter="\t", quoting=csv.QUOTE_NONE))
+    rows = _read_tsv(channels_tsv)
     grids = _grid_rows(rows)
     if not 0 <= grid < len(grids):
         raise MureplayError(f"No EMG grid {grid + 1} in {channels_tsv}.", field="mu_grid_index")
@@ -169,3 +167,71 @@ def read_bids_emg_grid(
     finally:
         reader.close()
     return data, fsamp, discard_mask
+
+
+#: ``EMGReference`` values that name a montage, not where the reference sits.
+_REFERENCE_KEYWORDS = {
+    "",
+    "n/a",
+    "channelspecific",
+    "bipolar",
+    "monopolar",
+    "unipolar",
+    "ref",
+    "reference",
+    "average",
+    "common average",
+    "car",
+}
+
+
+def _reference_location(value: Any) -> str | None:
+    """``EMGReference`` when it describes a place, not one of the keywords or a bare electrode name."""
+    text = str(value or "").strip()
+    if text.lower() in _REFERENCE_KEYWORDS or re.fullmatch(r"[A-Za-z]+\d+", text):
+        return None
+    return text
+
+
+def _read_tsv(path: Path) -> list[dict[str, str]]:
+    """The rows of a BIDS TSV file."""
+    with path.open("r", encoding="utf-8") as f:
+        # BIDS TSV has no quoting: a cell starting with '"' is plain text.
+        return list(csv.DictReader(f, delimiter="\t", quoting=csv.QUOTE_NONE))
+
+
+def read_sidecar_meta(bids_root: Path, entity_label: str) -> dict[str, Any]:
+    """The participant, placement and hardware fields MUedit2's session form shows, from the sidecars."""
+    meta: dict[str, Any] = {}
+    subject = _entity_pairs(entity_label).get("sub")
+    participants = bids_root / "participants.tsv"
+    if subject and participants.exists():
+        row = next(
+            (r for r in _read_tsv(participants) if r.get("participant_id") == f"sub-{subject}"),
+            None,
+        )
+        if row is not None:
+            meta["participant_meta"] = {
+                key: row.get(key, "") for key in ("age", "sex", "handedness")
+            }
+    try:
+        emg_path = _resolve_bids_emg_path(bids_root, entity_label)
+    except MureplayError:
+        return meta
+    sidecar = _read_sidecar(bids_root, emg_path, entity_label)
+    meta["manufacturer"] = sidecar.get("Manufacturer") or ""
+    meta["manufacturers_model_name"] = sidecar.get("ManufacturersModelName") or ""
+    meta["powerline_freq"] = sidecar.get("PowerLineFrequency")
+    meta["placement_scheme"] = sidecar.get("EMGPlacementScheme")
+    meta["placement_scheme_description"] = sidecar.get("EMGPlacementSchemeDescription")
+    meta["ground_location"] = sidecar.get("EMGGround")
+    meta["reference_location"] = _reference_location(sidecar.get("EMGReference"))
+    try:
+        rows = _read_tsv(_resolve_bids_channels_tsv(emg_path, entity_label))
+    except NotFoundError:
+        return meta
+    meta["muscle_names"] = [
+        "" if _blank(rows[layout[0]].get("target_muscle")) else rows[layout[0]]["target_muscle"]
+        for layout in _grid_rows(rows)
+    ]
+    return meta

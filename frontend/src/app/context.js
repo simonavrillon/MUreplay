@@ -20,9 +20,15 @@
  * @property {Api} api
  */
 
+/** @typedef {"research" | "clinic"} StageKey The pages the header's stepper switches between. */
+
 /**
  * @typedef {object} UiService
  * @property {(text: string, tone?: Tone) => void} setReplayStatus
+ * @property {(target: StageKey) => void} switchStage
+ * @property {() => void} positionStepIndicator Slide the stepper's highlight under the active page.
+ * @property {(open: boolean) => void} setSettingsOpen
+ * @property {(session: import("../state/transitions.js").SessionPayload) => void} showSessionSettings Fill the settings rail with a loaded session's fields.
  */
 
 /**

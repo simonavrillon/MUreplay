@@ -19,10 +19,8 @@ describe("COLORS", () => {
 });
 
 describe("canvasFont", () => {
-  test("is the page font at the small size", () => {
-    assert.equal(
-      canvasFont(),
-      `${tokens.get("--fs-xs")} ${tokens.get("--font")}`,
-    );
+  test("is the page font at the small size, in pixels", () => {
+    // 0.75rem at the browser's default 16 px root.
+    assert.equal(canvasFont(), `12px ${tokens.get("--font")}`);
   });
 });

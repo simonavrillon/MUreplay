@@ -109,3 +109,40 @@ export function shiftViewInside(start, end, totalSamples) {
   if (end <= start) end = Math.min(totalSamples, start + 1);
   return { start, end };
 }
+
+/**
+ * The discharges `steps` added and removed on MU `mu`, by their logged diffs.
+ *
+ * @param {Pick<import("../state/state.js").EditLogEntry, "mu" | "spikesAdded" | "spikesRemoved">[]} steps
+ * @param {number} mu
+ */
+export function dischargeDiff(steps, mu) {
+  let added = 0;
+  let removed = 0;
+  for (const step of steps) {
+    if (step.mu !== mu) continue;
+    added += step.spikesAdded.length;
+    removed += step.spikesRemoved.length;
+  }
+  return { added, removed };
+}
+
+/** Squares in a diff summary, as GitHub draws beside a commit's line counts. */
+const DIFF_SQUARES = 5;
+
+/**
+ * The diff summary's squares: added, then removed, in proportion; all
+ * neutral when there is no change.
+ *
+ * @param {number} added
+ * @param {number} removed
+ * @returns {("added" | "removed" | "neutral")[]}
+ */
+export function diffSquares(added, removed) {
+  const total = added + removed;
+  if (!total) return Array(DIFF_SQUARES).fill("neutral");
+  const green = Math.round((added / total) * DIFF_SQUARES);
+  return Array.from({ length: DIFF_SQUARES }, (_, i) =>
+    i < green ? "added" : "removed",
+  );
+}

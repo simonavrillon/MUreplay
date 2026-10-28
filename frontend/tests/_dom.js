@@ -28,6 +28,9 @@ export function fakeElement() {
   /** @type {Set<string>} */
   const classes = new Set();
   return {
+    /** @type {any[]} */
+    children: [],
+    className: "",
     textContent: "",
     title: "",
     value: "",
@@ -48,6 +51,10 @@ export function fakeElement() {
       },
       /** @param {string} name */
       has: (name) => classes.has(name),
+    },
+    /** @param {...any} nodes */
+    replaceChildren(...nodes) {
+      this.children = nodes;
     },
     style: {
       /** @type {Record<string, string>} */
@@ -109,6 +116,7 @@ export function fakeCanvas({ width, height }) {
   /** @type {Record<string, any>} */
   const ctx = { calls, fillStyle: "", strokeStyle: "" };
   const ops = [
+    "setTransform",
     "clearRect",
     "fillRect",
     "strokeRect",

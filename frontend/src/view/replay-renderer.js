@@ -1,6 +1,7 @@
 /**
  * Replay renderer: draws the current MU's discharge rates, pulse train and
- * timeline from the state it is given.
+ * timeline from the state it is given, as MUedit2's edit page draws them,
+ * with the step in view and the artifact windows over the pulse train.
  */
 
 import { COLORS } from "../config.js";
@@ -11,11 +12,18 @@ import {
   pulseTrainForCurrentMu,
   spikesForCurrentMu,
 } from "../state/selectors.js";
-import { seriesRange } from "../signal/series.js";
-import { PLOT_PADDING, drawSeries } from "./plots.js";
+import { traceWindow } from "../signal/series.js";
+import {
+  PLOT_PADDING,
+  drawTrace,
+  getCanvasPlotMetrics,
+  prepareCanvas,
+  viewScale,
+} from "./plots.js";
 
 /** @typedef {import("../app/context.js").Span} Span */
 /** @typedef {import("../state/state.js").EditLogEntry} EditLogEntry */
+/** @typedef {import("./plots.js").Selection} Selection */
 
 const TIMELINE_BAR_TOP = 4;
 const TIMELINE_BAR_H = 12;
@@ -31,7 +39,7 @@ export function timelineBarWidth(canvasWidth) {
 
 /**
  * The instantaneous discharge rate between each pair of discharges, placed at
- * their midpoint.
+ * their midpoint, as MUedit2 computes it.
  *
  * @param {number[]} spikes
  * @param {number} fsamp
@@ -46,23 +54,41 @@ function dischargeRates(spikes, fsamp, totalSamples) {
     const isi = spikes[i + 1] - spikes[i];
     if (isi <= 0) continue;
     const at = Math.round(spikes[i] + isi / 2);
-    if (at < 0 || at >= totalSamples) continue;
-    positions.push(at);
-    rates.push(fsamp / isi);
+    positions.push(Math.min(totalSamples - 1, Math.max(0, at)));
+    rates.push(fsamp ? fsamp / isi : 0);
   }
   return { positions, rates };
 }
 
 /**
- * The window the step behind the playhead covers, as the plots highlight it.
+ * The fastest rate whose midpoint is in `view`: the top of the rate plot.
+ *
+ * @param {ReturnType<typeof dischargeRates>} rates
+ * @param {Span} view
+ */
+function fastestRateInView({ positions, rates }, view) {
+  let fastest = 0;
+  for (let i = 0; i < positions.length; i++) {
+    if (positions[i] >= view.start && positions[i] < view.end) {
+      fastest = Math.max(fastest, rates[i]);
+    }
+  }
+  return fastest;
+}
+
+/**
+ * The window the step behind the playhead covers, highlighted over the whole
+ * plot height.
  *
  * @param {EditLogEntry | null} step
- * @returns {Span[]}
+ * @returns {Selection[]}
  */
 function stepSelections(step) {
   if (step?.viewStart == null || step.viewEnd == null) return [];
   if (step.viewEnd <= step.viewStart) return [];
-  return [{ start: step.viewStart, end: step.viewEnd }];
+  return [
+    { start: step.viewStart, end: step.viewEnd, yMin: 0, yMax: Infinity },
+  ];
 }
 
 /**
@@ -95,33 +121,47 @@ export function createReplayRenderer({ els, state }) {
   }
 
   function renderPulseTrain() {
+    const canvas = els.editPulseCanvas;
     const pulseTrain = pulseTrainForCurrentMu(state);
+    const view = clampedReplayView(state, pulseTrain.length);
+    if (!pulseTrain.length) {
+      drawTrace(canvas, null, view);
+      return;
+    }
     const spikes = spikesForCurrentMu(state);
     const artifacts = artifactsForCurrentMu(state);
-    const view = clampedReplayView(state, pulseTrain.length);
     const step = currentMuStep(state);
-    const plot = drawSeries(els.pulseTrainCanvas, view, {
-      line: { values: pulseTrain, color: COLORS.pulseTrain },
-      range: seriesRange(pulseTrain, view.start, view.end),
-      selections: stepSelections(step),
-      fsamp: state.fsamp,
-      markers: [
-        {
-          positions: spikes,
-          values: spikes.map((s) => pulseTrain[s] ?? 0),
-          color: COLORS.discharge,
-        },
-        {
-          positions: artifacts,
-          values: artifacts.map((s) => pulseTrain[s] ?? 0),
-          color: COLORS.artifactMarker,
-          radius: 4,
-          outlined: true,
-        },
-      ],
-    });
-    if (!plot) return;
-    const { ctx, top, height, toX } = plot;
+    const { plotWidth } = getCanvasPlotMetrics(canvas);
+    drawTrace(
+      canvas,
+      traceWindow(pulseTrain, view, Math.max(1, Math.round(plotWidth))),
+      view,
+      {
+        color: COLORS.pulseTrain,
+        selections: stepSelections(step),
+        fsamp: state.fsamp,
+        markers: [
+          {
+            positions: spikes,
+            values: spikes.map((s) => pulseTrain[s] ?? 0),
+            color: COLORS.discharge,
+          },
+          {
+            positions: artifacts,
+            values: artifacts.map((s) => pulseTrain[s] ?? 0),
+            color: COLORS.artifactMarker,
+            radius: 4,
+            outlined: true,
+          },
+        ],
+      },
+    );
+
+    const ctx = canvas.getContext("2d");
+    if (!ctx) return;
+    const { padding, plotHeight } = getCanvasPlotMetrics(canvas);
+    const { toX } = viewScale(view, padding.left, plotWidth);
+    const top = padding.top;
 
     ctx.fillStyle = COLORS.artifactWindowFill;
     ctx.strokeStyle = COLORS.artifactWindowStroke;
@@ -130,8 +170,8 @@ export function createReplayRenderer({ els, state }) {
       if (re <= view.start || rs >= view.end) continue;
       const x1 = toX(Math.max(rs, view.start));
       const spanPx = Math.max(2, toX(Math.min(re, view.end)) - x1);
-      ctx.fillRect(x1, top, spanPx, height);
-      ctx.strokeRect(x1 + 0.5, top + 0.5, spanPx - 1, height - 1);
+      ctx.fillRect(x1, top, spanPx, plotHeight);
+      ctx.strokeRect(x1 + 0.5, top + 0.5, spanPx - 1, plotHeight - 1);
     }
 
     if (!step) return;
@@ -147,10 +187,10 @@ export function createReplayRenderer({ els, state }) {
       for (const s of positions) {
         if (s < view.start || s >= view.end) continue;
         const x = toX(s);
-        ctx.fillRect(x - 2, top, 4, height);
+        ctx.fillRect(x - 2, top, 4, plotHeight);
         ctx.beginPath();
         ctx.moveTo(x, top);
-        ctx.lineTo(x, top + height);
+        ctx.lineTo(x, top + plotHeight);
         ctx.stroke();
       }
     };
@@ -167,42 +207,38 @@ export function createReplayRenderer({ els, state }) {
   }
 
   function renderDischargeRates() {
+    const canvas = els.editDrCanvas;
     const spikes = spikesForCurrentMu(state);
     const totalSamples = pulseTrainForCurrentMu(state).length;
+    if (!totalSamples || !spikes.length) {
+      drawTrace(canvas, null, { start: 0, end: 0 });
+      return;
+    }
     const view = clampedReplayView(state, totalSamples);
-    const { positions, rates } = dischargeRates(
-      spikes,
-      state.fsamp,
-      totalSamples,
-    );
-    const fastest = rates.reduce(
-      (fastestSoFar, rate, i) =>
-        positions[i] >= view.start && positions[i] < view.end
-          ? Math.max(fastestSoFar, rate)
-          : fastestSoFar,
-      0,
-    );
-    drawSeries(els.dischargeRateCanvas, view, {
-      range: { min: 0, max: fastest },
+    const rates = dischargeRates(spikes, state.fsamp, totalSamples);
+    drawTrace(canvas, { row: null, start: view.start, end: view.end }, view, {
+      range: { min: 0, max: fastestRateInView(rates, view) },
       selections: stepSelections(currentMuStep(state)),
       fsamp: state.fsamp,
-      markers: [{ positions, values: rates, color: COLORS.discharge }],
+      markers: [
+        {
+          positions: rates.positions,
+          values: rates.rates,
+          color: COLORS.discharge,
+        },
+      ],
     });
   }
 
   function renderTimeline() {
-    const canvas = els.timelineCanvas;
-    const ctx = canvas.getContext("2d");
-    if (!ctx) return;
-    const w = canvas.clientWidth || canvas.width || 1;
-    canvas.width = w;
-    canvas.height = 20;
-    ctx.clearRect(0, 0, w, 20);
+    const prepared = prepareCanvas(els.editTimelineCanvas, { height: 20 });
+    if (!prepared) return;
+    const { ctx, width } = prepared;
 
     const totalSamples = pulseTrainForCurrentMu(state).length;
     if (!totalSamples) return;
 
-    const barWidth = timelineBarWidth(w);
+    const barWidth = timelineBarWidth(width);
 
     ctx.fillStyle = COLORS.timelineTrack;
     ctx.fillRect(PLOT_PADDING.left, TIMELINE_BAR_TOP, barWidth, TIMELINE_BAR_H);

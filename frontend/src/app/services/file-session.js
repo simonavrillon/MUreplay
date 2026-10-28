@@ -41,6 +41,7 @@ export function createFileSessionService(app) {
         await app.api.loadPairedFromPath(filePath),
       );
       beginSession(state, payload);
+      app.showSessionSettings(payload);
       app.startReplay();
       const nMu = state.spikeTimes.length;
       const nSteps = state.timelineGroups.length;

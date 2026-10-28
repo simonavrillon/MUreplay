@@ -12,11 +12,15 @@ function fakeEls() {
   return {
     gridSelect: fakeSelect(),
     muSelect: fakeSelect(),
-    prevStepBtn: { disabled: false, textContent: "" },
-    playPauseBtn: { disabled: false, textContent: "" },
-    nextStepBtn: { disabled: false, textContent: "" },
-    timelineCounter: { textContent: "" },
+    prevStepBtn: fakeElement(),
+    playPauseBtn: fakeElement(),
+    nextStepBtn: fakeElement(),
+    timelineCounter: fakeElement(),
     timelineSlider: { ...fakeElement(), max: "0", value: "0" },
+    timelineSteps: fakeElement(),
+    diffAdded: fakeElement(),
+    diffRemoved: fakeElement(),
+    diffSquares: fakeElement(),
   };
 }
 
@@ -527,6 +531,40 @@ describe("updateTimelineUi", () => {
     assert.equal(els.timelineCounter.textContent, "Step 2 / 2");
     assert.equal(els.prevStepBtn.disabled, false);
     assert.equal(els.nextStepBtn.disabled, true, "nothing left to apply");
+  });
+
+  test("draws a dot per step and counts the replayed steps' discharges", async () => {
+    const app = createHarness({
+      state: oneGrid([[10]], {
+        editHistory: [
+          step({ mu: 0, spikesAdded: [20, 40] }),
+          step({ type: "update_filter", mu: 0, spikesRemoved: [10] }),
+        ],
+      }),
+    });
+    const { els } = app;
+    await seekTo(app, 1);
+
+    // The first dot is step 0, the decomposition as loaded.
+    const dots = els.timelineSteps.children;
+    assert.deepEqual(
+      dots.map((d) => d.dataset.kind),
+      ["start", "add", "update_filter"],
+    );
+    assert.deepEqual(
+      dots.map((d) => [...d.classes]),
+      [["is-done"], ["is-done", "is-current"], []],
+    );
+    assert.equal(els.timelineSteps.style.props["--progress"], "0.5");
+    assert.equal(els.diffAdded.textContent, "+2");
+    assert.equal(els.diffRemoved.textContent, "−0");
+
+    await seekTo(app, 2);
+    assert.equal(els.diffRemoved.textContent, "−1");
+    assert.deepEqual(
+      els.diffSquares.children.map((s) => s.dataset.kind),
+      ["added", "added", "added", "removed", "removed"],
+    );
   });
 
   test("the timeline controls are disabled when the MU has no steps", () => {

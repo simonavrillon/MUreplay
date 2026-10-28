@@ -1,5 +1,5 @@
 /**
- * Reports caught errors: logs them, and shows them on a status line.
+ * Reports caught errors: logs them, and shows them in the status.
  */
 
 /**

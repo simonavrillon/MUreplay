@@ -54,7 +54,19 @@ for (const [key, name] of Object.entries(COLOR_TOKENS)) {
   Object.defineProperty(COLORS, key, { get: () => cssToken(name) });
 }
 
+/** @type {string | undefined} */
+let fontCache;
+
 /** Canvas text: the page's font at its small size. */
 export function canvasFont() {
-  return `${cssToken("--fs-xs")} ${cssToken("--font")}`;
+  if (fontCache) return fontCache;
+  // Canvas text is drawn in pixels, so the rem token is resolved against the root size.
+  const rootPx = parseFloat(
+    getComputedStyle(document.documentElement).fontSize,
+  );
+  const size = cssToken("--fs-xs");
+  const family = cssToken("--font");
+  const font = `${parseFloat(size) * (rootPx || 16)}px ${family}`;
+  if (size && family) fontCache = font;
+  return font;
 }

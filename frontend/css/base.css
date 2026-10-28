@@ -3,11 +3,26 @@
   box-sizing: border-box;
 }
 
+html,
+body {
+  height: 100%;
+}
+
 body {
   margin: 0;
   font-family: var(--font);
+  font-size: var(--fs-md);
   background: var(--bg);
   color: var(--text);
+  font-weight: var(--fw-regular);
+  overflow-x: hidden;
+}
+
+button,
+input,
+select,
+textarea {
+  font: inherit;
 }
 
 /* Wins over any class that sets display. */
@@ -25,20 +40,24 @@ body {
   flex: 1;
   display: flex;
   flex-direction: column;
+  min-height: 0;
 }
 
 /* ── Canvas ── */
 
 canvas {
-  border-radius: 6px;
+  width: 100%;
+  display: block;
+  border-radius: var(--radius-sm);
 }
 
-.edit-timeline-canvas {
-  height: 20px;
-  cursor: grab;
-  border-radius: 3px;
-}
+/* ── Misc ── */
 
-.edit-timeline-canvas:active {
-  cursor: grabbing;
+.icon-btn {
+  border: none;
+  background: transparent;
+  appearance: none;
+  -webkit-appearance: none;
+  cursor: pointer;
+  transition: color 0.15s ease;
 }

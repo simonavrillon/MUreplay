@@ -60,6 +60,18 @@ From the recording, MUreplay reads a grid's channels as MUedit2 does:
   last data record). A sidecar higher in the dataset, such as `task-<task>_emg.json` at its
   root, applies too; the recording's own wins.
 
+The settings rail ([user-guide.md](user-guide.md#session-settings)) shows what the dataset
+records about the recording, as MUedit2's settings panel does. A file that is missing, or a field
+it leaves out, leaves the field blank; it never stops the session from opening.
+
+| Field | Read from |
+|---|---|
+| age, sex, handedness | the subject's row of `participants.tsv`, at the dataset's root |
+| manufacturer, device model, power line | `Manufacturer`, `ManufacturersModelName`, `PowerLineFrequency` in `_emg.json` |
+| placement scheme and description | `EMGPlacementScheme`, `EMGPlacementSchemeDescription` |
+| reference, ground | `EMGReference` (left blank when it names a montage such as `monopolar`), `EMGGround` |
+| muscle per grid | the `target_muscle` of each grid's first row in `_channels.tsv` |
+
 ## The decomposition (`.npz`)
 
 MUreplay reads both layouts MUedit2 writes: schema v1 (older MUedit2, object arrays) and schema
@@ -81,7 +93,9 @@ loader does.
 The run settings (`parameters`) are the settings the decomposition was run with: channel
 extension (`nbextchan`), peel-off window (`peel_off_win`) and precision (`compute_dtype`). A
 refit of an `update_filter` step repeats them, as MUedit2's editor does; a file without them
-refits with MUedit2's defaults.
+refits with MUedit2's defaults. The settings rail also shows the ones MUedit2's settings panel
+does: `niter`, `nwindows`, `duplicatesthresh`, `peel_off_enabled` and `peel_off_win`,
+`use_adaptive` and `full_trace` (the post-processing mode), `sil_thr`, `covfilter` and `cov_thr`.
 
 ## The edit log (`_edited.json`)
 

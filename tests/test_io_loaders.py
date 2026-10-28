@@ -77,6 +77,16 @@ class TestLoadNpzPayload:
             "compute_dtype": "float64",
         }
 
+    def test_the_settings_panel_gets_the_run_settings_the_file_holds(self) -> None:
+        buffer = io.BytesIO()
+        run = {"niter": np.int64(150), "use_adaptive": True, "sil_thr": 0.9, "grid": "x"}
+        np.savez(buffer, discharge_times=np.array([[1]], dtype=object), parameters=np.array(run))
+        assert _load_npz_payload(io.BytesIO(buffer.getvalue()))["parameters"] == {
+            "niter": 150,
+            "use_adaptive": True,
+            "sil_thr": 0.9,
+        }
+
     def test_unusable_run_settings_fall_back_to_muedit2_defaults(self) -> None:
         buffer = io.BytesIO()
         run = {"nbextchan": -3, "peel_off_win": "x", "compute_dtype": "int8"}
@@ -167,6 +177,8 @@ class TestLoadPairedFromPath:
         assert {"add_spikes", "remove_outliers", "update_filter", "flag_mu"} <= {
             str(step.get("type")) for step in payload["edit_history"]
         }
+        assert payload["parameters"]["niter"] == 25
+        assert payload["sidecar_meta"]["manufacturer"] == "OT Bioelettronica"
 
     def test_the_decomposition_and_the_edited_file_open_the_same_session(
         self, sample_bids_root: Path

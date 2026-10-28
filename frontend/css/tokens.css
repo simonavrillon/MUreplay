@@ -1,30 +1,37 @@
-/* Design tokens: colors, fonts, spacing. */
+/* Design tokens: colors, fonts, spacing; MUedit2's, so the two apps look alike. */
 :root {
   --bg: #1f1f1f;
+  --panel: #2a2a2a;
   --muted: #b7b7b7;
   --accent: #3776ab;
   --text: #ffffff;
   --border: #3a3a3a;
-  --font: "IBM Plex Sans", "Segoe UI", sans-serif;
-  --fs-xs: 10px;
-  --fs-sm: 12px;
-  --fs-md: 14px;
-  --fs-lg: 20px;
-  --fw-light: 300;
-  --fw-bold: 700;
+  --radius: 8px;
+  --radius-sm: 6px;
+  /* Toolbar buttons, and the pitch of the settings rail's icons. */
+  --control-h: 40px;
+  --font: "Open Sans", sans-serif;
+  /* rem, so the browser's font-size setting scales the whole interface. */
+  --fs-xs: 0.75rem;
+  --fs-sm: 0.8125rem;
+  --fs-md: 0.875rem;
+  --fs-lg: 1.25rem;
+  --fw-regular: 400;
+  --fw-semibold: 600;
   --surface: #303030;
+  --surface-active: #30343a;
   --danger: #d62728;
   --mu-4: #e7c1ff;
+  --mu-4-dim: rgba(231, 193, 255, 0.12);
   --artifact: #ff8c66;
-  /* Replay timeline slider; its steps take the --plot-timeline-* colours. */
-  --timeline-thumb: #f5f5f5;
-  --timeline-thumb-outline: #111111;
-  --timeline-thumb-halo: rgba(255, 255, 255, 0.08);
+  /* The two pages: Research takes MUedit2's edit colour, Clinic an orange of its own. */
+  --research: var(--mu-4);
+  --clinic: #ffb98a;
 
   /* Canvas plots; src/config.js reads these by name. */
   --plot-trace-2: #f5f5f5;
   --plot-artifact-fill: rgba(255, 140, 102, 0.18);
-  --plot-artifact-stroke: rgba(255, 140, 102, 0.55);
+  --plot-artifact-stroke: rgba(255, 140, 102, 0.75);
   --plot-selection-fill: rgba(195, 155, 242, 0.08);
   --plot-selection-stroke: rgba(195, 155, 242, 0.6);
   /* The discharges the step in view added and removed. */
@@ -35,8 +42,9 @@
   --plot-gridline: rgba(255, 255, 255, 0.08);
   --plot-axis: rgba(255, 255, 255, 0.15);
   --plot-marker-outline: rgba(0, 0, 0, 0.4);
+  /* The navigation timeline under the plots, and the replay bar's steps. */
   --plot-timeline-track: rgba(255, 255, 255, 0.07);
-  --plot-timeline-added: rgba(74, 222, 128, 0.85);
+  --plot-timeline-added: rgba(44, 160, 44, 0.85);
   --plot-timeline-removed: rgba(248, 113, 113, 0.85);
   --plot-timeline-spikes: rgba(231, 193, 255, 0.35);
   --plot-timeline-view-fill: rgba(195, 155, 242, 0.28);

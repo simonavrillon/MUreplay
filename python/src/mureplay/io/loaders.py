@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import csv
 import json
 import re
 from itertools import pairwise
@@ -12,6 +13,7 @@ import numpy as np
 from numpy.lib.npyio import NpzFile
 
 from mureplay.errors import MureplayError, NotFoundError
+from mureplay.io.bids import read_sidecar_meta
 from mureplay.paths import data_root
 from mureplay.replay.artifact_mask import mask_to_intervals
 from mureplay.replay.filter_update import (
@@ -121,6 +123,30 @@ def _refit_settings(parameters: dict[str, Any]) -> dict[str, Any]:
     }
 
 
+#: The run settings the settings panel shows, by their name in MUedit2's ``parameters``.
+_SHOWN_PARAMETERS = (
+    "niter",
+    "nwindows",
+    "duplicatesthresh",
+    "peel_off_enabled",
+    "peel_off_win",
+    "use_adaptive",
+    "full_trace",
+    "sil_thr",
+    "covfilter",
+    "cov_thr",
+)
+
+
+def _shown_parameters(parameters: dict[str, Any]) -> dict[str, Any]:
+    """The run settings the settings panel shows, those the file holds as plain values."""
+    return {
+        key: parameters[key]
+        for key in _SHOWN_PARAMETERS
+        if isinstance(parameters.get(key), bool | int | float)
+    }
+
+
 def _load_npz_payload(source: Path | BinaryIO) -> dict[str, Any]:
     """The JSON-ready decomposition of a MUedit2 ``.npz``, in either schema."""
     # np.load reads a member only when it is accessed, so an embedded EMG is never read.
@@ -148,6 +174,7 @@ def _load_npz_payload(source: Path | BinaryIO) -> dict[str, Any]:
         "grid_names": fields["grid_names"] or ["Grid 1"],
         "mu_grid_index": mu_grid_index,
         "refit_settings": _refit_settings(fields["parameters"]),
+        "parameters": _shown_parameters(fields["parameters"]),
     }
     if fields["artifact_regions"] is not None:
         payload["artifact_regions"] = fields["artifact_regions"]
@@ -243,4 +270,11 @@ def load_paired_from_path(file_path: Path) -> dict[str, Any]:
     payload["bids_root"] = _infer_bids_root(file_path) or str(data_root())
     # The decomposition's own label: the recording its EMG comes from.
     payload["entity_label"] = _entity_label_from_filename(decomp_path.name)
+    try:
+        payload["sidecar_meta"] = read_sidecar_meta(
+            Path(payload["bids_root"]), payload["entity_label"]
+        )
+    except (MureplayError, OSError, csv.Error):
+        # The sidecars only fill the settings panel; a refit reports a broken one.
+        payload["sidecar_meta"] = {}
     return payload

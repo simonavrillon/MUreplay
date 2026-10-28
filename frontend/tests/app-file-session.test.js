@@ -42,6 +42,8 @@ function createFakeApp(opts = {}) {
       },
     },
     setReplayStatus: (text) => calls.push(["replayStatus", text]),
+    showSessionSettings: (session) =>
+      calls.push(["settings", session.entityLabel]),
     startReplay: () => {
       calls.push(["startReplay", app.state.editHistory.length]);
       // The real replay builds the timeline from the log.

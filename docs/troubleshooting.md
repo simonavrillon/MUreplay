@@ -21,6 +21,6 @@ variables.
 
 ## Where errors are reported
 
-Errors from a step or a load show on the status line under the selectors; errors reaching the
+Errors from a step or a load show in red in the status at the top right; errors reaching the
 server show in the launcher's terminal window. When something fails, keep that window open
 and include what it shows if you [open an issue](https://github.com/simonavrillon/MUreplay/issues).

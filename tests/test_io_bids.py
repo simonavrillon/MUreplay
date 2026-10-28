@@ -10,7 +10,7 @@ import pyedflib
 import pytest
 
 from mureplay.errors import MureplayError, NotFoundError
-from mureplay.io.bids import _entity_pairs, _grid_rows, read_bids_emg_grid
+from mureplay.io.bids import _entity_pairs, _grid_rows, read_bids_emg_grid, read_sidecar_meta
 
 FSAMP = 2000.0
 #: Samples the EDF file holds, and the fewer its sidecar's RecordingDuration declares.
@@ -158,3 +158,39 @@ class TestEntityLabel:
         with pytest.raises(MureplayError) as caught:
             read_bids_emg_grid(tmp_path, "task-x_run-1", grid=0)
         assert caught.value.field == "entity_label"
+
+
+class TestSidecarMeta:
+    def test_the_participant_placement_and_hardware_are_read(self, padded_bids_root: Path) -> None:
+        (padded_bids_root / "participants.tsv").write_text(
+            "participant_id\tage\tsex\thandedness\nsub-1\t31\tF\tright\n", encoding="utf-8"
+        )
+        emg_dir = padded_bids_root / "sub-1" / "emg"
+        (emg_dir / f"{ENTITY}_emg.json").write_text(
+            json.dumps(
+                {
+                    "Manufacturer": "OT Bioelettronica",
+                    "PowerLineFrequency": 50,
+                    "EMGPlacementScheme": "Measured",
+                    "EMGReference": "wet band around the ankle",
+                    "EMGGround": "monopolar",
+                }
+            ),
+            encoding="utf-8",
+        )
+        meta = read_sidecar_meta(padded_bids_root, ENTITY)
+        assert meta["participant_meta"] == {"age": "31", "sex": "F", "handedness": "right"}
+        assert meta["manufacturer"] == "OT Bioelettronica"
+        assert meta["powerline_freq"] == 50
+        assert meta["placement_scheme"] == "Measured"
+        assert meta["reference_location"] == "wet band around the ankle"
+        assert meta["muscle_names"] == [""]
+
+    def test_a_reference_naming_a_montage_is_no_location(self, padded_bids_root: Path) -> None:
+        (padded_bids_root / "sub-1" / "emg" / f"{ENTITY}_emg.json").write_text(
+            json.dumps({"EMGReference": "monopolar"}), encoding="utf-8"
+        )
+        assert read_sidecar_meta(padded_bids_root, ENTITY)["reference_location"] is None
+
+    def test_a_missing_recording_has_no_sidecar_fields(self, tmp_path: Path) -> None:
+        assert read_sidecar_meta(tmp_path, ENTITY) == {}

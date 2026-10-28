@@ -10,6 +10,8 @@ import { normalizeRefitResult } from "../../api/payloads.js";
 import {
   applyDiff,
   clamp,
+  diffSquares,
+  dischargeDiff,
   inactiveMusBefore,
   isArtifactStep,
   isSpikeEditStep,
@@ -150,7 +152,7 @@ export function createReplayService(app) {
       stopPlay();
       return;
     }
-    els.playPauseBtn.textContent = "⏸";
+    els.playPauseBtn.classList.add("is-running");
     const timer = window.setInterval(() => {
       // A step that replays update_filter takes longer than this interval, so
       // skip the tick rather than stacking a second seek on top of it.
@@ -166,7 +168,7 @@ export function createReplayService(app) {
 
   /** Stop playing, and show the play button. */
   function stopPlay() {
-    els.playPauseBtn.textContent = "▶";
+    els.playPauseBtn.classList.remove("is-running");
     if (state.playTimer !== null) window.clearInterval(state.playTimer);
     setPlayTimer(state, null);
   }
@@ -649,44 +651,54 @@ export function createReplayService(app) {
     els.nextStepBtn.disabled = total === 0 || state.replayPosition >= total;
     els.playPauseBtn.disabled = total === 0;
     els.timelineCounter.textContent = `Step ${state.replayPosition} / ${total}`;
-    updateTimelineTrackColors();
+    renderTimelineSteps();
+    renderDiffSummary();
   }
 
-  /** Paint each timeline step in the slider's track by what it did to the current MU. */
-  function updateTimelineTrackColors() {
+  /**
+   * The step line: a dot for the decomposition as loaded, then one per
+   * timeline step, coloured by what it did to the current MU. Dots up to the
+   * playhead are filled, the one at it ringed, the rest hollow.
+   */
+  function renderTimelineSteps() {
     const groups = state.timelineGroups;
-    if (!groups.length) {
-      els.timelineSlider.style.setProperty(
-        "--timeline-gradient",
-        "var(--border)",
-      );
-      return;
-    }
-    const parts = groups.flatMap((group, i) => {
-      const start = (i / groups.length) * 100;
-      const end = ((i + 1) / groups.length) * 100;
-      const kind = groupColorKind(group);
-      if (kind === "split_add_remove") {
-        const mid = (start + end) / 2;
-        return [
-          `var(--plot-timeline-added) ${start}%`,
-          `var(--plot-timeline-added) ${mid}%`,
-          `var(--plot-timeline-removed) ${mid}%`,
-          `var(--plot-timeline-removed) ${end}%`,
-        ];
-      }
-      const color = {
-        add: "var(--plot-timeline-added)",
-        remove: "var(--plot-timeline-removed)",
-        update_filter: "var(--accent)",
-        artifact: "var(--artifact)",
-        neutral: "var(--border)",
-      }[kind];
-      return [`${color} ${start}%`, `${color} ${end}%`];
-    });
-    els.timelineSlider.style.setProperty(
-      "--timeline-gradient",
-      `linear-gradient(to right, ${parts.join(", ")})`,
+    const pos = state.replayPosition;
+    const kinds = ["start", ...groups.map(groupColorKind)];
+    els.timelineSteps.replaceChildren(
+      ...kinds.map((kind, i) => {
+        const dot = document.createElement("i");
+        dot.className = "timeline-dot";
+        dot.dataset.kind = kind;
+        if (i <= pos) dot.classList.add("is-done");
+        if (i === pos) dot.classList.add("is-current");
+        return dot;
+      }),
+    );
+    els.timelineSteps.style.setProperty("--steps", String(kinds.length));
+    els.timelineSteps.style.setProperty(
+      "--progress",
+      String(groups.length ? pos / groups.length : 0),
+    );
+    els.timelineSlider.title = pos
+      ? `Step ${pos} of ${groups.length}: ${groups[pos - 1].type}`
+      : "Step 0: the decomposition as loaded";
+  }
+
+  /** The discharges the replayed steps added and removed on the current MU, as GitHub counts a commit's lines. */
+  function renderDiffSummary() {
+    const replayed = state.timelineGroups
+      .slice(0, state.replayPosition)
+      .flatMap((group) => group.indices.map((idx) => state.editHistory[idx]));
+    const { added, removed } = dischargeDiff(replayed, state.currentMu);
+    els.diffAdded.textContent = `+${added}`;
+    els.diffRemoved.textContent = `−${removed}`;
+    els.diffSquares.replaceChildren(
+      ...diffSquares(added, removed).map((kind) => {
+        const square = document.createElement("span");
+        square.className = "diff-square";
+        square.dataset.kind = kind;
+        return square;
+      }),
     );
   }
 

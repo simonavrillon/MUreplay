@@ -24,6 +24,9 @@ describe("beginSession", () => {
         peelOffWin: 0.025,
         computeDtype: "float32",
       },
+      // Shown in the settings panel only; the state does not keep them.
+      parameters: /** @type {any} */ ({}),
+      sidecarMeta: /** @type {any} */ ({}),
       editHistory,
     });
     assert.equal(state.bidsRoot, "/b");

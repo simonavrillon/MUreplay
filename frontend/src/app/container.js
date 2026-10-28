@@ -26,4 +26,7 @@ export function initializeApp() {
 
   app.updateTimelineUi();
   app.renderAll();
+  // The chips' widths depend on the web font, which may load after this.
+  app.positionStepIndicator();
+  void document.fonts.ready.then(() => app.positionStepIndicator());
 }
