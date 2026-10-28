@@ -1,12 +1,10 @@
 /**
  * Backend JSON normalised at the boundary: a loaded session, its log entries
  * and a refit result become the shapes the state holds. Past this module no
- * code reads a snake_case key. The backend types the decomposition's arrays,
- * so only what it passes through from the user's files unchecked is checked
- * here: the run's saved parameters, and the log with its uids and artifact
- * markers.
+ * code reads a snake_case key. The backend types the decomposition's arrays
+ * and its run settings, so only what it passes through from the user's files
+ * unchecked is checked here: the log, with its uids and artifact markers.
  */
-import { DEFAULT_REFIT_SETTINGS } from "../state/state.js";
 
 /** @typedef {import("../app/context.js").JsonObject} JsonObject */
 /** @typedef {import("../state/state.js").EditLogEntry} EditLogEntry */
@@ -49,7 +47,12 @@ export function normalizeSessionPayload(raw) {
     // No key when the decomposition has no artifact windows.
     /** @type {number[][]} */
     artifactRegions: raw.artifact_regions ?? [],
-    refitSettings: normalizeRefitSettings(raw.parameters),
+    /** @type {import("../state/state.js").RefitSettings} */
+    refitSettings: {
+      nbextchan: raw.refit_settings.nbextchan,
+      peelOffWin: raw.refit_settings.peel_off_win,
+      computeDtype: raw.refit_settings.compute_dtype,
+    },
     editHistory,
   };
 }
@@ -66,29 +69,6 @@ function artifactRows(artifactTimes, nMu) {
     const row = Array.isArray(artifactTimes) ? artifactTimes[mu] : null;
     return Array.isArray(row) ? row.map(Number) : [];
   });
-}
-
-/**
- * The run settings a filter refit uses, from the decomposition's saved
- * parameters; MUedit2's defaults where the file has none.
- *
- * @param {JsonObject} params
- * @returns {import("../state/state.js").RefitSettings}
- */
-function normalizeRefitSettings(params) {
-  const nbextchan = Number(params.nbextchan);
-  const peelOffWin = Number(params.peel_off_win);
-  return {
-    nbextchan:
-      Number.isInteger(nbextchan) && nbextchan > 0
-        ? nbextchan
-        : DEFAULT_REFIT_SETTINGS.nbextchan,
-    peelOffWin: peelOffWin > 0 ? peelOffWin : DEFAULT_REFIT_SETTINGS.peelOffWin,
-    computeDtype:
-      params.compute_dtype === "float64"
-        ? "float64"
-        : DEFAULT_REFIT_SETTINGS.computeDtype,
-  };
 }
 
 /**

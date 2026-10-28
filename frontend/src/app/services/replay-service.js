@@ -590,8 +590,7 @@ export function createReplayService(app) {
 
   function fillGridSelect() {
     els.gridSelect.innerHTML = "";
-    const labels = state.gridNames.length ? state.gridNames : ["Grid 1"];
-    labels.forEach((name, idx) => {
+    state.gridNames.forEach((name, idx) => {
       els.gridSelect.appendChild(
         createOption(String(idx), `Grid ${idx + 1}${name ? ` • ${name}` : ""}`),
       );

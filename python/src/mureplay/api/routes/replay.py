@@ -1,4 +1,4 @@
-"""Replay routes: health, and loading a session."""
+"""Replay route: loading a session."""
 
 from __future__ import annotations
 
@@ -12,12 +12,6 @@ from mureplay.api.schemas import LoadPairedFromPathPayload
 from mureplay.io import loaders
 
 router = APIRouter(prefix="/api/v1", tags=["replay"])
-
-
-@router.get("/health")
-def health() -> dict[str, Any]:
-    """Answer while the server is up."""
-    return success_payload({"status": "ok"})
 
 
 @router.post("/load-paired-from-path")

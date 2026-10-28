@@ -59,7 +59,7 @@ def muedit2_session() -> Path:
 
 @pytest.fixture
 def client() -> Iterator[TestClient]:
-    """The app as ``cli.serve_api`` builds it, without the page."""
+    """The app as ``cli._serve_api`` builds it, without the page."""
     app = create_app()
     include_routers(app)
     with TestClient(app, raise_server_exceptions=False) as test_client:

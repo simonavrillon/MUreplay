@@ -48,24 +48,14 @@
 /** @typedef {"flagged" | "duplicate" | "removed"} MuMark */
 
 /**
- * How the decomposition was run, which a filter refit repeats.
+ * How the decomposition was run, which a filter refit repeats; the backend
+ * fills MUedit2's defaults where the file has none.
  *
  * @typedef {object} RefitSettings
  * @property {number} nbextchan
  * @property {number} peelOffWin Seconds.
  * @property {"float32" | "float64"} computeDtype
  */
-
-/**
- * MUedit2's run settings, for a decomposition that saved none.
- *
- * @type {Readonly<RefitSettings>}
- */
-export const DEFAULT_REFIT_SETTINGS = {
-  nbextchan: 1000,
-  peelOffWin: 0.025,
-  computeDtype: "float32",
-};
 
 /**
  * @typedef {object} State
@@ -117,7 +107,7 @@ export const state = {
   replayBackups: [],
   replayView: null,
   loadedFromDecomp: false,
-  refitSettings: { ...DEFAULT_REFIT_SETTINGS },
+  refitSettings: { nbextchan: 0, peelOffWin: 0, computeDtype: "float32" },
   muMarks: {},
   muGhostUids: [],
   bidsRoot: "",

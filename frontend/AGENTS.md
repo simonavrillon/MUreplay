@@ -44,7 +44,7 @@ Architecture: [dev/architecture.md](../dev/architecture.md#frontend-shape). Wire
   fails if `routes.js` names a path the backend doesn't serve.
 - Backend JSON is `JsonObject` until it is normalised at the boundary (`api/payloads.js`).
 - Branch on `ApiError.field` / `.status`, never on message text. Report failures with
-  `handleError(err, setStatus, label)` (`app/services/error-service.js`).
+  `handleError(err, setReplayStatus, label)` (`app/services/error-service.js`).
 
 ## Style
 

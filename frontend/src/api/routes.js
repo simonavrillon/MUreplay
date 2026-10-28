@@ -5,7 +5,6 @@
 export const API_BASE = "/api/v1";
 
 export const routes = {
-  health: "/health",
   loadPairedFromPath: "/load-paired-from-path",
   editUpdateFilter: "/edit/update-filter",
   dialogOpenFile: "/dialog/open-file",

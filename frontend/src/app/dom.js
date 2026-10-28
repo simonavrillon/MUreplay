@@ -12,7 +12,6 @@ const select = (id) => /** @type {HTMLSelectElement} */ (element(id));
 const canvas = (id) => /** @type {HTMLCanvasElement} */ (element(id));
 
 export const els = {
-  status: element("status"),
   replayStatus: element("replayStatus"),
   loadMenuBtn: button("loadMenuBtn"),
   gridSelect: select("gridSelect"),

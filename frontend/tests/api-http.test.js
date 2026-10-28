@@ -1,7 +1,7 @@
-// The fetch seam: error messages, envelopes, timeouts and the backend wait.
+// The fetch seam: error messages, envelopes and timeouts.
 import { test, describe } from "node:test";
 import assert from "node:assert/strict";
-import { ApiError, apiJson, waitForBackend } from "../src/api/http.js";
+import { ApiError, apiJson } from "../src/api/http.js";
 
 /** What a stubbed fetch hands back: a Response stand-in, a promise for one, or a rejection. @typedef {any} StubResult */
 
@@ -47,9 +47,9 @@ test.afterEach(() => {
 describe("apiJson", () => {
   test("unwraps the data envelope of a 2xx response", async () => {
     stubBehavior = () => fakeResponse({ data: { unwrapped: true } });
-    const payload = await apiJson("http://api/health");
+    const payload = await apiJson("http://api/load");
     assert.deepEqual(payload, { unwrapped: true });
-    assert.equal(recorded[0].url, "http://api/health");
+    assert.equal(recorded[0].url, "http://api/load");
     // The request carries the abort signal of the internal timeout.
     assert.ok(recorded[0].init.signal instanceof AbortSignal);
   });
@@ -126,49 +126,5 @@ describe("apiJson", () => {
   test("rethrows non-timeout failures untouched", async () => {
     stubBehavior = () => Promise.reject(new TypeError("network down"));
     await assert.rejects(apiJson("http://api/x"), /network down/);
-  });
-});
-
-describe("waitForBackend", () => {
-  test("resolves true once health checks pass", async () => {
-    let attempts = 0;
-    stubBehavior = () => {
-      attempts += 1;
-      return attempts === 1
-        ? fakeResponse({}, { status: 503 })
-        : fakeResponse({ status: "ok" });
-    };
-    const ok = await waitForBackend("http://api/health", {
-      intervalMs: 1,
-      timeoutMs: 1000,
-    });
-    assert.equal(ok, true);
-    assert.equal(attempts, 2);
-  });
-
-  test("keeps polling while the connection is refused", async () => {
-    // Before the server binds its port, fetch rejects rather than returning a
-    // non-ok response -- which is the normal first phase of every app start.
-    let attempts = 0;
-    stubBehavior = () => {
-      attempts += 1;
-      if (attempts < 3) return Promise.reject(new TypeError("fetch failed"));
-      return fakeResponse({ status: "ok" });
-    };
-    const ok = await waitForBackend("http://api/health", {
-      intervalMs: 1,
-      timeoutMs: 1000,
-    });
-    assert.equal(ok, true);
-    assert.equal(attempts, 3);
-  });
-
-  test("returns false when the deadline passes", async () => {
-    stubBehavior = () => fakeResponse({}, { status: 503 });
-    const ok = await waitForBackend("http://api/health", {
-      intervalMs: 1,
-      timeoutMs: 20,
-    });
-    assert.equal(ok, false);
   });
 });

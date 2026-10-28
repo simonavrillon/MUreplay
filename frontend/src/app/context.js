@@ -22,7 +22,6 @@
 
 /**
  * @typedef {object} UiService
- * @property {(text: string, tone?: Tone) => void} setStatus
  * @property {(text: string, tone?: Tone) => void} setReplayStatus
  */
 

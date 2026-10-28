@@ -19,8 +19,8 @@ import numpy as np
 import pytest
 
 from mureplay.api.schemas import UpdateFilterPayload
-from mureplay.api.services.filter_service import INTRAMUSCULAR_GRIDS, run_update_filter
-from mureplay.io.loaders import load_npz_payload, load_paired_from_path
+from mureplay.api.services.filter_service import _INTRAMUSCULAR_GRIDS, run_update_filter
+from mureplay.io.loaders import _load_npz_payload, load_paired_from_path
 from mureplay.replay.artifact_mask import build_manual_artifact_mask
 from mureplay.replay.filter_update import (
     emg_filter_inplace,
@@ -92,7 +92,7 @@ class TestSessionFiltering:
 
     def test_the_intramuscular_grids_match_the_catalogue(self) -> None:
         catalogue = _mu2("muedit.signal.grid")._GRID_CATALOG
-        assert set(INTRAMUSCULAR_GRIDS) == {
+        assert set(_INTRAMUSCULAR_GRIDS) == {
             k for k, spec in catalogue.items() if spec.emg_type == 2
         }
 
@@ -204,7 +204,7 @@ class TestDecompositionFile:
             artifact_mask=artifact_mask,
         )
 
-        payload = load_npz_payload(out_path)
+        payload = _load_npz_payload(out_path)
         assert payload["spike_times"] == spike_times
         assert payload["grid_names"] == ["Grid A", "Grid B"]
         assert payload["mu_grid_index"] == [0, 1]
@@ -228,7 +228,7 @@ class TestSessionReplay:
         # out the MUs flagged or removed at that step.
         log = json.loads(muedit2_session.with_suffix(".json").read_text(encoding="utf-8"))
         payload = load_paired_from_path(muedit2_session)
-        run = payload["parameters"]
+        run = payload["refit_settings"]
         mu_grid_index = payload["mu_grid_index"]
         state = [list(row) for row in payload["spike_times"]]
         # The log lists the uids that survived; the page numbers the file's MUs as MUedit2 does.

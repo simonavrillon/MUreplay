@@ -1,9 +1,9 @@
 /**
- * The composition root: builds the app context, binds the stages, and waits
- * for the backend before enabling file loading.
+ * The composition root: builds the app context and binds the stages. The
+ * server that serves this page also answers the API, so it is already up.
  */
 import { createApiClient } from "../api/client.js";
-import { apiJson, waitForBackend } from "../api/http.js";
+import { apiJson } from "../api/http.js";
 import { state } from "../state/state.js";
 import { createReplayRenderer } from "../view/replay-renderer.js";
 import { createApp } from "./create-app.js";
@@ -12,7 +12,7 @@ import { setupImportEvents } from "./stages/import-stage.js";
 import { setupLayoutEvents } from "./stages/layout-stage.js";
 import { setupReplayEvents } from "./stages/replay-stage.js";
 
-export async function initializeApp() {
+export function initializeApp() {
   const app = createApp({
     state,
     els,
@@ -26,18 +26,4 @@ export async function initializeApp() {
 
   app.updateTimelineUi();
   app.renderAll();
-
-  els.loadMenuBtn.disabled = true;
-  app.setStatus("Connecting to the backend…");
-
-  const ready = await waitForBackend(app.api.healthUrl());
-  if (ready) {
-    els.loadMenuBtn.disabled = false;
-    app.setStatus("");
-  } else {
-    app.setStatus(
-      "The backend did not answer. Quit MUreplay and launch it again.",
-      "error",
-    );
-  }
 }

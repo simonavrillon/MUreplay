@@ -10,7 +10,7 @@ import pyedflib
 import pytest
 
 from mureplay.errors import MureplayError, NotFoundError
-from mureplay.io.bids import entity_pairs, grid_rows, read_bids_emg_grid
+from mureplay.io.bids import _entity_pairs, _grid_rows, read_bids_emg_grid
 
 FSAMP = 2000.0
 #: Samples the EDF file holds, and the fewer its sidecar's RecordingDuration declares.
@@ -138,16 +138,16 @@ class TestGridRows:
             {"type": "MISC", "group": "Grid1"},
             {"type": "emg", "group": "Grid2"},
         ]
-        assert grid_rows(rows) == [[0, 4], [1]]
+        assert _grid_rows(rows) == [[0, 4], [1]]
 
     def test_named_groups_keep_their_listed_order(self) -> None:
         rows = [{"type": "EMG", "group": "TA"}, {"type": "EMG", "group": "GM"}]
-        assert grid_rows(rows) == [[0], [1]]
+        assert _grid_rows(rows) == [[0], [1]]
 
 
 class TestEntityLabel:
     def test_its_entities_are_read(self) -> None:
-        assert entity_pairs("sub-1_ses-2_task-x_run-1") == {
+        assert _entity_pairs("sub-1_ses-2_task-x_run-1") == {
             "sub": "1",
             "ses": "2",
             "task": "x",

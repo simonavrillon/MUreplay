@@ -17,7 +17,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 - Status messages are plain sentences: a failed load reads "Could not load the session: …", and
   a filter step that could not be recomputed says it was replayed from the edit log instead.
-- Errors on the status line under the selectors show in red, as they do in the header.
+- Errors on the status line under the selectors show in red.
 - The bar under the pulse train also marks the artifact markers the current step added or
   removed, as MUedit2's does.
 - The app and its API run as one server, at <http://127.0.0.1:8000>; the launchers start it with
@@ -49,6 +49,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Removed
 
+- The page no longer waits for the backend at start, and the header has no status line: the
+  server that serves the page also answers it, so it is ready as soon as the page shows.
 - The `mureplay-api` command: use `mureplay api`.
 - The `MUREPLAY_BACKEND_PORT` and `MUREPLAY_FRONTEND_PORT` settings: the one server takes
   `MUREPLAY_PORT`.
@@ -58,8 +60,9 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Fixed
 
+- A file dialog left open for two minutes reports "File dialog timed out" rather than "The
+  server took too long to answer."
 - The current step's window is no longer shaded twice as dark while the plots are zoomed out.
-- Errors on the header's status line show in red.
 - The motor unit dropdown shows the flagged, duplicated and removed marks as soon as a session
   opens, and never opens on a removed unit.
 - Opening a second session no longer keeps the first one's motor unit marks.

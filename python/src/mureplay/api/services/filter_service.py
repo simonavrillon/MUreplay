@@ -19,12 +19,12 @@ from mureplay.replay.filter_update import (
 
 #: The intramuscular grids of MUedit2's catalogue (``signal/grid.py``), matched as substrings
 #: of the grid name like MUedit2 does; every other grid takes the surface bandpass.
-INTRAMUSCULAR_GRIDS = ("MYOMRF-4x8", "MYOMNP-1x32")
+_INTRAMUSCULAR_GRIDS = ("MYOMRF-4x8", "MYOMNP-1x32")
 
 
-def grid_emg_type(grid_name: str) -> int:
+def _grid_emg_type(grid_name: str) -> int:
     """The bandpass MUedit2 filters ``grid_name`` with: 2 for intramuscular, 1 for surface."""
-    return 2 if any(key in grid_name for key in INTRAMUSCULAR_GRIDS) else 1
+    return 2 if any(key in grid_name for key in _INTRAMUSCULAR_GRIDS) else 1
 
 
 def run_update_filter(payload: UpdateFilterPayload) -> dict[str, Any]:
@@ -64,7 +64,7 @@ def run_update_filter(payload: UpdateFilterPayload) -> dict[str, Any]:
         raise MureplayError(
             "The step's window runs past the end of the EMG recording.", field="view_end"
         )
-    emg_filter_inplace(emg, fsamp, grid_emg_type(payload.grid_name))
+    emg_filter_inplace(emg, fsamp, _grid_emg_type(payload.grid_name))
     artifact_mask = build_manual_artifact_mask(payload.artifact_regions, emg.shape[1])
 
     pulse_train, updated = update_motor_unit_filter_window(
@@ -82,16 +82,16 @@ def run_update_filter(payload: UpdateFilterPayload) -> dict[str, Any]:
         artifact_mask=artifact_mask,
         compute_dtype=payload.compute_dtype,
     )
-    updated_row = None
+    updated_pulse_train = None
     if row.size and pulse_train is not None:
         edge = edge_samples(fsamp)
         seg_start = view_start + edge
         seg_end = min(view_start + len(pulse_train) - edge, row.shape[0])
         if seg_end > seg_start and len(pulse_train) > 2 * edge:
             row[seg_start:seg_end] = pulse_train[edge : edge + (seg_end - seg_start)]
-        updated_row = row.tolist()
+        updated_pulse_train = row.tolist()
 
     return {
         "spikes": updated.tolist(),
-        "pulse_train": updated_row,
+        "pulse_train": updated_pulse_train,
     }

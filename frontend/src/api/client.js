@@ -7,6 +7,12 @@ import { API_BASE, routes } from "./routes.js";
 /** @typedef {import("../app/context.js").JsonObject} JsonObject */
 
 /**
+ * Longer than the 120 s the server keeps its file dialog open, so the
+ * server's "File dialog timed out" arrives before this request gives up.
+ */
+const DIALOG_TIMEOUT_MS = 130000;
+
+/**
  * @param {JsonObject} body
  * @returns {RequestInit}
  */
@@ -26,10 +32,6 @@ const urlOf = (route) => `${API_BASE}${route}`;
  */
 export function createApiClient({ apiJson }) {
   return {
-    healthUrl() {
-      return urlOf(routes.health);
-    },
-
     /** @param {string} filePath */
     loadPairedFromPath(filePath) {
       return apiJson(
@@ -39,7 +41,7 @@ export function createApiClient({ apiJson }) {
     },
 
     openFileDialog() {
-      return apiJson(urlOf(routes.dialogOpenFile));
+      return apiJson(urlOf(routes.dialogOpenFile), {}, DIALOG_TIMEOUT_MS);
     },
 
     /** @param {JsonObject} payload */

@@ -26,7 +26,11 @@ function minimalPayload() {
     fsamp: 2048,
     grid_names: ["Grid 1"],
     mu_grid_index: [0],
-    parameters: {},
+    refit_settings: {
+      nbextchan: 1000,
+      peel_off_win: 0.025,
+      compute_dtype: "float32",
+    },
     edit_history: [],
     source_filename: "sub-01_decomp.npz",
     bids_root: "/data",
@@ -35,10 +39,10 @@ function minimalPayload() {
 }
 
 describe("normalizeSessionPayload", () => {
-  test("reads the run's refit settings, with MUedit2's defaults", () => {
+  test("reads the run's refit settings", () => {
     const run = normalizeSessionPayload({
       ...minimalPayload(),
-      parameters: {
+      refit_settings: {
         nbextchan: 640,
         peel_off_win: 0.02,
         compute_dtype: "float64",
@@ -48,15 +52,6 @@ describe("normalizeSessionPayload", () => {
       nbextchan: 640,
       peelOffWin: 0.02,
       computeDtype: "float64",
-    });
-    const odd = normalizeSessionPayload({
-      ...minimalPayload(),
-      parameters: { nbextchan: -3, peel_off_win: "x", compute_dtype: "int8" },
-    });
-    assert.deepEqual(odd.refitSettings, {
-      nbextchan: 1000,
-      peelOffWin: 0.025,
-      computeDtype: "float32",
     });
   });
 

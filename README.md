@@ -105,8 +105,8 @@ finds them.
 If the browser never opens, go to <http://127.0.0.1:8000> manually. Errors show on the status
 line under the dropdowns, and the launcher's terminal window shows what reached the server.
 [Troubleshooting](docs/troubleshooting.md) lists common symptoms and their fixes: a port already
-in use, an unreachable backend, a file that will not load, a filter step that could not be
-recomputed. If something is awkward or missing, please
+in use, a file that will not load, a filter step that could not be recomputed. If something is
+awkward or missing, please
 [open an issue](https://github.com/simonavrillon/MUreplay/issues).
 
 ## Command line

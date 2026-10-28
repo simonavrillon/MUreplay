@@ -8,9 +8,9 @@ from starlette.testclient import TestClient
 
 from mureplay.api.app_factory import create_app, mount_frontend
 from mureplay.api.routes import include_routers
-from mureplay.cli import LOOPBACK_HOSTS
+from mureplay.cli import _LOOPBACK_HOSTS
 from mureplay.paths import frontend_dir
-from tests._api import API, error, ok
+from tests._api import API, error
 from tests.conftest import REPO_ROOT
 
 # ── Serving ─────────────────────────────────────────────────────────────────
@@ -29,14 +29,17 @@ class TestServing:
         assert page.status_code == 200
         assert "<html" in page.text.lower()
         assert page.headers["cache-control"] == "no-cache"
-        assert ok(client.get(f"{API}/health")) == {"status": "ok"}
+        missing = client.post(f"{API}/load-paired-from-path", json={"file_path": "/no/such.npz"})
+        error(missing, 404)
 
     def test_a_loopback_server_rejects_other_hosts(self) -> None:
-        app = create_app(allowed_hosts=LOOPBACK_HOSTS)
+        app = create_app(allowed_hosts=_LOOPBACK_HOSTS)
         include_routers(app)
         client = TestClient(app, base_url="http://127.0.0.1")
-        assert client.get(f"{API}/health").status_code == 200
-        assert client.get(f"{API}/health", headers={"host": "evil.example"}).status_code == 400
+        load = f"{API}/load-paired-from-path"
+        body = {"file_path": "/no/such.npz"}
+        assert client.post(load, json=body).status_code == 404
+        assert client.post(load, json=body, headers={"host": "evil.example"}).status_code == 400
 
     def test_every_path_in_routes_js_is_served(self, client: TestClient) -> None:
         js = (REPO_ROOT / "frontend" / "src" / "api" / "routes.js").read_text(encoding="utf-8")

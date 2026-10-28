@@ -151,6 +151,7 @@ names and JSON keys are snake_case; the frontend writes the same name in camelCa
 | step | one entry of the edit log | `EditLogEntry` |
 | timeline step | what the timeline shows: a step, or a run of spike edits on one MU merged | `ReplayGroup` |
 | refit | replaying an `update_filter` step on the BIDS EMG | `run_update_filter` |
+| refit settings | the run settings a refit repeats (`nbextchan`, `peel_off_win`, `compute_dtype`), from the file's `parameters` | `refit_settings` |
 | replay base | the decomposition the replay starts from, at step 0 | `replayBase*` |
 | artifact window | a time range excluded from the decomposition | `artifact_regions`, `artifact_intervals` |
 | artifact marker | a peak marked as an artifact on one MU | `artifacts`, `artifact_times` |

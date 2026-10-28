@@ -16,9 +16,8 @@ change these only together with the other side, and with a test.
 
 | Route | Does |
 |---|---|
-| `GET /health` | answers while the server is up; the page waits on it at start |
 | `GET /dialog/open-file` | the path the user picks in the native file dialog, or `null` when cancelled |
-| `POST /load-paired-from-path` | the decomposition and edit log paired with a path ([file-formats.md](../docs/file-formats.md#how-files-are-paired)), complete: `fsamp`, `grid_names` and one `mu_grid_index` entry per MU are filled in when the file has none |
+| `POST /load-paired-from-path` | the decomposition and edit log paired with a path ([file-formats.md](../docs/file-formats.md#how-files-are-paired)), complete: `fsamp`, `grid_names` and one `mu_grid_index` entry per MU are filled in when the file has none, and `refit_settings` holds the run's `nbextchan`, `peel_off_win` and `compute_dtype`, with MUedit2's defaults where the file's `parameters` have none |
 | `POST /edit/update-filter` | refits one MU on the BIDS EMG, as a logged `update_filter` step did |
 
 ### Errors
@@ -48,7 +47,7 @@ page:
 | `grid_name` | the decomposition's grid names; picks the bandpass |
 | `artifact_times`, `artifact_regions` | the MU's artifact markers at that step; the file's artifact windows |
 | `bids_root`, `entity_label` | the load response's: the dataset inferred from the file's location (else `MUREPLAY_DATA_ROOT`), and the decomposition's recording |
-| `nbextchan`, `peel_off_win`, `compute_dtype` | the decomposition's saved run `parameters`, as MUedit2's session refits with them (MUedit2's defaults when the file has none) |
+| `nbextchan`, `peel_off_win`, `compute_dtype` | the load response's `refit_settings`: the decomposition's saved run `parameters`, as MUedit2's session refits with them |
 
 ## The edit log (MUedit2's format)
 
@@ -82,8 +81,8 @@ exact equality:
 | `filter_update.subtract_mu_waveforms` | `muedit.decomp.algorithm.subtract_mu_waveforms` |
 | `filter_update.update_motor_unit_filter_window` | `muedit.editing.operations.update_motor_unit_filter_window` |
 | `artifact_mask.build_manual_artifact_mask` | `muedit.decomp.preprocess.build_manual_artifact_mask` |
-| `filter_service.INTRAMUSCULAR_GRIDS` | the `emg_type == 2` entries of `muedit.signal.grid._GRID_CATALOG` |
-| `io.loaders.load_npz_payload` | reads what `muedit.decomp.decomposition_file.save_decomposition_npz` writes |
+| `filter_service._INTRAMUSCULAR_GRIDS` | the `emg_type == 2` entries of `muedit.signal.grid._GRID_CATALOG` |
+| `io.loaders._load_npz_payload` | reads what `muedit.decomp.decomposition_file.save_decomposition_npz` writes |
 | `filter_service.run_update_filter`, replayed over a whole session | the saved `_edited.npz` of that session |
 
 CI checks MUedit2's default branch out beside MUreplay, so a change there that MUreplay hasn't

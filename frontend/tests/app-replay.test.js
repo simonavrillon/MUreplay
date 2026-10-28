@@ -140,7 +140,6 @@ function createHarness(opts = {}) {
     setReplayStatus(text) {
       app.statuses.push(text);
     },
-    setStatus() {},
     renderAll() {},
     filterCalls,
   });

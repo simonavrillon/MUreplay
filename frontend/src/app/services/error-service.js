@@ -4,12 +4,12 @@
 
 /**
  * @param {unknown} err
- * @param {(text: string, tone?: import("../context.js").Tone) => void} setStatus
+ * @param {(text: string, tone?: import("../context.js").Tone) => void} setReplayStatus
  * @param {string} label  What failed, as a sentence: "Could not load the session"
  */
-export function handleError(err, setStatus, label) {
+export function handleError(err, setReplayStatus, label) {
   console.error(err);
-  setStatus(`${label}: ${errorMessage(err)}`, "error");
+  setReplayStatus(`${label}: ${errorMessage(err)}`, "error");
 }
 
 /**

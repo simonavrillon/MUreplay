@@ -16,14 +16,14 @@ from mureplay.errors import MureplayError, NotFoundError
 _GRID_LABEL = re.compile(r"^grid\s*(\d+)$", re.IGNORECASE)
 
 
-def entity_pairs(stem: str) -> dict[str, str]:
+def _entity_pairs(stem: str) -> dict[str, str]:
     """The ``key-value`` entities of a BIDS file stem."""
     return dict(part.split("-", 1) for part in stem.split("_") if "-" in part)
 
 
 def _resolve_bids_emg_path(bids_root: Path, entity_label: str) -> Path:
     """The ``.bdf``/``.edf`` recording of ``entity_label`` under ``bids_root``."""
-    entities = entity_pairs(entity_label)
+    entities = _entity_pairs(entity_label)
     if not entities.get("sub"):
         raise MureplayError(
             f"The file name {entity_label!r} names no BIDS subject (sub-<label>).",
@@ -65,7 +65,7 @@ def _grid_number(label: str) -> int | None:
     return int(match[1]) if match else None
 
 
-def grid_rows(rows: list[dict[str, str]]) -> list[list[int]]:
+def _grid_rows(rows: list[dict[str, str]]) -> list[list[int]]:
     """The ``channels.tsv`` rows of each grid, in grid order, as MUedit2 groups them."""
     # An EMG row with a group belongs to a grid; groups sort by number when all are
     # Grid<n>, else keep the order they are first listed in.
@@ -81,7 +81,7 @@ def grid_rows(rows: list[dict[str, str]]) -> list[list[int]]:
 
 def _inherited(bids_root: Path, emg_path: Path, entity_label: str, suffix: str) -> list[Path]:
     """Files named ``…_<suffix>`` whose entities all match the recording's, least specific first."""
-    wanted = entity_pairs(entity_label)
+    wanted = _entity_pairs(entity_label)
     folders = [bids_root]
     if "sub" in wanted:
         folders.append(bids_root / f"sub-{wanted['sub']}")
@@ -93,7 +93,7 @@ def _inherited(bids_root: Path, emg_path: Path, entity_label: str, suffix: str) 
         for path in folder.glob(f"*{suffix}"):
             if path.name != suffix and not path.name.endswith(f"_{suffix}"):
                 continue
-            entities = entity_pairs(path.name[: -len(suffix)].rstrip("_"))
+            entities = _entity_pairs(path.name[: -len(suffix)].rstrip("_"))
             if all(wanted.get(k) == v for k, v in entities.items()):
                 found.append((level, len(entities), path))
     return [path for *_, path in sorted(found)]
@@ -148,7 +148,7 @@ def read_bids_emg_grid(
     with channels_tsv.open("r", encoding="utf-8") as f:
         # BIDS TSV has no quoting: a cell starting with '"' is plain text.
         rows = list(csv.DictReader(f, delimiter="\t", quoting=csv.QUOTE_NONE))
-    grids = grid_rows(rows)
+    grids = _grid_rows(rows)
     if not 0 <= grid < len(grids):
         raise MureplayError(f"No EMG grid {grid + 1} in {channels_tsv}.", field="mu_grid_index")
     layout = grids[grid]

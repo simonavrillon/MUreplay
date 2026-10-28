@@ -42,7 +42,6 @@ export function createFileSessionService(app) {
       );
       beginSession(state, payload);
       app.startReplay();
-      app.setStatus("");
       const nMu = state.spikeTimes.length;
       const nSteps = state.timelineGroups.length;
       app.setReplayStatus(

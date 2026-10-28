@@ -12,8 +12,8 @@ import pytest
 
 from mureplay.errors import NotFoundError
 from mureplay.io.loaders import (
-    infer_bids_root,
-    load_npz_payload,
+    _infer_bids_root,
+    _load_npz_payload,
     load_paired_from_path,
 )
 from tests.conftest import SAMPLE_ENTITY
@@ -54,27 +54,41 @@ def _v2_npz(*, with_pulse_trains: bool) -> io.BytesIO:
 
 class TestLoadNpzPayload:
     def test_schema_v2_loads(self) -> None:
-        payload = load_npz_payload(_v2_npz(with_pulse_trains=True))
+        payload = _load_npz_payload(_v2_npz(with_pulse_trains=True))
         assert payload["spike_times"] == [[10, 20, 30], [5, 15]]
         assert payload["grid_names"] == ["Grid A", "Grid B"]
         assert payload["mu_grid_index"] == [0, 1]
         assert payload["fsamp"] == FSAMP
         assert payload["artifact_regions"] == [[100, 150]]
 
-    def test_the_run_parameters_load_from_either_schema(self) -> None:
-        assert load_npz_payload(_v2_npz(with_pulse_trains=False))["parameters"] == {"niter": 25}
+    def test_the_run_settings_load_from_either_schema_with_muedit2_defaults(self) -> None:
+        assert _load_npz_payload(_v2_npz(with_pulse_trains=False))["refit_settings"] == {
+            "nbextchan": 1000,
+            "peel_off_win": 0.025,
+            "compute_dtype": "float32",
+        }
         buffer = io.BytesIO()
         run = {"nbextchan": np.int64(640), "peel_off_win": 0.02, "compute_dtype": "float64"}
         np.savez(buffer, discharge_times=np.array([[1]], dtype=object), parameters=np.array(run))
         # v1 pickles the dict; it must not come back as a list of its keys.
-        assert load_npz_payload(io.BytesIO(buffer.getvalue()))["parameters"] == {
+        assert _load_npz_payload(io.BytesIO(buffer.getvalue()))["refit_settings"] == {
             "nbextchan": 640,
             "peel_off_win": 0.02,
             "compute_dtype": "float64",
         }
 
+    def test_unusable_run_settings_fall_back_to_muedit2_defaults(self) -> None:
+        buffer = io.BytesIO()
+        run = {"nbextchan": -3, "peel_off_win": "x", "compute_dtype": "int8"}
+        np.savez(buffer, discharge_times=np.array([[1]], dtype=object), parameters=np.array(run))
+        assert _load_npz_payload(io.BytesIO(buffer.getvalue()))["refit_settings"] == {
+            "nbextchan": 1000,
+            "peel_off_win": 0.025,
+            "compute_dtype": "float32",
+        }
+
     def test_a_file_without_pulse_trains_gets_binary_trains(self) -> None:
-        payload = load_npz_payload(_v2_npz(with_pulse_trains=False))
+        payload = _load_npz_payload(_v2_npz(with_pulse_trains=False))
         assert len(payload["pulse_trains"]) == 2
         assert len(payload["pulse_trains"][0]) == TOTAL_SAMPLES
         for row, times in zip(payload["pulse_trains"], payload["spike_times"], strict=True):
@@ -88,12 +102,12 @@ class TestLoadNpzPayload:
             grid_names=_json_array(["Grid A"]),
             fsamp=np.float64(FSAMP),
         )
-        assert load_npz_payload(io.BytesIO(buffer.getvalue()))["grid_names"] == ["Grid A"]
+        assert _load_npz_payload(io.BytesIO(buffer.getvalue()))["grid_names"] == ["Grid A"]
 
     def test_a_file_without_grids_gets_one_grid_for_every_mu(self) -> None:
         buffer = io.BytesIO()
         np.savez(buffer, discharge_times=np.array([[1], [2]], dtype=object))
-        payload = load_npz_payload(io.BytesIO(buffer.getvalue()))
+        payload = _load_npz_payload(io.BytesIO(buffer.getvalue()))
         assert payload["grid_names"] == ["Grid 1"]
         assert payload["mu_grid_index"] == [0, 0]
 
@@ -111,7 +125,7 @@ class TestLoadNpzPayload:
             total_samples=np.int64(TOTAL_SAMPLES),
             artifact_mask=mask,
         )
-        payload = load_npz_payload(io.BytesIO(buffer.getvalue()))
+        payload = _load_npz_payload(io.BytesIO(buffer.getvalue()))
         assert payload["spike_times"] == [[120, 300]]
         assert payload["grid_names"] == ["Grid 1"]
         assert payload["artifact_regions"] == [[100, 150]]
@@ -123,10 +137,10 @@ class TestLoadNpzPayload:
 class TestInferBidsRoot:
     def test_a_derivatives_file_points_at_the_dataset_root(self) -> None:
         path = Path("/d/derivatives/muedit/sub-1/ses-1/decomp/x_edited.npz")
-        assert infer_bids_root(path) == str(Path("/d"))
+        assert _infer_bids_root(path) == str(Path("/d"))
 
     def test_a_flat_layout_points_above_the_subject(self) -> None:
-        assert infer_bids_root(Path("/d/sub-1/x_edited.npz")) == str(Path("/d"))
+        assert _infer_bids_root(Path("/d/sub-1/x_edited.npz")) == str(Path("/d"))
 
 
 class TestLoadPairedFromPath:

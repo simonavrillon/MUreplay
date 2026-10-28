@@ -8,7 +8,7 @@ from typing import Any
 import pytest
 from starlette.testclient import TestClient
 
-from mureplay.api.services.filter_service import grid_emg_type
+from mureplay.api.services.filter_service import _grid_emg_type
 from tests._api import API, error
 
 
@@ -58,4 +58,4 @@ class TestGridEmgType:
         [("HD08MM1305", 1), ("Grid 3 MYOMRF-4x8", 2), ("MYOMNP-1x32", 2), ("", 1)],
     )
     def test_intramuscular_grids_take_the_wide_band(self, grid_name: str, expected: int) -> None:
-        assert grid_emg_type(grid_name) == expected
+        assert _grid_emg_type(grid_name) == expected

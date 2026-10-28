@@ -25,7 +25,7 @@ Architecture: [dev/architecture.md](../../../dev/architecture.md). Wire formats:
   here alone breaks the replay.
 - `api/services/filter_service.py` stands in for MUedit2's `EditSession.update_filter`: the
   grid filtered once, whole; peel-off over the grid's other live MUs; the grid's bandpass from
-  `INTRAMUSCULAR_GRIDS`.
+  `_INTRAMUSCULAR_GRIDS`.
 
 ## Errors and logging
 

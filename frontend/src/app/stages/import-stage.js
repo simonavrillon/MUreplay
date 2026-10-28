@@ -6,7 +6,7 @@
  * @param {import("../context.js").App} app
  */
 export function setupImportEvents(app) {
-  app.els.loadMenuBtn?.addEventListener("click", () => {
+  app.els.loadMenuBtn.addEventListener("click", () => {
     void app.onOpenDialog();
   });
 }

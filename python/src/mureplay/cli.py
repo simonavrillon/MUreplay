@@ -15,7 +15,7 @@ from mureplay.api.app_factory import create_app, mount_frontend
 from mureplay.api.routes import include_routers
 from mureplay.paths import frontend_dir
 
-LOOPBACK_HOSTS = ("127.0.0.1", "localhost")
+_LOOPBACK_HOSTS = ("127.0.0.1", "localhost")
 HOST_ENV = "MUREPLAY_HOST"
 PORT_ENV = "MUREPLAY_PORT"
 OPEN_BROWSER_ENV = "MUREPLAY_OPEN_BROWSER"
@@ -28,12 +28,12 @@ def _open_when_started(server: uvicorn.Server, url: str) -> None:
     webbrowser.open(url)
 
 
-def serve_api() -> None:
+def _serve_api() -> None:
     """Start the MUreplay server: the API, and the frontend at ``/`` on the same origin."""
     # The dialog and load routes read any local path, so only this machine's frontend may call them.
     host = os.environ.get(HOST_ENV, "127.0.0.1")
     port = int(os.environ.get(PORT_ENV, "8000"))
-    app = create_app(allowed_hosts=LOOPBACK_HOSTS if host in LOOPBACK_HOSTS else None)
+    app = create_app(allowed_hosts=_LOOPBACK_HOSTS if host in _LOOPBACK_HOSTS else None)
     include_routers(app)
     frontend = frontend_dir()
     if frontend is not None:
@@ -59,7 +59,7 @@ def main() -> None:
         sys.exit(0 if is_help else 2)
     command = sys.argv[1]
     if command == "api":
-        serve_api()
+        _serve_api()
     else:
         print(f"mureplay: unknown command '{command}'", file=sys.stderr)
         sys.exit(2)

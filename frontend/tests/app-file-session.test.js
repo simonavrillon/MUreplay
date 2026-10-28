@@ -42,7 +42,6 @@ function createFakeApp(opts = {}) {
       },
     },
     setReplayStatus: (text) => calls.push(["replayStatus", text]),
-    setStatus: (text) => calls.push(["status", text]),
     startReplay: () => {
       calls.push(["startReplay", app.state.editHistory.length]);
       // The real replay builds the timeline from the log.
@@ -78,7 +77,11 @@ function loadPayload(overrides = {}) {
     fsamp: 2048,
     grid_names: ["Grid 1"],
     mu_grid_index: [0],
-    parameters: {},
+    refit_settings: {
+      nbextchan: 1000,
+      peel_off_win: 0.025,
+      compute_dtype: "float32",
+    },
     edit_history: [],
     source_filename: "sub-01_edited.json",
     bids_root: "/data",
