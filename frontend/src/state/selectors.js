@@ -1,12 +1,10 @@
 /**
  * Reads of `state` that need derivation; use these where one exists.
  */
-import { clamp } from "../replay/operations.js";
-import { extent } from "../signal/series.js";
 
 /** @typedef {import("./state.js").State} State */
 /** @typedef {import("./state.js").EditLogEntry} EditLogEntry */
-/** @typedef {import("./state.js").ReplayGroup} ReplayGroup */
+/** @typedef {import("../app/context.js").Span} Span */
 
 /**
  * The MUs of grid `grid`, in file order.
@@ -16,44 +14,7 @@ import { extent } from "../signal/series.js";
  * @returns {number[]}
  */
 export function musForGrid(state, grid) {
-  return state.muGridIndex.flatMap((g, mu) =>
-    (Number(g) || 0) === grid ? [mu] : [],
-  );
-}
-
-/**
- * The first grid, in MU order, that holds an MU.
- *
- * @param {State} state
- */
-export function firstGridWithMu(state) {
-  return state.muGridIndex.length ? Number(state.muGridIndex[0]) || 0 : 0;
-}
-
-/**
- * The MU a log entry names, by index or else by uid; -1 when it names none.
- *
- * @param {State} state
- * @param {EditLogEntry | null | undefined} step
- */
-export function resolveStepMuIndex(state, step) {
-  if (Number.isFinite(step?.muIdx) && step && step.muIdx >= 0)
-    return step.muIdx;
-  if (step?.muUid) {
-    const idx = state.muUids.indexOf(step.muUid);
-    if (idx >= 0) return idx;
-  }
-  return -1;
-}
-
-/**
- * The timeline: the replay groups that touch the current MU.
- *
- * @param {State} state
- * @returns {ReplayGroup[]}
- */
-export function getActiveReplayGroups(state) {
-  return state.filteredReplayGroups;
+  return state.muGridIndex.flatMap((g, mu) => (g === grid ? [mu] : []));
 }
 
 /**
@@ -63,18 +24,19 @@ export function getActiveReplayGroups(state) {
  * @returns {EditLogEntry | null}
  */
 export function currentStep(state) {
-  const groups = getActiveReplayGroups(state);
-  if (!groups.length || state.replayPosition <= 0) return null;
-  const idx = clamp(state.replayPosition - 1, 0, groups.length - 1);
-  return groups[idx]?.displayStep || null;
+  const group = state.timelineGroups[state.replayPosition - 1];
+  return group ? group.displayStep : null;
 }
 
 /**
+ * The step behind the playhead when it is on the current MU, else `null`.
+ *
  * @param {State} state
- * @param {EditLogEntry | null} step
+ * @returns {EditLogEntry | null}
  */
-export function isCurrentMuStep(state, step) {
-  return !!step && step.muIdx === state.currentMu;
+export function currentMuStep(state) {
+  const step = currentStep(state);
+  return step && step.mu === state.currentMu ? step : null;
 }
 
 /**
@@ -82,44 +44,36 @@ export function isCurrentMuStep(state, step) {
  * @returns {number[]}
  */
 export function spikesForCurrentMu(state) {
-  const row = state.spikeTimes[state.currentMu];
-  return Array.isArray(row) ? row : [];
+  return state.spikeTimes[state.currentMu] ?? [];
 }
 
 /**
  * @param {State} state
  * @returns {number[]}
  */
-export function artifactTimesForCurrentMu(state) {
-  return state.artifactTimes[state.currentMu] || [];
+export function pulseTrainForCurrentMu(state) {
+  return state.pulseTrains[state.currentMu] ?? [];
 }
 
 /**
- * The current MU's pulse train, or a binary one drawn from its discharges when none was loaded.
- *
  * @param {State} state
  * @returns {number[]}
  */
-export function pulseForCurrentMu(state) {
-  const pulse = state.pulseTrains[state.currentMu];
-  if (Array.isArray(pulse) && pulse.length) return pulse;
-  const spikes = spikesForCurrentMu(state);
-  if (!spikes.length) return [];
-  const synthetic = new Array(extent(spikes).max + 1).fill(0);
-  spikes.forEach((s) => {
-    if (s >= 0 && s < synthetic.length) synthetic[s] = 1;
-  });
-  return synthetic;
+export function artifactsForCurrentMu(state) {
+  return state.artifactTimes[state.currentMu] ?? [];
 }
 
 /**
- * The samples in view: the zoomed window, or all `total` before one is set.
+ * The samples in view: the zoomed window, kept inside `totalSamples`, or all of them before one is set.
  *
  * @param {State} state
- * @param {number} total
- * @returns {import("../app/context.js").Span}
+ * @param {number} totalSamples
+ * @returns {Span}
  */
-export function getReplayView(state, total) {
+export function clampedReplayView(state, totalSamples) {
   const view = state.replayView;
-  return view && view.end > view.start ? view : { start: 0, end: total };
+  if (!view || totalSamples <= 0) return { start: 0, end: totalSamples };
+  const start = Math.max(0, Math.min(totalSamples - 1, view.start));
+  const end = Math.max(start + 1, Math.min(totalSamples, view.end));
+  return { start, end };
 }

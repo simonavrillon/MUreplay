@@ -1,13 +1,7 @@
 // The fetch seam: error messages, envelopes, timeouts and the backend wait.
 import { test, describe } from "node:test";
 import assert from "node:assert/strict";
-import {
-  ApiError,
-  RequestTimeout,
-  apiFetch,
-  apiJson,
-  waitForBackend,
-} from "../src/app/http.js";
+import { ApiError, apiJson, waitForBackend } from "../src/api/http.js";
 
 /**
  * What a stubbed fetch may hand back: a Response stand-in, a promise for one,
@@ -59,11 +53,11 @@ test.afterEach(() => {
   globalThis.fetch = originalFetch;
 });
 
-describe("apiFetch", () => {
-  test("resolves on a 2xx response", async () => {
-    stubBehavior = () => fakeResponse({ fine: true }, { status: 200 });
-    const res = await apiFetch("http://api/health");
-    assert.equal(res.status, 200);
+describe("apiJson", () => {
+  test("unwraps the data envelope of a 2xx response", async () => {
+    stubBehavior = () => fakeResponse({ data: { unwrapped: true } });
+    const payload = await apiJson("http://api/health");
+    assert.deepEqual(payload, { unwrapped: true });
     assert.equal(recorded[0].url, "http://api/health");
     // The request carries the abort signal of the internal timeout.
     assert.ok(recorded[0].init.signal instanceof AbortSignal);
@@ -73,12 +67,12 @@ describe("apiFetch", () => {
     stubBehavior = () =>
       fakeResponse({ error: { message: "file not found" } }, { status: 404 });
     await assert.rejects(
-      apiFetch("http://api/load", {}, 5000),
+      apiJson("http://api/load", {}, 5000),
       /file not found/,
     );
   });
 
-  test("carries the status, code and field of the error envelope", async () => {
+  test("carries the status and field of the error envelope", async () => {
     stubBehavior = () =>
       fakeResponse(
         {
@@ -90,15 +84,14 @@ describe("apiFetch", () => {
         },
         { status: 404 },
       );
-    const err = await apiFetch("http://api/load").catch((e) => e);
+    const err = await apiJson("http://api/load").catch((e) => e);
     assert.ok(err instanceof ApiError);
     assert.equal(err.message, "File not found: /x.npz.");
     assert.equal(err.status, 404);
-    assert.equal(err.code, "http_404");
     assert.equal(err.field, "file_path");
   });
 
-  test("formats FastAPI validation details with location", async () => {
+  test("shows a validation error's message without Pydantic's details", async () => {
     stubBehavior = () =>
       fakeResponse(
         {
@@ -111,18 +104,20 @@ describe("apiFetch", () => {
         { status: 422 },
       );
     await assert.rejects(
-      apiFetch("http://api/load"),
-      /^ApiError: Request validation failed: body\.file_path field required$/,
+      apiJson("http://api/load"),
+      /^ApiError: Request validation failed$/,
     );
   });
 
-  test("falls back to the HTTP status on unparseable bodies", async () => {
+  test("falls back to a plain sentence on unparseable bodies", async () => {
     stubBehavior = () =>
       fakeResponse("<html>oops</html>", { status: 500, jsonError: true });
-    await assert.rejects(apiFetch("http://api/load"), /^ApiError: HTTP 500$/);
+    const err = await apiJson("http://api/load").catch((e) => e);
+    assert.equal(err.message, "The server could not complete the request.");
+    assert.equal(err.status, 500);
   });
 
-  test("reports a timeout as RequestTimeout", async () => {
+  test("reports a timeout in a plain sentence", async () => {
     stubBehavior = (_url, init) =>
       new Promise((_resolve, reject) => {
         init.signal.addEventListener("abort", () => {
@@ -131,26 +126,15 @@ describe("apiFetch", () => {
           reject(err);
         });
       });
-    await assert.rejects(apiFetch("http://api/slow", {}, 25), RequestTimeout);
+    await assert.rejects(
+      apiJson("http://api/slow", {}, 25),
+      /^Error: The server took too long to answer\.$/,
+    );
   });
 
   test("rethrows non-timeout failures untouched", async () => {
     stubBehavior = () => Promise.reject(new TypeError("network down"));
-    await assert.rejects(apiFetch("http://api/x"), /network down/);
-  });
-});
-
-describe("apiJson", () => {
-  test("unwraps the data envelope", async () => {
-    stubBehavior = () => fakeResponse({ data: { unwrapped: true } });
-    const payload = await apiJson("http://api/health");
-    assert.deepEqual(payload, { unwrapped: true });
-  });
-
-  test("returns the payload as-is when there is no envelope", async () => {
-    stubBehavior = () => fakeResponse({ health: "ok" });
-    const payload = await apiJson("http://api/health");
-    assert.deepEqual(payload, { health: "ok" });
+    await assert.rejects(apiJson("http://api/x"), /network down/);
   });
 });
 

@@ -3,7 +3,6 @@ import { test, after, describe } from "node:test";
 import assert from "node:assert/strict";
 import { createReplayService } from "../src/app/services/replay-service.js";
 import { normalizeLogEntry } from "../src/api/payloads.js";
-import { getActiveReplayGroups } from "../src/state/selectors.js";
 import { fakeElement, fakeSelect, installDom } from "./_dom.js";
 
 /**
@@ -18,8 +17,8 @@ import { fakeElement, fakeSelect, installDom } from "./_dom.js";
 
 function fakeEls() {
   return {
-    editMuGridSelect: fakeSelect(),
-    editMuSelect: fakeSelect(),
+    gridSelect: fakeSelect(),
+    muSelect: fakeSelect(),
     prevStepBtn: { disabled: false, textContent: "" },
     playPauseBtn: { disabled: false, textContent: "" },
     nextStepBtn: { disabled: false, textContent: "" },
@@ -36,6 +35,7 @@ after(() => Object.assign(globalThis, saved));
  * @param {Partial<import("../src/state/state.js").State>} [overrides]
  */
 function makeState(overrides = {}) {
+  const nMu = overrides.spikeTimes?.length ?? 0;
   return {
     fsamp: 2048,
     pulseTrains: [],
@@ -45,10 +45,9 @@ function makeState(overrides = {}) {
     muUids: [],
     currentGrid: 0,
     currentMu: 0,
-    history: [],
+    editHistory: [],
     replayGroups: [],
-    filteredReplayGroups: [],
-    isPlaying: false,
+    timelineGroups: [],
     playTimer: null,
     replayBaseSpikeTimes: [],
     replayBasePulseTrains: [],
@@ -65,7 +64,8 @@ function makeState(overrides = {}) {
     muGhostUids: [],
     bidsRoot: "/data",
     entityLabel: "sub-01",
-    artifactTimes: [],
+    // One row per MU, as the loader produces.
+    artifactTimes: Array.from({ length: nMu }, () => []),
     replayBaseArtifactTimes: [],
     artifactRegions: [],
     ...overrides,
@@ -80,10 +80,12 @@ function makeState(overrides = {}) {
  * @param {Partial<import("../src/state/state.js").EditLogEntry>} fields
  */
 function step(fields) {
+  const mu = fields.mu ?? -1;
   return {
     type: "add_spikes",
-    muUid: "",
-    muIdx: -1,
+    // `mu` is where `muUid` sits in the fixtures' `g0_mu<n>` uids.
+    muUid: mu >= 0 ? `g0_mu${mu}` : "",
+    mu,
     viewStart: null,
     viewEnd: null,
     spikesAdded: [],
@@ -92,7 +94,9 @@ function step(fields) {
     artifactsRemoved: [],
     usePeeloff: false,
     lockSpikes: false,
-    raw: {},
+    flagged: true,
+    sourceMuUid: "",
+    removedMuUids: [],
     ...fields,
   };
 }
@@ -117,13 +121,18 @@ function createHarness(opts = {}) {
       /** @param {any} payload */
       updateFilter: async (payload) => {
         filterCalls.push(payload);
-        return opts.updateFilter ? opts.updateFilter(payload) : {};
+        if (opts.updateFilter) return opts.updateFilter(payload);
+        // The backend always answers with both keys; by default the refit changes nothing.
+        return {
+          spikes: payload.spike_times[payload.mu],
+          pulse_train: payload.pulse_train,
+        };
       },
     },
     /** @type {string[]} */
     statuses: [],
     /** @param {string} text */
-    setEditStatus(text) {
+    setReplayStatus(text) {
       app.statuses.push(text);
     },
     setStatus() {},
@@ -179,20 +188,20 @@ describe("rebuildReplayGroups", () => {
         ],
         muGridIndex: [0, 0],
         muUids: ["g0_mu0", "g0_mu1"],
-        history: [
-          step({ type: "add_spikes", muIdx: 0, spikesAdded: [20] }),
+        editHistory: [
+          step({ type: "add_spikes", mu: 0, spikesAdded: [20] }),
           step({
             type: "delete_spikes",
-            muIdx: 0,
+            mu: 0,
             spikesRemoved: [10],
           }),
           // A different MU breaks the run.
-          step({ type: "add_spikes", muIdx: 1, spikesAdded: [30] }),
+          step({ type: "add_spikes", mu: 1, spikesAdded: [30] }),
           // So does a step that is not a spike edit.
-          step({ type: "update_filter", muIdx: 1 }),
+          step({ type: "update_filter", mu: 1 }),
           step({
             type: "remove_outliers",
-            muIdx: 1,
+            mu: 1,
             spikesRemoved: [30],
           }),
         ],
@@ -217,16 +226,16 @@ describe("rebuildReplayGroups", () => {
         pulseTrains: [[0, 1]],
         muGridIndex: [0],
         muUids: ["g0_mu0"],
-        history: [
+        editHistory: [
           step({
-            muIdx: 0,
+            mu: 0,
             spikesAdded: [20],
             viewStart: 100,
             viewEnd: 400,
           }),
           step({
             type: "delete_spikes",
-            muIdx: 0,
+            mu: 0,
             spikesRemoved: [10],
             viewStart: 50,
             viewEnd: 200,
@@ -237,17 +246,16 @@ describe("rebuildReplayGroups", () => {
 
     const display = app.state.replayGroups[0].displayStep;
     assert.equal(display.type, "spike_edits");
-    assert.equal(display.groupedCount, 2);
     assert.deepEqual(display.spikesAdded, [20]);
     assert.deepEqual(display.spikesRemoved, [10]);
     // The merged view spans both steps.
     assert.equal(display.viewStart, 50);
     assert.equal(display.viewEnd, 400);
-    assert.equal(display.muIdx, 0);
+    assert.equal(display.mu, 0);
   });
 });
 
-describe("getActiveReplayGroups", () => {
+describe("the timeline groups", () => {
   test("keeps only the current MU's groups", () => {
     const app = createHarness({
       state: {
@@ -258,20 +266,20 @@ describe("getActiveReplayGroups", () => {
         ],
         muGridIndex: [0, 0],
         muUids: ["g0_mu0", "g0_mu1"],
-        history: [
-          step({ muIdx: 0, spikesAdded: [20] }),
-          step({ muIdx: 1, spikesAdded: [30] }),
+        editHistory: [
+          step({ mu: 0, spikesAdded: [20] }),
+          step({ mu: 1, spikesAdded: [30] }),
         ],
       },
     });
 
     assert.equal(app.state.replayGroups.length, 2);
-    assert.equal(getActiveReplayGroups(app.state).length, 1);
-    assert.deepEqual(getActiveReplayGroups(app.state)[0].indices, [0]);
+    assert.equal(app.state.timelineGroups.length, 1);
+    assert.deepEqual(app.state.timelineGroups[0].indices, [0]);
 
     // Switching MU switches the timeline with it.
     app.onMuChange({ target: { value: "1" } });
-    assert.deepEqual(getActiveReplayGroups(app.state)[0].indices, [1]);
+    assert.deepEqual(app.state.timelineGroups[0].indices, [1]);
   });
 
   test("groups belonging to a removed MU drop out of the timeline", () => {
@@ -281,12 +289,11 @@ describe("getActiveReplayGroups", () => {
         pulseTrains: [[0, 1]],
         muGridIndex: [0],
         muUids: ["g0_mu0"],
-        history: [
-          step({ muUid: "g0_mu0", muIdx: 0, spikesAdded: [20] }),
+        editHistory: [
+          step({ mu: 0, spikesAdded: [20] }),
           step({
             type: "remove_duplicates",
-            muUid: "",
-            raw: { removed_mu_uids: ["g0_mu0"] },
+            removedMuUids: ["g0_mu0"],
           }),
         ],
       },
@@ -308,11 +315,11 @@ describe("seeking the timeline", () => {
         pulseTrains: [[0, 1, 0, 1]],
         muGridIndex: [0],
         muUids: ["g0_mu0"],
-        history: [
-          step({ type: "add_spikes", muIdx: 0, spikesAdded: [20] }),
+        editHistory: [
+          step({ type: "add_spikes", mu: 0, spikesAdded: [20] }),
           step({
             type: "update_filter",
-            muIdx: 0,
+            mu: 0,
             spikesRemoved: [10],
           }),
         ],
@@ -333,21 +340,21 @@ describe("seeking the timeline", () => {
         artifactTimes: [[7]],
         muGridIndex: [0],
         muUids: ["g0_mu0"],
-        history: [
+        editHistory: [
           step({
             type: "add_spikes",
-            muIdx: 0,
+            mu: 0,
             spikesAdded: [20],
             spikesRemoved: [30],
           }),
           step({
             type: "add_artifact",
-            muIdx: 0,
+            mu: 0,
             artifactsAdded: [99],
           }),
           step({
             type: "delete_spikes",
-            muIdx: 0,
+            mu: 0,
             spikesRemoved: [50],
           }),
         ],
@@ -355,7 +362,7 @@ describe("seeking the timeline", () => {
     });
 
     const before = snapshot(app.state);
-    const total = getActiveReplayGroups(app.state).length;
+    const total = app.state.timelineGroups.length;
     assert.equal(total, 3);
 
     await seekTo(app, total);
@@ -378,21 +385,21 @@ describe("seeking the timeline", () => {
         artifactTimes: [[7, 42]],
         muGridIndex: [0],
         muUids: ["g0_mu0"],
-        history: [
-          step({ type: "add_spikes", muIdx: 0, spikesAdded: [20, 40] }),
+        editHistory: [
+          step({ type: "add_spikes", mu: 0, spikesAdded: [20, 40] }),
           step({
             type: "delete_artifact",
-            muIdx: 0,
+            mu: 0,
             artifactsRemoved: [7],
           }),
           step({
             type: "remove_outliers",
-            muIdx: 0,
+            mu: 0,
             spikesRemoved: [50],
           }),
           step({
             type: "add_artifact",
-            muIdx: 0,
+            mu: 0,
             artifactsAdded: [77],
           }),
         ],
@@ -400,7 +407,7 @@ describe("seeking the timeline", () => {
     });
 
     const before = snapshot(app.state);
-    const total = getActiveReplayGroups(app.state).length;
+    const total = app.state.timelineGroups.length;
     for (let pos = 1; pos <= total; pos += 1) await seekTo(app, pos);
     for (let pos = total - 1; pos >= 0; pos -= 1) await seekTo(app, pos);
     assert.equal(snapshot(app.state), before);
@@ -418,10 +425,10 @@ describe("seeking the timeline", () => {
         muGridIndex: [0, 0],
         muUids: ["g0_mu0", "g0_mu1"],
         currentMu: 1,
-        history: [
+        editHistory: [
           step({
             type: "add_artifact",
-            muIdx: 1,
+            mu: 1,
             artifactsAdded: [50, 300],
           }),
         ],
@@ -439,29 +446,6 @@ describe("seeking the timeline", () => {
   });
 
   // --- MU resolution --------------------------------------------------------
-  test("a step carrying only a uid lands on that uid's MU", async () => {
-    const app = createHarness({
-      state: {
-        spikeTimes: [[10], [10]],
-        pulseTrains: [
-          [0, 1],
-          [0, 1],
-        ],
-        muGridIndex: [0, 0],
-        muUids: ["g0_mu0", "g0_mu1"],
-        history: [
-          // muIdx is unresolved, as it is for any log keyed by uid alone.
-          step({ muUid: "g0_mu1", muIdx: -1, spikesAdded: [20] }),
-        ],
-      },
-    });
-    app.onMuChange({ target: { value: "1" } });
-
-    await seekTo(app, 1);
-    assert.deepEqual(app.state.spikeTimes[1], [10, 20]);
-    assert.deepEqual(app.state.spikeTimes[0], [10], "MU 0 must not be touched");
-  });
-
   test("a step naming no MU at all is skipped, not applied to MU 0", async () => {
     const app = createHarness({
       state: {
@@ -469,12 +453,12 @@ describe("seeking the timeline", () => {
         pulseTrains: [[0, 1]],
         muGridIndex: [0],
         muUids: ["g0_mu0"],
-        history: [step({ muUid: "", muIdx: -1, spikesAdded: [20] })],
+        editHistory: [step({ spikesAdded: [20] })],
       },
     });
 
     // The group is filtered out of the timeline entirely.
-    assert.equal(getActiveReplayGroups(app.state).length, 0);
+    assert.equal(app.state.timelineGroups.length, 0);
     assert.deepEqual(app.state.spikeTimes[0], [10]);
   });
 
@@ -495,9 +479,9 @@ describe("seeking the timeline", () => {
         ],
         muGridIndex: [0, 0, 0],
         muUids: ["g0_mu0", "g0_mu1", "g0_mu2"],
-        history: [
-          step({ type: "update_filter", muIdx: 0 }),
-          step({ type: "add_spikes", muIdx: 0, spikesAdded: [20] }),
+        editHistory: [
+          step({ type: "update_filter", mu: 0 }),
+          step({ type: "add_spikes", mu: 0, spikesAdded: [20] }),
         ],
       },
     });
@@ -528,7 +512,7 @@ describe("seeking the timeline", () => {
   });
 
   // --- base reconstruction --------------------------------------------------
-  test("a session without the decomposition rewinds the history for its base", () => {
+  test("a session without the decomposition rewinds the edit log for its base", () => {
     // Loaded from an already-edited file: the arrays on hand are the *end* of
     // the session, so the base has to be reconstructed by undoing the log.
     const app = createHarness({
@@ -539,11 +523,11 @@ describe("seeking the timeline", () => {
         artifactTimes: [[50]],
         muGridIndex: [0],
         muUids: ["g0_mu0"],
-        history: [
-          step({ type: "add_spikes", muIdx: 0, spikesAdded: [20] }),
+        editHistory: [
+          step({ type: "add_spikes", mu: 0, spikesAdded: [20] }),
           step({
             type: "add_artifact",
-            muIdx: 0,
+            mu: 0,
             artifactsAdded: [50],
           }),
         ],
@@ -573,7 +557,7 @@ describe("seeking the timeline", () => {
         spikes_removed: [10],
       },
     ];
-    const history = raw
+    const editHistory = raw
       .map((entry) => normalizeLogEntry(entry, muUids))
       .filter((entry) => entry !== null);
 
@@ -587,14 +571,14 @@ describe("seeking the timeline", () => {
         ],
         muGridIndex: [0, 0, 0],
         muUids,
-        history,
+        editHistory,
       },
     });
     app.onMuChange({ target: { value: "2" } });
 
     const before = snapshot(app.state);
     // Both entries are spike edits on one MU, so they replay as a single group.
-    assert.equal(getActiveReplayGroups(app.state).length, 1);
+    assert.equal(app.state.timelineGroups.length, 1);
 
     await seekTo(app, 1);
     assert.deepEqual(app.state.spikeTimes[2], [20]);
@@ -627,10 +611,10 @@ describe("update_filter", () => {
           peelOffWin: 0.03,
           computeDtype: "float64",
         },
-        history: [
+        editHistory: [
           step({
             type: "update_filter",
-            muIdx: 0,
+            mu: 0,
             viewStart: 100,
             viewEnd: 400,
             usePeeloff: true,
@@ -677,7 +661,7 @@ describe("update_filter", () => {
         artifactTimes: [[5]],
         muGridIndex: [0],
         muUids: ["g0_mu0"],
-        history: [step({ type: "update_filter", muIdx: 0 })],
+        editHistory: [step({ type: "update_filter", mu: 0 })],
       },
     });
 
@@ -700,10 +684,10 @@ describe("update_filter", () => {
         pulseTrains: [[0, 1, 0, 1]],
         muGridIndex: [0],
         muUids: ["g0_mu0"],
-        history: [
+        editHistory: [
           step({
             type: "update_filter",
-            muIdx: 0,
+            mu: 0,
             spikesAdded: [20],
             spikesRemoved: [30],
           }),
@@ -714,11 +698,10 @@ describe("update_filter", () => {
     const before = snapshot(app.state);
     await seekTo(app, 1);
     assert.deepEqual(app.state.spikeTimes[0], [10, 20]);
-    assert.ok(
-      app.statuses.some((s) =>
-        /update_filter step fallback.*backend down/.test(s),
-      ),
-      `expected a fallback status, got ${JSON.stringify(app.statuses)}`,
+    // The step's last status, so the step's own "Applied" line does not hide it.
+    assert.equal(
+      app.statuses[app.statuses.length - 1],
+      "Replayed step 1 of 1 from the edit log: could not recompute the filter. backend down",
     );
     // The fallback is a plain diff, so it still inverts cleanly.
     await seekTo(app, 0);
@@ -735,9 +718,9 @@ describe("updateTimelineUi", () => {
         pulseTrains: [[0, 1]],
         muGridIndex: [0],
         muUids: ["g0_mu0"],
-        history: [
-          step({ muIdx: 0, spikesAdded: [20] }),
-          step({ type: "update_filter", muIdx: 0 }),
+        editHistory: [
+          step({ mu: 0, spikesAdded: [20] }),
+          step({ type: "update_filter", mu: 0 }),
         ],
       },
     });
@@ -778,10 +761,10 @@ describe("startReplay", () => {
         muGridIndex: [1, 1, 0],
         muUids: ["g1_mu0", "g1_mu1", "g0_mu0"],
         gridNames: ["Grid 1", "Grid 2"],
-        history: [
+        editHistory: [
           step({
             type: "remove_duplicates",
-            raw: { removed_mu_uids: ["g1_mu0"] },
+            removedMuUids: ["g1_mu0"],
           }),
         ],
       },
@@ -789,7 +772,7 @@ describe("startReplay", () => {
     // g1_mu0 is the first MU of the first grid, but the log removed it.
     assert.equal(app.state.currentGrid, 1);
     assert.equal(app.state.currentMu, 1);
-    assert.equal(app.els.editMuSelect.value, "1");
+    assert.equal(app.els.muSelect.value, "1");
   });
 });
 

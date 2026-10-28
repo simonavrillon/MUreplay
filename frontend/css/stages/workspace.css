@@ -1,32 +1,30 @@
-/* Workspace shell: header, load button, status pill, stages, chart cards, MU controls. */
-/* ── Workspace ── */
-
-.workspace {
-  padding: 14px;
-  position: relative;
-  flex: 1;
-  min-height: 0;
-  display: flex;
-  flex-direction: column;
-}
+/* Workspace shell: header, load button, status lines, the stage, chart cards. */
 
 .workspace-header {
-  position: relative;
   display: flex;
   align-items: center;
-  justify-content: center;
+  justify-content: space-between;
   gap: 12px;
   padding: 8px 14px 10px;
-  background: transparent;
-  border: none;
   border-bottom: 1px solid var(--border);
-  border-radius: 0;
   margin: 10px 14px 0;
 }
 
-.headline {
-  font-size: var(--fs-lg);
+.workspace-header h1 {
   margin: 0;
+  font-size: var(--fs-lg);
+  font-weight: var(--fw-bold);
+}
+
+.header-actions {
+  display: inline-flex;
+  align-items: center;
+  gap: 10px;
+}
+
+.headline {
+  margin: 0;
+  font-size: var(--fs-md);
   font-weight: var(--fw-bold);
 }
 
@@ -53,68 +51,37 @@
   color: var(--accent);
 }
 
-.status-pill {
+.status-line {
   padding: 4px 6px;
-  border-radius: 999px;
-  border: none;
-  background: transparent;
   color: var(--muted);
   font-size: var(--fs-sm);
   letter-spacing: 0.02em;
-  text-transform: none;
   font-weight: var(--fw-light);
 }
 
-.status-pill[data-tone="error"] {
+.status-line[data-tone="error"] {
   color: var(--danger);
-  border-color: var(--danger);
 }
 
-.status-pill[data-tone="success"] {
-  color: var(--success);
-  border-color: var(--success);
-}
-
-.pill-toggle {
-  width: 100%;
-  padding: 9px 12px;
-  border-radius: 6px;
-  border: 1px solid var(--border);
-  background: var(--surface);
-  color: var(--text);
-  font-weight: var(--fw-bold);
-  font-size: var(--fs-md);
-  letter-spacing: 0.02em;
-  cursor: pointer;
-  transition:
-    border-color 0.15s ease,
-    background 0.15s ease;
-}
-
-.pill-toggle:focus {
-  outline: 2px solid var(--accent);
-  outline-offset: 2px;
+.workspace {
+  padding: 14px;
+  flex: 1;
+  min-height: 0;
+  display: flex;
+  flex-direction: column;
 }
 
 .stage {
-  display: none;
+  display: flex;
   flex-direction: column;
   gap: 10px;
   flex: 1;
   min-height: 0;
 }
 
-.stage.active {
-  display: flex;
-}
-
-/* Chart Cards */
-/* ── Chart Cards ── */
+/* ── Chart cards ── */
 
 .chart-card {
-  background: transparent;
-  border: none;
-  border-radius: 0;
   padding: 4px 0 12px;
   border-bottom: 1px solid var(--border);
   display: flex;
@@ -129,81 +96,4 @@
   text-transform: uppercase;
   font-size: var(--fs-sm);
   margin-bottom: 8px;
-}
-
-/* ── MU Controls ── */
-
-.mu-controls {
-  display: flex;
-  flex-wrap: wrap;
-  gap: 12px;
-  align-items: flex-end;
-  margin-bottom: 10px;
-}
-
-.mu-controls label {
-  display: flex;
-  flex-direction: column;
-  gap: 4px;
-  font-size: var(--fs-sm);
-  color: var(--muted);
-  font-weight: var(--fw-light);
-}
-
-.mu-controls select {
-  background: var(--surface);
-  border: 1px solid var(--border);
-  color: var(--text);
-  padding: 6px 10px;
-  border-radius: 6px;
-  min-width: 160px;
-}
-
-#emgCanvas,
-#auxCanvas {
-  flex: 1 1 auto;
-  min-height: clamp(var(--plot-qc-min), 22vh, var(--plot-qc-max));
-}
-
-#emgCanvas {
-  height: clamp(var(--plot-qc-min), 24vh, var(--plot-qc-max));
-}
-
-#auxCanvas {
-  height: clamp(var(--plot-qc-min), 20vh, var(--plot-qc-max));
-}
-
-#muPulseCanvas {
-  flex: 1 1 auto;
-  min-height: 0;
-  height: 100%;
-}
-
-.stage-edit {
-  flex: 1;
-  min-height: 0;
-}
-
-.stage-edit .edit-top-row {
-  margin-bottom: 0;
-}
-
-.stage-edit .edit-full {
-  flex: 1 1 0;
-  min-height: 0;
-}
-
-#editDrCard {
-  flex-grow: 1;
-}
-
-#editPulseCard {
-  flex-grow: 2;
-}
-
-#editDrCanvas,
-#editPulseCanvas {
-  flex: 1 1 auto;
-  min-height: 0;
-  height: 100%;
 }

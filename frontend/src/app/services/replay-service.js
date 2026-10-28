@@ -6,16 +6,14 @@
  * EMG. Every step applied forward pushes a backup, so undoing it restores the
  * rows exactly; a refit that fails falls back to the step's logged diff.
  */
+import { normalizeRefitResult } from "../../api/payloads.js";
 import {
-  applyArtifactDiffBackward,
-  applyArtifactDiffForward,
-  applyLoggedDiffBackward,
-  applyLoggedDiffForward,
+  applyDiff,
   clamp,
   inactiveMusBefore,
   isArtifactStep,
   isSpikeEditStep,
-  stepMuKey,
+  shiftViewInside,
 } from "../../replay/operations.js";
 import {
   popReplayBackup,
@@ -23,26 +21,24 @@ import {
   restoreReplayBase,
   setCurrentGrid,
   setCurrentMu,
-  setFilteredReplayGroups,
   setMuRows,
   setPlayTimer,
   setReplayBase,
   setReplayGroups,
   setReplayPosition,
   setReplayView,
+  setTimelineGroups,
 } from "../../state/actions.js";
 import {
   currentStep,
-  firstGridWithMu,
-  getActiveReplayGroups,
-  getReplayView,
+  clampedReplayView,
   musForGrid,
-  pulseForCurrentMu,
-  resolveStepMuIndex,
+  pulseTrainForCurrentMu,
 } from "../../state/selectors.js";
 import { errorMessage, handleError } from "./error-service.js";
 
 /** @typedef {import("../../state/state.js").EditLogEntry} EditLogEntry */
+/** @typedef {import("../../state/state.js").MuMark} MuMark */
 /** @typedef {import("../../state/state.js").ReplayGroup} ReplayGroup */
 /** @typedef {import("../context.js").ReplayService} ReplayService */
 
@@ -51,7 +47,7 @@ const PLAY_INTERVAL_MS = 700;
 /**
  * Option prefixes for the marks the log puts on an MU.
  *
- * @type {Record<string, string>}
+ * @type {Record<MuMark, string>}
  */
 const MARK_PREFIX = { flagged: "✕", duplicate: "⊕", removed: "⊗" };
 
@@ -69,7 +65,7 @@ export function createReplayService(app) {
       Number(/** @type {HTMLSelectElement} */ (event.target).value) || 0,
     );
     fillMuSelect();
-    rebuildFilteredReplayGroups();
+    rebuildTimelineGroups();
     resetReplayForCurrentMu();
   }
 
@@ -79,7 +75,7 @@ export function createReplayService(app) {
       state,
       Number(/** @type {HTMLSelectElement} */ (event.target).value) || 0,
     );
-    rebuildFilteredReplayGroups();
+    rebuildTimelineGroups();
     resetReplayForCurrentMu();
   }
 
@@ -87,7 +83,7 @@ export function createReplayService(app) {
   function goToMu(direction) {
     const mus = musForGrid(state, state.currentGrid);
     if (!mus.length) return;
-    const current = state.currentMu ?? mus[0];
+    const current = state.currentMu;
     const idx = mus.indexOf(current);
     const offset = direction === "prev" ? -1 : 1;
     let next = current;
@@ -101,25 +97,24 @@ export function createReplayService(app) {
     if (next === current) return;
     setCurrentMu(state, next);
     fillMuSelect(next);
-    rebuildFilteredReplayGroups();
+    rebuildTimelineGroups();
     resetReplayForCurrentMu();
   }
 
   /** @type {ReplayService["adjustReplayView"]} */
   function adjustReplayView(action) {
-    const total = pulseForCurrentMu(state).length;
-    if (!total) return;
-    const view = getReplayView(state, total);
+    const totalSamples = pulseTrainForCurrentMu(state).length;
+    if (!totalSamples) return;
+    const view = clampedReplayView(state, totalSamples);
     const span = Math.max(1, view.end - view.start);
     const center = view.start + span / 2;
     let nextStart = view.start;
     let nextEnd = view.end;
-
     if (action === "zoom_in" || action === "zoom_out") {
       const nextSpan =
         action === "zoom_in"
           ? Math.max(10, Math.round(span * 0.8))
-          : Math.min(total, Math.round(span * 1.5));
+          : Math.min(totalSamples, Math.round(span * 1.5));
       nextStart = Math.round(center - nextSpan / 2);
       nextEnd = Math.round(center + nextSpan / 2);
     } else if (action === "scroll_left" || action === "scroll_right") {
@@ -128,17 +123,7 @@ export function createReplayService(app) {
       nextStart += shift;
       nextEnd += shift;
     }
-
-    if (nextStart < 0) {
-      nextEnd -= nextStart;
-      nextStart = 0;
-    }
-    if (nextEnd > total) {
-      nextStart = Math.max(0, nextStart - (nextEnd - total));
-      nextEnd = total;
-    }
-    if (nextEnd <= nextStart) nextEnd = Math.min(total, nextStart + 1);
-    setReplayView(state, { start: nextStart, end: nextEnd });
+    setReplayView(state, shiftViewInside(nextStart, nextEnd, totalSamples));
     app.renderAll();
   }
 
@@ -151,7 +136,7 @@ export function createReplayService(app) {
 
   /** @type {ReplayService["moveStep"]} */
   function moveStep(delta) {
-    const groups = getActiveReplayGroups(state);
+    const groups = state.timelineGroups;
     if (!groups.length) return;
     void seekReplayPosition(
       clamp(state.replayPosition + delta, 0, groups.length),
@@ -160,8 +145,8 @@ export function createReplayService(app) {
 
   /** @type {ReplayService["togglePlay"]} */
   function togglePlay() {
-    if (!getActiveReplayGroups(state).length) return;
-    if (state.isPlaying) {
+    if (!state.timelineGroups.length) return;
+    if (state.playTimer !== null) {
       stopPlay();
       return;
     }
@@ -170,7 +155,7 @@ export function createReplayService(app) {
       // A step that replays update_filter takes longer than this interval, so
       // skip the tick rather than stacking a second seek on top of it.
       if (seeking) return;
-      if (state.replayPosition >= getActiveReplayGroups(state).length) {
+      if (state.replayPosition >= state.timelineGroups.length) {
         stopPlay();
         return;
       }
@@ -182,7 +167,7 @@ export function createReplayService(app) {
   /** Stop playing, and show the play button. */
   function stopPlay() {
     els.playPauseBtn.textContent = "▶";
-    if (state.playTimer) window.clearInterval(state.playTimer);
+    if (state.playTimer !== null) window.clearInterval(state.playTimer);
     setPlayTimer(state, null);
   }
 
@@ -236,7 +221,7 @@ export function createReplayService(app) {
    *   instead of running whatever was queued behind it.
    */
   async function runSeek(targetPos) {
-    const target = clamp(targetPos, 0, getActiveReplayGroups(state).length);
+    const target = clamp(targetPos, 0, state.timelineGroups.length);
     try {
       while (state.replayPosition < target) {
         await applyGroupForward(state.replayPosition);
@@ -251,8 +236,8 @@ export function createReplayService(app) {
     } catch (err) {
       handleError(
         err,
-        app.setEditStatus,
-        `Replay failed at step ${state.replayPosition}`,
+        app.setReplayStatus,
+        `Could not replay step ${state.replayPosition + 1}`,
       );
       stopPlay();
       return false;
@@ -263,9 +248,7 @@ export function createReplayService(app) {
   function applyTimelineStep() {
     updateTimelineUi();
     const step = currentStep(state);
-    if (step && step.muIdx >= 0 && step.muIdx < state.spikeTimes.length) {
-      showMu(step.muIdx);
-    }
+    if (step) showMu(step.mu);
     app.renderAll();
   }
 
@@ -275,158 +258,159 @@ export function createReplayService(app) {
    * @param {number} mu
    */
   function showMu(mu) {
-    setCurrentGrid(state, state.muGridIndex[mu] || 0);
+    setCurrentGrid(state, state.muGridIndex[mu]);
     fillGridSelect();
     fillMuSelect(mu);
   }
 
+  // A timeline group's steps are all on the current MU, so every step applied
+  // forward pushes a backup and every step undone pops its own.
+
   /** @param {number} groupIdx */
   async function applyGroupForward(groupIdx) {
-    const group = getActiveReplayGroups(state)[groupIdx];
-    if (!group) return;
+    const group = state.timelineGroups[groupIdx];
+    let refitError = "";
     for (const stepIdx of group.indices) {
-      await applyStepForward(stepIdx);
+      refitError = (await applyStepForward(stepIdx)) || refitError;
     }
-    app.setEditStatus(
-      `Applied replay step ${groupIdx + 1}/${getActiveReplayGroups(state).length}: ${group.type}`,
-    );
+    const where = `step ${groupIdx + 1} of ${state.timelineGroups.length}`;
+    if (refitError) {
+      app.setReplayStatus(
+        `Replayed ${where} from the edit log: could not recompute the filter. ${refitError}`,
+        "error",
+      );
+    } else {
+      app.setReplayStatus(`Applied ${where}: ${group.type}.`);
+    }
   }
 
   /** @param {number} groupIdx */
   function undoGroupBackward(groupIdx) {
-    const group = getActiveReplayGroups(state)[groupIdx];
-    if (!group) return;
+    const group = state.timelineGroups[groupIdx];
     for (let i = group.indices.length - 1; i >= 0; i -= 1) {
-      undoStepBackward(group.indices[i]);
+      undoStepBackward();
     }
-    app.setEditStatus(
-      `Reverted replay step ${groupIdx + 1}/${getActiveReplayGroups(state).length}: ${group.type}`,
+    app.setReplayStatus(
+      `Undid step ${groupIdx + 1} of ${state.timelineGroups.length}: ${group.type}.`,
     );
   }
 
-  /** @param {number} stepIdx */
+  /**
+   * @param {number} stepIdx
+   * @returns {Promise<string>} Why a refit fell back to the logged diff; empty when none did.
+   */
   async function applyStepForward(stepIdx) {
-    const step = state.history[stepIdx];
-    if (!step) return;
-    const mu = resolveStepMuIndex(state, step);
-    if (mu < 0 || mu >= state.spikeTimes.length) return;
-
+    const step = state.editHistory[stepIdx];
+    const { mu } = step;
+    let refitError = "";
     pushReplayBackup(state, {
-      stepIdx,
-      muIdx: mu,
-      spikes: [...(state.spikeTimes[mu] || [])],
-      pulseTrain: [...(state.pulseTrains[mu] || [])],
-      artifactTimes: [...(state.artifactTimes[mu] || [])],
+      mu,
+      spikes: [...state.spikeTimes[mu]],
+      pulseTrain: [...state.pulseTrains[mu]],
+      artifacts: [...state.artifactTimes[mu]],
     });
-
-    if (String(step.type || "").toLowerCase() === "update_filter") {
-      await refitStep(stepIdx, step, mu);
-    } else if (isArtifactStep(step)) {
-      setMuRows(state, mu, {
-        artifactTimes: applyArtifactDiffForward(state.artifactTimes[mu], step),
-      });
+    if (step.type === "update_filter") {
+      refitError = await refitStep(stepIdx, step);
     } else {
-      setMuRows(state, mu, {
-        spikes: applyLoggedDiffForward(state.spikeTimes[mu], step),
-      });
+      applyLoggedDiff(step);
     }
     showMu(mu);
+    return refitError;
   }
 
   /**
-   * Refit MU `mu` as the logged `update_filter` step did; on failure, apply the step's diff.
+   * Apply `step`'s logged diff to its MU's artifact markers or discharges.
    *
-   * @param {number} stepIdx
    * @param {EditLogEntry} step
-   * @param {number} mu
    */
-  async function refitStep(stepIdx, step, mu) {
-    const pulse = state.pulseTrains[mu] || pulseForCurrentMu(state);
-    const grid = state.muGridIndex[mu];
-    try {
-      const out = await api.updateFilter({
-        mu,
-        spike_times: state.spikeTimes,
-        pulse_train: pulse,
-        bids_root: state.bidsRoot,
-        entity_label: state.entityLabel,
-        grid_name: state.gridNames[grid] || "",
-        mu_grid_index: state.muGridIndex,
-        inactive_mus: inactiveMusBefore(state.history, stepIdx, state.muUids),
-        view_start: step.viewStart ?? 0,
-        view_end: step.viewEnd ?? pulse.length,
-        nbextchan: state.refitSettings.nbextchan,
-        peel_off_win: state.refitSettings.peelOffWin,
-        compute_dtype: state.refitSettings.computeDtype,
-        use_peeloff: step.usePeeloff ?? false,
-        lock_spikes: step.lockSpikes ?? false,
-        artifact_times: state.artifactTimes[mu] || [],
-        artifact_regions: state.artifactRegions || [],
-      });
+  function applyLoggedDiff(step) {
+    const { mu } = step;
+    if (isArtifactStep(step)) {
       setMuRows(state, mu, {
-        spikes: Array.isArray(out.spikes)
-          ? out.spikes.map(Number).filter((n) => Number.isFinite(n))
-          : undefined,
-        pulseTrain: Array.isArray(out.pulse_train)
-          ? out.pulse_train.map((n) => Number(n) || 0)
-          : undefined,
+        artifacts: applyDiff(
+          state.artifactTimes[mu],
+          step.artifactsAdded,
+          step.artifactsRemoved,
+        ),
       });
-    } catch (err) {
-      app.setEditStatus(`update_filter step fallback (${errorMessage(err)})`);
+    } else {
       setMuRows(state, mu, {
-        spikes: applyLoggedDiffForward(state.spikeTimes[mu], step),
+        spikes: applyDiff(
+          state.spikeTimes[mu],
+          step.spikesAdded,
+          step.spikesRemoved,
+        ),
       });
     }
   }
 
-  /** @param {number} stepIdx */
-  function undoStepBackward(stepIdx) {
-    const step = state.history[stepIdx];
-    if (!step) return;
-    const backup = popReplayBackup(state);
-    if (!backup || backup.stepIdx !== stepIdx) {
-      // No backup for this step: undo its logged diff instead.
-      const mu = resolveStepMuIndex(state, step);
-      if (mu < 0 || mu >= state.spikeTimes.length) return;
-      if (isArtifactStep(step)) {
-        setMuRows(state, mu, {
-          artifactTimes: applyArtifactDiffBackward(
-            state.artifactTimes[mu],
-            step,
+  /**
+   * Refit the step's MU as the logged `update_filter` step did; on failure, apply the step's diff.
+   *
+   * @param {number} stepIdx
+   * @param {EditLogEntry} step
+   * @returns {Promise<string>} Why the refit failed; empty when it succeeded.
+   */
+  async function refitStep(stepIdx, step) {
+    const { mu } = step;
+    const pulseTrain = state.pulseTrains[mu];
+    const grid = state.muGridIndex[mu];
+    try {
+      const refit = normalizeRefitResult(
+        await api.updateFilter({
+          mu,
+          spike_times: state.spikeTimes,
+          pulse_train: pulseTrain,
+          bids_root: state.bidsRoot,
+          entity_label: state.entityLabel,
+          grid_name: state.gridNames[grid] || "",
+          mu_grid_index: state.muGridIndex,
+          inactive_mus: inactiveMusBefore(
+            state.editHistory,
+            stepIdx,
+            state.muUids,
           ),
-        });
-      } else {
-        setMuRows(state, mu, {
-          spikes: applyLoggedDiffBackward(state.spikeTimes[mu], step),
-        });
-      }
-      return;
+          view_start: step.viewStart ?? 0,
+          view_end: step.viewEnd ?? pulseTrain.length,
+          nbextchan: state.refitSettings.nbextchan,
+          peel_off_win: state.refitSettings.peelOffWin,
+          compute_dtype: state.refitSettings.computeDtype,
+          use_peeloff: step.usePeeloff,
+          lock_spikes: step.lockSpikes,
+          artifact_times: state.artifactTimes[mu],
+          artifact_regions: state.artifactRegions,
+        }),
+      );
+      setMuRows(state, mu, refit);
+      return "";
+    } catch (err) {
+      applyLoggedDiff(step);
+      return errorMessage(err);
     }
-    // A session with no artifacts keeps `artifactTimes` empty; restoring an
-    // empty row into it would grow one entry per MU an undo passes through.
-    const keepArtifacts =
-      backup.artifactTimes.length ||
-      state.artifactTimes[backup.muIdx] !== undefined;
-    setMuRows(state, backup.muIdx, {
+  }
+
+  /** Restore the rows the newest backup holds. */
+  function undoStepBackward() {
+    const backup = /** @type {import("../../state/state.js").ReplayBackup} */ (
+      popReplayBackup(state)
+    );
+    setMuRows(state, backup.mu, {
       spikes: backup.spikes,
       pulseTrain: backup.pulseTrain,
-      artifactTimes: keepArtifacts ? backup.artifactTimes : undefined,
+      artifacts: backup.artifacts,
     });
-    showMu(backup.muIdx);
+    showMu(backup.mu);
   }
 
   /**
    * One timeline entry standing for a run of steps.
    *
-   * @param {EditLogEntry[]} steps
-   * @returns {EditLogEntry | null}
+   * @param {EditLogEntry[]} steps Spike edits on one MU.
+   * @returns {EditLogEntry}
    */
   function mergeStepsForDisplay(steps) {
-    if (!steps.length) return null;
     if (steps.length === 1) return steps[0];
-    const first = steps[0];
     const last = steps[steps.length - 1];
-    const muSet = new Set(steps.map((s) => stepMuKey(s)));
     const starts = steps.flatMap((s) =>
       s.viewStart != null ? [s.viewStart] : [],
     );
@@ -436,36 +420,31 @@ export function createReplayService(app) {
       type: "spike_edits",
       viewStart: starts.length ? Math.min(...starts) : null,
       viewEnd: ends.length ? Math.max(...ends) : null,
-      spikesAdded: [...new Set(steps.flatMap((s) => s.spikesAdded || []))],
-      spikesRemoved: [...new Set(steps.flatMap((s) => s.spikesRemoved || []))],
-      muIdx: muSet.size === 1 ? resolveStepMuIndex(state, first) : -1,
-      muUid: muSet.size === 1 ? first.muUid : "",
-      groupedCount: steps.length,
+      spikesAdded: [...new Set(steps.flatMap((s) => s.spikesAdded))],
+      spikesRemoved: [...new Set(steps.flatMap((s) => s.spikesRemoved))],
     };
   }
 
   /**
    * The marks the log puts on MUs: flagged, duplicated or removed, by uid.
    *
-   * @returns {Record<string, string>}
+   * @returns {Record<string, MuMark>}
    */
   function logMarks() {
-    /** @type {Record<string, string>} */
+    /** @type {Record<string, MuMark>} */
     const marks = {};
-    for (const step of state.history) {
-      const type = String(step?.type || "").toLowerCase();
+    for (const step of state.editHistory) {
+      const { type } = step;
       if (type === "flag_mu" && step.muUid) {
         marks[step.muUid] = "flagged";
       } else if (type === "duplicate_mu") {
         if (step.muUid) marks[step.muUid] = marks[step.muUid] || "duplicate";
-        const sourceUid = step.raw?.source_mu_uid;
+        const sourceUid = step.sourceMuUid;
         if (sourceUid) marks[sourceUid] = marks[sourceUid] || "duplicate";
       } else if (type === "remove_duplicates" || type === "remove_flagged") {
-        const removedUids = step.raw?.removed_mu_uids;
-        if (Array.isArray(removedUids))
-          removedUids.forEach((uid) => {
-            marks[String(uid)] = "removed";
-          });
+        step.removedMuUids.forEach((uid) => {
+          marks[uid] = "removed";
+        });
       }
     }
     return marks;
@@ -476,23 +455,22 @@ export function createReplayService(app) {
     /** @type {ReplayGroup[]} */
     const groups = [];
     let i = 0;
-    while (i < state.history.length) {
-      const step = state.history[i];
+    while (i < state.editHistory.length) {
+      const step = state.editHistory[i];
       if (!isSpikeEditStep(step)) {
         groups.push({
           indices: [i],
-          type: String(step.type || "unknown"),
+          type: step.type,
           displayStep: step,
         });
         i += 1;
         continue;
       }
-      const key = stepMuKey(step);
       let j = i + 1;
       while (
-        j < state.history.length &&
-        isSpikeEditStep(state.history[j]) &&
-        stepMuKey(state.history[j]) === key
+        j < state.editHistory.length &&
+        isSpikeEditStep(state.editHistory[j]) &&
+        state.editHistory[j].muUid === step.muUid
       ) {
         j += 1;
       }
@@ -500,7 +478,9 @@ export function createReplayService(app) {
       groups.push({
         indices,
         type: "spike_edits",
-        displayStep: mergeStepsForDisplay(indices.map((k) => state.history[k])),
+        displayStep: mergeStepsForDisplay(
+          indices.map((k) => state.editHistory[k]),
+        ),
       });
       i = j;
     }
@@ -512,20 +492,19 @@ export function createReplayService(app) {
       marks,
       Object.keys(marks).filter((uid) => !liveUids.has(uid)),
     );
-    rebuildFilteredReplayGroups();
+    rebuildTimelineGroups();
   }
 
   /** Keep the groups that touch the current MU, leaving out MUs the file no longer has. */
-  function rebuildFilteredReplayGroups() {
+  function rebuildTimelineGroups() {
     const ghostUids = new Set(state.muGhostUids);
-    setFilteredReplayGroups(
+    setTimelineGroups(
       state,
       state.replayGroups.filter((group) => {
-        const uid = group.displayStep?.muUid || "";
+        const uid = group.displayStep.muUid;
         if (uid && ghostUids.has(uid)) return false;
         return group.indices.some(
-          (idx) =>
-            resolveStepMuIndex(state, state.history[idx]) === state.currentMu,
+          (idx) => state.editHistory[idx].mu === state.currentMu,
         );
       }),
     );
@@ -535,25 +514,34 @@ export function createReplayService(app) {
    * The rows the replay starts from: the loaded decomposition, or, for a file
    * saved after the edits, the edits undone in reverse.
    *
-   * @returns {import("../../state/actions.js").ReplayBase}
+   * @returns {import("../../state/state.js").ReplayBase}
    */
   function replayBase() {
     const base = {
-      spikeTimes: state.spikeTimes.map((row) => [...row]),
+      spikeTimes: state.spikeTimes,
       pulseTrains: state.pulseTrains,
       artifactTimes: state.artifactTimes,
     };
     if (state.loadedFromDecomp) return base;
-    base.artifactTimes = state.artifactTimes.map((row) => [...(row || [])]);
-    for (let i = state.history.length - 1; i >= 0; i -= 1) {
-      const step = state.history[i];
-      const mu = resolveStepMuIndex(state, step);
-      if (mu < 0 || mu >= base.spikeTimes.length) continue;
-      base.spikeTimes[mu] = applyLoggedDiffBackward(base.spikeTimes[mu], step);
-      if (isArtifactStep(step) && mu < base.artifactTimes.length) {
-        base.artifactTimes[mu] = applyArtifactDiffBackward(
+    // `setReplayBase` copies the rows and the rewind only replaces them, so
+    // copying the outer arrays is enough to leave the state's untouched.
+    base.spikeTimes = [...state.spikeTimes];
+    base.artifactTimes = [...state.artifactTimes];
+    for (let i = state.editHistory.length - 1; i >= 0; i -= 1) {
+      const step = state.editHistory[i];
+      const { mu } = step;
+      if (mu < 0) continue;
+      if (!isArtifactStep(step)) {
+        base.spikeTimes[mu] = applyDiff(
+          base.spikeTimes[mu],
+          step.spikesRemoved,
+          step.spikesAdded,
+        );
+      } else {
+        base.artifactTimes[mu] = applyDiff(
           base.artifactTimes[mu],
-          step,
+          step.artifactsRemoved,
+          step.artifactsAdded,
         );
       }
     }
@@ -564,12 +552,13 @@ export function createReplayService(app) {
   function startReplay() {
     stopPlay();
     rebuildReplayGroups();
-    const grid = firstGridWithMu(state);
+    // The grid of the first MU, not the lowest grid number.
+    const grid = state.muGridIndex[0] ?? 0;
     setCurrentGrid(state, grid);
     setCurrentMu(state, musForGrid(state, grid)[0] ?? 0);
     fillGridSelect();
     fillMuSelect();
-    rebuildFilteredReplayGroups();
+    rebuildTimelineGroups();
     setReplayBase(state, replayBase());
     applyTimelineStep();
   }
@@ -591,7 +580,7 @@ export function createReplayService(app) {
   }
 
   /** @param {string} value @param {string} text @param {boolean} [disabled] */
-  function addOption(value, text, disabled = false) {
+  function createOption(value, text, disabled = false) {
     const option = document.createElement("option");
     option.value = value;
     option.textContent = text;
@@ -600,14 +589,14 @@ export function createReplayService(app) {
   }
 
   function fillGridSelect() {
-    els.editMuGridSelect.innerHTML = "";
+    els.gridSelect.innerHTML = "";
     const labels = state.gridNames.length ? state.gridNames : ["Grid 1"];
     labels.forEach((name, idx) => {
-      els.editMuGridSelect.appendChild(
-        addOption(String(idx), `Grid ${idx + 1}${name ? ` • ${name}` : ""}`),
+      els.gridSelect.appendChild(
+        createOption(String(idx), `Grid ${idx + 1}${name ? ` • ${name}` : ""}`),
       );
     });
-    els.editMuGridSelect.value = String(state.currentGrid);
+    els.gridSelect.value = String(state.currentGrid);
   }
 
   /**
@@ -617,26 +606,29 @@ export function createReplayService(app) {
    */
   function fillMuSelect(forceMu = null) {
     const mus = musForGrid(state, state.currentGrid);
-    els.editMuSelect.innerHTML = "";
+    els.muSelect.innerHTML = "";
     if (!mus.length) {
-      els.editMuSelect.appendChild(addOption("0", "No MUs"));
+      els.muSelect.appendChild(createOption("0", "No MUs"));
       setCurrentMu(state, 0);
       return;
     }
     mus.forEach((mu) => {
       const mark = state.muMarks[state.muUids[mu] || ""];
-      const prefix = mark ? `${MARK_PREFIX[mark] || ""} ` : "";
-      els.editMuSelect.appendChild(
-        addOption(String(mu), `${prefix}MU ${mu + 1}`, !isSelectable(mu)),
+      const prefix = mark ? `${MARK_PREFIX[mark]} ` : "";
+      els.muSelect.appendChild(
+        createOption(String(mu), `${prefix}MU ${mu + 1}`, !isSelectable(mu)),
       );
     });
+    // A ghost uid is a key of `muMarks`, so it always has a mark.
     state.muGhostUids
       .filter((uid) => Number(uid.match(/^g(\d+)_/)?.[1]) === state.currentGrid)
       .forEach((uid) => {
-        const mark = state.muMarks[uid];
-        const prefix = MARK_PREFIX[mark] || "—";
-        els.editMuSelect.appendChild(
-          addOption("", `${prefix} ${uid} (removed)`, true),
+        els.muSelect.appendChild(
+          createOption(
+            "",
+            `${MARK_PREFIX[state.muMarks[uid]]} ${uid} (removed)`,
+            true,
+          ),
         );
       });
     if (forceMu != null && mus.includes(forceMu)) setCurrentMu(state, forceMu);
@@ -645,26 +637,25 @@ export function createReplayService(app) {
       const first = mus.find(isSelectable);
       if (first != null) setCurrentMu(state, first);
     }
-    els.editMuSelect.value = String(state.currentMu);
+    els.muSelect.value = String(state.currentMu);
   }
 
   /** @type {ReplayService["updateTimelineUi"]} */
   function updateTimelineUi() {
-    const total = getActiveReplayGroups(state).length;
+    const total = state.timelineGroups.length;
     els.timelineSlider.max = String(total);
     els.timelineSlider.value = String(clamp(state.replayPosition, 0, total));
     els.timelineSlider.disabled = total === 0;
     els.prevStepBtn.disabled = total === 0 || state.replayPosition <= 0;
     els.nextStepBtn.disabled = total === 0 || state.replayPosition >= total;
     els.playPauseBtn.disabled = total === 0;
-    if (els.timelineCounter)
-      els.timelineCounter.textContent = `Step ${state.replayPosition} / ${total}`;
+    els.timelineCounter.textContent = `Step ${state.replayPosition} / ${total}`;
     updateTimelineTrackColors();
   }
 
   /** Paint each timeline step in the slider's track by what it did to the current MU. */
   function updateTimelineTrackColors() {
-    const groups = getActiveReplayGroups(state);
+    const groups = state.timelineGroups;
     if (!groups.length) {
       els.timelineSlider.style.setProperty(
         "--timeline-gradient",
@@ -679,15 +670,15 @@ export function createReplayService(app) {
       if (kind === "split_add_remove") {
         const mid = (start + end) / 2;
         return [
-          `var(--timeline-added) ${start}%`,
-          `var(--timeline-added) ${mid}%`,
-          `var(--timeline-removed) ${mid}%`,
-          `var(--timeline-removed) ${end}%`,
+          `var(--plot-timeline-added) ${start}%`,
+          `var(--plot-timeline-added) ${mid}%`,
+          `var(--plot-timeline-removed) ${mid}%`,
+          `var(--plot-timeline-removed) ${end}%`,
         ];
       }
       const color = {
-        add: "var(--timeline-added)",
-        remove: "var(--timeline-removed)",
+        add: "var(--plot-timeline-added)",
+        remove: "var(--plot-timeline-removed)",
         update_filter: "var(--accent)",
         artifact: "var(--artifact)",
         neutral: "var(--border)",
@@ -705,17 +696,15 @@ export function createReplayService(app) {
    * @returns {"neutral" | "split_add_remove" | "add" | "remove" | "update_filter" | "artifact"}
    */
   function groupColorKind(group) {
-    const types = group.indices
-      .map((idx) => state.history[idx])
-      .filter((step) => resolveStepMuIndex(state, step) === state.currentMu)
-      .map((step) => String(step?.type || "").toLowerCase());
+    const steps = group.indices
+      .map((idx) => state.editHistory[idx])
+      .filter((step) => step.mu === state.currentMu);
+    const types = steps.map((step) => step.type);
     if (types.includes("update_filter")) return "update_filter";
-    if (types.some((t) => t === "add_artifact" || t === "delete_artifact"))
-      return "artifact";
+    if (steps.some(isArtifactStep)) return "artifact";
     const hasAdd = types.includes("add_spikes");
-    const hasRemove = types.some(
-      (t) =>
-        t === "delete_spikes" || t === "delete_dr" || t === "remove_outliers",
+    const hasRemove = steps.some(
+      (step) => isSpikeEditStep(step) && step.type !== "add_spikes",
     );
     if (hasAdd && hasRemove) return "split_add_remove";
     if (hasAdd) return "add";

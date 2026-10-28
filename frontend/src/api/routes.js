@@ -1,7 +1,9 @@
 /**
- * Central API endpoint path table. Callers compose the full URL by
- * prepending API_BASE (injected via deps): `${API_BASE}${routes.health}`.
+ * The API's paths. The server serves the page and the API on one origin, so
+ * `API_BASE` is relative to the page.
  */
+export const API_BASE = "/api/v1";
+
 export const routes = {
   health: "/health",
   loadPairedFromPath: "/load-paired-from-path",

@@ -1,8 +1,8 @@
 /**
- * The HTTP layer under `api/client.js`: timeouts, and the backend's error
- * envelope as `ApiError`.
+ * The HTTP layer under `client.js`: timeouts, the success envelope, and the
+ * backend's error envelope as `ApiError`.
  */
-/** @typedef {import("./context.js").JsonObject} JsonObject */
+/** @typedef {import("../app/context.js").JsonObject} JsonObject */
 
 /** How long a request may take before it is given up, unless it says otherwise. */
 const REQUEST_TIMEOUT_MS = 120000;
@@ -14,22 +14,13 @@ const REQUEST_TIMEOUT_MS = 120000;
 export class ApiError extends Error {
   /**
    * @param {string} message
-   * @param {{ status: number, code?: string, field?: string }} info
+   * @param {{ status: number, field?: string }} info
    */
-  constructor(message, { status, code = "", field = "" }) {
+  constructor(message, { status, field = "" }) {
     super(message);
     this.name = "ApiError";
     this.status = status;
-    this.code = code;
     this.field = field;
-  }
-}
-
-/** A request given up on: the server may still carry it out. */
-export class RequestTimeout extends Error {
-  constructor() {
-    super("Request timed out");
-    this.name = "RequestTimeout";
   }
 }
 
@@ -38,42 +29,29 @@ export class RequestTimeout extends Error {
  * @returns {Promise<ApiError>}
  */
 async function parseApiError(res) {
-  let message = `HTTP ${res.status}`;
-  let code = "";
+  let message = "The server could not complete the request.";
   let field = "";
   try {
     const err = (await res.json())?.error;
     if (typeof err?.message === "string" && err.message.trim()) {
       message = err.message.trim();
     }
-    if (typeof err?.code === "string") code = err.code;
-
-    const detail = err?.detail;
-    if (Array.isArray(detail)) {
-      // A 422: Pydantic's validation errors, each with `loc` + `msg`.
-      const first =
-        detail.find((item) => item && typeof item === "object") || null;
-      const msg = first?.msg || "";
-      const loc = Array.isArray(first?.loc) ? first.loc.join(".") : "";
-      if (msg) {
-        message = `${message}: ${loc ? `${loc} ` : ""}${msg}`.trim();
-      }
-    } else if (typeof detail?.field === "string") {
-      field = detail.field;
-    }
+    if (typeof err?.detail?.field === "string") field = err.detail.field;
   } catch {
-    // Keep status fallback.
+    // Keep the generic message.
   }
-  return new ApiError(message, { status: res.status, code, field });
+  return new ApiError(message, { status: res.status, field });
 }
 
 /**
+ * A success response's `data`: every route wraps its answer in the envelope.
+ *
  * @param {string} url
  * @param {RequestInit} [options]
  * @param {number} [timeoutMs]
- * @returns {Promise<Response>}
+ * @returns {Promise<JsonObject>}
  */
-export async function apiFetch(
+export async function apiJson(
   url,
   options = {},
   timeoutMs = REQUEST_TIMEOUT_MS,
@@ -85,10 +63,11 @@ export async function apiFetch(
     if (!res.ok) {
       throw await parseApiError(res);
     }
-    return res;
+    return (await res.json()).data;
   } catch (err) {
     if (err instanceof Error && err.name === "AbortError") {
-      throw new RequestTimeout();
+      // The server may still carry the request out.
+      throw new Error("The server took too long to answer.");
     }
     throw err;
   } finally {
@@ -116,28 +95,4 @@ export async function waitForBackend(
     await new Promise((r) => setTimeout(r, intervalMs));
   }
   return false;
-}
-
-/**
- * @param {string} url
- * @param {RequestInit} [options]
- * @param {number} [timeoutMs]
- * @returns {Promise<JsonObject>}
- */
-export async function apiJson(
-  url,
-  options = {},
-  timeoutMs = REQUEST_TIMEOUT_MS,
-) {
-  const res = await apiFetch(url, options, timeoutMs);
-  const payload = await res.json();
-  if (
-    payload &&
-    typeof payload === "object" &&
-    "data" in payload &&
-    payload.data !== undefined
-  ) {
-    return payload.data;
-  }
-  return payload;
 }

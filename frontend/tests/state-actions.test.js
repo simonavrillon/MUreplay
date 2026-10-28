@@ -4,7 +4,6 @@ import assert from "node:assert/strict";
 import {
   restoreReplayBase,
   setMuRows,
-  setPlayTimer,
   setReplayBase,
 } from "../src/state/actions.js";
 
@@ -20,8 +19,6 @@ function emptyState() {
     replayBackups: [],
     replayPosition: 0,
     replayView: null,
-    isPlaying: false,
-    playTimer: null,
   });
 }
 
@@ -56,7 +53,7 @@ describe("restoreReplayBase", () => {
       artifactTimes: [],
     });
     setMuRows(state, 0, { spikes: [1, 5] });
-    state.replayBackups.push(/** @type {any} */ ({ stepIdx: 0 }));
+    state.replayBackups.push(/** @type {any} */ ({ mu: 0 }));
     state.replayPosition = 1;
 
     restoreReplayBase(state);
@@ -74,15 +71,5 @@ describe("setMuRows", () => {
     setMuRows(state, 0, { spikes: [2] });
     assert.deepEqual(state.spikeTimes, [[2]]);
     assert.deepEqual(state.pulseTrains, [[0, 1]]);
-  });
-});
-
-describe("setPlayTimer", () => {
-  test("plays while a timer is set, including timer id 0", () => {
-    const state = emptyState();
-    setPlayTimer(state, 0);
-    assert.equal(state.isPlaying, true);
-    setPlayTimer(state, null);
-    assert.equal(state.isPlaying, false);
   });
 });

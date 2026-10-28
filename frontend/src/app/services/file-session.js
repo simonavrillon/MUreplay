@@ -1,14 +1,9 @@
 /**
- * File session service: opening a session, from the native dialog or a path.
- * The loaded decomposition replaces the shown one through `beginSession`; its
- * log, normalised, then starts the replay.
+ * File session service: opening a session from the native dialog. The loaded
+ * decomposition replaces the shown one through `beginSession`; its log,
+ * normalised, then starts the replay.
  */
-import {
-  normalizeEditedPayload,
-  normalizeLogEntry,
-} from "../../api/payloads.js";
-import { setHistory } from "../../state/actions.js";
-import { getActiveReplayGroups } from "../../state/selectors.js";
+import { normalizeSessionPayload } from "../../api/payloads.js";
 import { beginSession } from "../../state/transitions.js";
 import { handleError } from "./error-service.js";
 
@@ -23,53 +18,40 @@ export function createFileSessionService(app) {
 
   /** @type {FileSessionService["onOpenDialog"]} */
   async function onOpenDialog() {
+    let path;
     try {
-      app.setEditStatus("Opening file dialog...");
-      const result = await app.api.openFileDialog();
-      const path = result?.path;
-      if (!path) {
-        app.setEditStatus("No file selected");
-        return;
-      }
-      await onLoadByPath(path);
+      app.setReplayStatus("Opening the file dialog…");
+      ({ path } = await app.api.openFileDialog());
     } catch (err) {
-      handleError(err, app.setEditStatus, "Dialog error");
+      handleError(err, app.setReplayStatus, "Could not open the file dialog");
+      return;
     }
+    if (!path) {
+      app.setReplayStatus("No file selected.");
+      return;
+    }
+    await loadSession(path);
   }
 
-  /** @type {FileSessionService["onLoadByPath"]} */
-  async function onLoadByPath(filePath) {
-    filePath = (filePath || "").trim();
-    if (!filePath) return;
+  /** @param {string} filePath */
+  async function loadSession(filePath) {
     try {
-      app.setEditStatus("Loading...");
-      const parsed = await app.api.loadPairedFromPath(filePath);
-      const payload = normalizeEditedPayload(parsed);
-      beginSession(
-        state,
-        {
-          filename: String(parsed.source_filename),
-          bidsRoot: parsed.bids_root || "",
-          entityLabel: parsed.entity_label || "",
-        },
-        payload,
+      app.setReplayStatus("Loading the session…");
+      const payload = normalizeSessionPayload(
+        await app.api.loadPairedFromPath(filePath),
       );
-      const log = Array.isArray(parsed.edit_history) ? parsed.edit_history : [];
-      setHistory(
-        state,
-        log
-          .map((entry) => normalizeLogEntry(entry, state.muUids))
-          .filter((entry) => entry !== null),
-      );
+      beginSession(state, payload);
       app.startReplay();
       app.setStatus("");
-      app.setEditStatus(
-        `Loaded ${state.spikeTimes.length} MUs + ${getActiveReplayGroups(state).length} replay steps`,
+      const nMu = state.spikeTimes.length;
+      const nSteps = state.timelineGroups.length;
+      app.setReplayStatus(
+        `Loaded ${nMu} MU${nMu === 1 ? "" : "s"} and ${nSteps} replay step${nSteps === 1 ? "" : "s"}.`,
       );
     } catch (err) {
-      handleError(err, app.setEditStatus, "Path load error");
+      handleError(err, app.setReplayStatus, "Could not load the session");
     }
   }
 
-  return { onOpenDialog, onLoadByPath };
+  return { onOpenDialog };
 }

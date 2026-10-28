@@ -2,15 +2,13 @@
 import { test, describe } from "node:test";
 import assert from "node:assert/strict";
 import {
-  artifactTimesForCurrentMu,
+  artifactsForCurrentMu,
+  currentMuStep,
   currentStep,
-  spikesForCurrentMu,
-  firstGridWithMu,
-  getReplayView,
-  isCurrentMuStep,
+  clampedReplayView,
   musForGrid,
-  pulseForCurrentMu,
-  resolveStepMuIndex,
+  pulseTrainForCurrentMu,
+  spikesForCurrentMu,
 } from "../src/state/selectors.js";
 
 /**
@@ -22,11 +20,10 @@ import {
 function stateWith(fields) {
   return /** @type {any} */ ({
     muGridIndex: [],
-    muUids: [],
     spikeTimes: [],
     pulseTrains: [],
     artifactTimes: [],
-    filteredReplayGroups: [],
+    timelineGroups: [],
     replayPosition: 0,
     replayView: null,
     currentMu: 0,
@@ -35,67 +32,68 @@ function stateWith(fields) {
 }
 
 /** @param {Record<string, any>} fields */
-const entry = (fields) =>
-  /** @type {any} */ ({ muIdx: -1, muUid: "", ...fields });
+const entry = (fields) => /** @type {any} */ ({ mu: -1, muUid: "", ...fields });
 
-describe("musForGrid and firstGridWithMu", () => {
+describe("musForGrid", () => {
   test("read the grid assignment", () => {
     const state = stateWith({ muGridIndex: [2, 0, 2] });
     assert.deepEqual(musForGrid(state, 2), [0, 2]);
     assert.deepEqual(musForGrid(state, 0), [1]);
     assert.deepEqual(musForGrid(state, 1), []);
-    // The grid of the first MU, not the lowest grid number.
-    assert.equal(firstGridWithMu(state), 2);
-    assert.equal(firstGridWithMu(stateWith({})), 0);
   });
 });
 
-describe("resolveStepMuIndex", () => {
-  test("prefers the logged index, then the uid, else -1", () => {
-    const state = stateWith({ muUids: ["g0_mu0", "g0_mu1"] });
-    assert.equal(
-      resolveStepMuIndex(state, entry({ muIdx: 0, muUid: "g0_mu1" })),
-      0,
-    );
-    assert.equal(resolveStepMuIndex(state, entry({ muUid: "g0_mu1" })), 1);
-    assert.equal(resolveStepMuIndex(state, entry({ muUid: "g9_mu9" })), -1);
-    assert.equal(resolveStepMuIndex(state, null), -1);
-  });
-});
-
-describe("currentStep", () => {
+describe("currentStep and currentMuStep", () => {
   test("reports the group behind the playhead", () => {
-    const first = entry({ muIdx: 0 });
-    const second = entry({ muIdx: 1 });
+    const first = entry({ mu: 0 });
+    const second = entry({ mu: 1 });
     const groups = [first, second].map((displayStep, i) => ({
       indices: [i],
       type: "spike_edits",
       displayStep,
     }));
-    const state = stateWith({ filteredReplayGroups: groups });
+    const state = stateWith({ timelineGroups: groups });
 
     assert.equal(currentStep(state), null, "no step applied yet");
+    assert.equal(currentMuStep(state), null);
     state.replayPosition = 1;
     assert.equal(currentStep(state), first);
-    assert.equal(isCurrentMuStep(state, first), true);
-    assert.equal(isCurrentMuStep(state, second), false);
-    assert.equal(isCurrentMuStep(state, null), false);
+    assert.equal(currentMuStep(state), first);
+    state.replayPosition = 2;
+    assert.equal(currentStep(state), second);
+    assert.equal(currentMuStep(state), null, "the step is on another MU");
   });
 });
 
-describe("pulseForCurrentMu", () => {
-  test("synthesizes a train when none was loaded", () => {
-    const state = stateWith({ spikeTimes: [[2, 5]], pulseTrains: [[]] });
-    assert.deepEqual(pulseForCurrentMu(state), [0, 0, 1, 0, 0, 1]);
+describe("the current MU's rows", () => {
+  test("are its own, or empty when no MU is loaded", () => {
+    const state = stateWith({
+      spikeTimes: [[2, 5]],
+      pulseTrains: [[0, 0, 1]],
+      artifactTimes: [[4]],
+    });
     assert.deepEqual(spikesForCurrentMu(state), [2, 5]);
-    assert.deepEqual(artifactTimesForCurrentMu(state), []);
+    assert.deepEqual(pulseTrainForCurrentMu(state), [0, 0, 1]);
+    assert.deepEqual(artifactsForCurrentMu(state), [4]);
+    const empty = stateWith({});
+    assert.deepEqual(spikesForCurrentMu(empty), []);
+    assert.deepEqual(pulseTrainForCurrentMu(empty), []);
+    assert.deepEqual(artifactsForCurrentMu(empty), []);
   });
 });
 
-describe("getReplayView", () => {
+describe("clampedReplayView", () => {
   test("is the whole recording until a view is set", () => {
-    assert.deepEqual(getReplayView(stateWith({}), 100), { start: 0, end: 100 });
+    assert.deepEqual(clampedReplayView(stateWith({}), 100), {
+      start: 0,
+      end: 100,
+    });
     const zoomed = stateWith({ replayView: { start: 10, end: 20 } });
-    assert.deepEqual(getReplayView(zoomed, 100), { start: 10, end: 20 });
+    assert.deepEqual(clampedReplayView(zoomed, 100), { start: 10, end: 20 });
+  });
+
+  test("keeps the view inside the recording", () => {
+    const wide = stateWith({ replayView: { start: 80, end: 500 } });
+    assert.deepEqual(clampedReplayView(wide, 100), { start: 80, end: 100 });
   });
 });

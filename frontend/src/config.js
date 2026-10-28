@@ -1,7 +1,4 @@
-// The page's environment: the API origin, and the CSS tokens canvases draw with.
-
-// The MUreplay server serves the page and the API on one origin.
-export const API_BASE = `${window.location.origin}/api/v1`;
+// The CSS tokens canvases draw with.
 
 /** @type {Map<string, string>} */
 const tokenCache = new Map();
@@ -24,8 +21,6 @@ function cssToken(name) {
 }
 
 const COLOR_TOKENS = {
-  primary: "--text",
-  warning: "--accent-2",
   muted: "--muted",
   discharge: "--mu-4",
   artifactMarker: "--artifact",
@@ -59,15 +54,7 @@ for (const [key, name] of Object.entries(COLOR_TOKENS)) {
   Object.defineProperty(COLORS, key, { get: () => cssToken(name) });
 }
 
-/** @type {string | undefined} */
-let fontCache;
-
 /** Canvas text: the page's font at its small size. */
 export function canvasFont() {
-  if (fontCache) return fontCache;
-  const size = cssToken("--fs-xs");
-  const family = cssToken("--font");
-  const font = `${size} ${family}`;
-  if (size && family) fontCache = font;
-  return font;
+  return `${cssToken("--fs-xs")} ${cssToken("--font")}`;
 }

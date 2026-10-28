@@ -38,7 +38,9 @@ frontend/              vanilla JS app (no framework)
   src/app/             context, services (file session, replay, ui), stages
   src/state/           state, actions, selectors, transitions
   src/view/            renderers (plots, replay-renderer)
-  src/api/             client, routes, payloads
+  src/api/             client, routes, http, payloads
+  src/replay/          operations: logged diffs and step predicates
+  src/signal/          series: the range a plot scales to
   index.html           the page
 tests/                 pytest suite (backend), including the parity tests against MUedit2
 frontend/tests/        node --test suite
@@ -145,7 +147,7 @@ names and JSON keys are snake_case; the frontend writes the same name in camelCa
 | BIDS dataset | the dataset a session belongs to, holding the raw EMG | `bids_root` |
 | entity label | the BIDS name of a recording, such as `sub-1_ses-1_task-x_run-1` | `entity_label` |
 | uid | an MU's stable id in the edit log, numbered per grid | `mu_uid` (`g<grid>_mu<n>`) |
-| edit log | the `_edited.json` beside a decomposition: MUedit2's history | `history`, `edit_history` |
+| edit log | the `_edited.json` beside a decomposition: MUedit2's history | `edit_history` (its key in the file: `history`) |
 | step | one entry of the edit log | `EditLogEntry` |
 | timeline step | what the timeline shows: a step, or a run of spike edits on one MU merged | `ReplayGroup` |
 | refit | replaying an `update_filter` step on the BIDS EMG | `run_update_filter` |

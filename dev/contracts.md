@@ -27,11 +27,11 @@ change these only together with the other side, and with a test.
 |---|---|---|---|
 | `MureplayError` (`mureplay/errors.py`) | 400 | `http_400` | `message` as-is; `detail.field` names the request field at fault |
 | `NotFoundError` | 404 | `http_404` | same |
-| `RequestValidationError` | 422 | `validation_error` | `message` "Request validation failed", the Pydantic errors in `detail`; the page appends the first one to the message (`parseApiError`) |
+| `RequestValidationError` | 422 | `validation_error` | `message` "Request validation failed", the Pydantic errors in `detail`; the page shows the message alone |
 | `HTTPException` (routing, the dialog) | its status | `http_<status>` | its `detail` as the message |
 | anything else | 500 | `internal_error` | a generic message; the traceback goes to the server's terminal only |
 
-The page raises these as `ApiError` (`app/http.js`), with `status`, `code` and `field`. Branch
+The page raises these as `ApiError` (`api/http.js`), with `status` and `field`. Branch
 on those, never on the message text.
 
 ### The refit request

@@ -1,37 +1,25 @@
 /* Design tokens: colors, fonts, spacing. */
 :root {
   --bg: #1f1f1f;
-  --panel: #2a2a2a;
-  --panel-solid: #2a2a2a;
   --muted: #b7b7b7;
   --accent: #3776ab;
-  --accent-2: #ffd43b;
   --text: #ffffff;
   --border: #3a3a3a;
-  --shadow: none;
-  --radius: 8px;
   --font: "IBM Plex Sans", "Segoe UI", sans-serif;
   --fs-xs: 10px;
   --fs-sm: 12px;
   --fs-md: 14px;
   --fs-lg: 20px;
   --fw-light: 300;
-  --fw-regular: 400;
   --fw-bold: 700;
-  --plot-qc-min: 120px;
-  --plot-qc-max: 260px;
-  --plot-edit-min: 200px;
-  --plot-edit-max: 460px;
   --surface: #303030;
   --danger: #d62728;
-  --success: #2ca02c;
   --mu-4: #e7c1ff;
   --artifact: #ff8c66;
-  /* Replay timeline slider: steps that added or removed discharges. */
-  --timeline-added: #4ce38a;
-  --timeline-removed: #ff7a7a;
+  /* Replay timeline slider; its steps take the --plot-timeline-* colours. */
   --timeline-thumb: #f5f5f5;
   --timeline-thumb-outline: #111111;
+  --timeline-thumb-halo: rgba(255, 255, 255, 0.08);
 
   /* Canvas plots; src/config.js reads these by name. */
   --plot-trace-2: #f5f5f5;
@@ -53,8 +41,4 @@
   --plot-timeline-spikes: rgba(231, 193, 255, 0.35);
   --plot-timeline-view-fill: rgba(195, 155, 242, 0.28);
   --plot-timeline-view-stroke: rgba(195, 155, 242, 0.75);
-}
-
-* {
-  box-sizing: border-box;
 }

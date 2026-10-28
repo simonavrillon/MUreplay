@@ -6,11 +6,13 @@ import { fakeElement } from "./_dom.js";
 
 /**
  * Partial on purpose: the ui service reads `app.els` and nothing else.
- * @param {{ status?: any, editStatus?: any }} [els]
+ * @param {{ status?: any, replayStatus?: any }} [els]
  */
 function createApp(els = {}) {
   return /** @type {import("../src/app/context.js").App} */ (
-    /** @type {unknown} */ ({ els: { status: null, editStatus: null, ...els } })
+    /** @type {unknown} */ ({
+      els: { status: fakeElement(), replayStatus: fakeElement(), ...els },
+    })
   );
 }
 
@@ -18,8 +20,8 @@ describe("setStatus", () => {
   test("writes text and hides the line while it is empty", () => {
     const status = fakeElement();
     const ui = createUiService(createApp({ status }));
-    ui.setStatus("Loading...");
-    assert.equal(status.textContent, "Loading...");
+    ui.setStatus("Loading…");
+    assert.equal(status.textContent, "Loading…");
     assert.equal(status.hidden, false);
     ui.setStatus("");
     assert.equal(status.textContent, "");
@@ -34,22 +36,19 @@ describe("setStatus", () => {
     ui.setStatus("Connecting");
     assert.equal(status.dataset.tone, "muted");
   });
-
-  test("tolerates a missing status element", () => {
-    const ui = createUiService(createApp());
-    assert.doesNotThrow(() => ui.setStatus("anything", "error"));
-  });
 });
 
-describe("setEditStatus", () => {
-  test("writes text and tolerates a missing element", () => {
-    const editStatus = fakeElement();
-    const ui = createUiService(createApp({ editStatus }));
-    ui.setEditStatus("Loaded 3 MUs");
-    assert.equal(editStatus.textContent, "Loaded 3 MUs");
-    ui.setEditStatus("");
-    assert.equal(editStatus.textContent, "");
-    const uiWithout = createUiService(createApp());
-    assert.doesNotThrow(() => uiWithout.setEditStatus("ignored"));
+describe("setReplayStatus", () => {
+  test("writes text in the tone the stylesheet colours by, muted by default", () => {
+    const replayStatus = fakeElement();
+    const ui = createUiService(createApp({ replayStatus }));
+    ui.setReplayStatus("Could not load the session: not found", "error");
+    assert.equal(
+      replayStatus.textContent,
+      "Could not load the session: not found",
+    );
+    assert.equal(replayStatus.dataset.tone, "error");
+    ui.setReplayStatus("Loaded 3 MUs");
+    assert.equal(replayStatus.dataset.tone, "muted");
   });
 });

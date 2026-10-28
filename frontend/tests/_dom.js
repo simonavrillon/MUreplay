@@ -84,7 +84,6 @@ export function fakeSelect() {
 /** Install `window`, `document` and `getComputedStyle` as the page has them. */
 export function installDom() {
   globalThis.window = /** @type {any} */ ({
-    location: { origin: "http://127.0.0.1:8000" },
     setInterval: () => 0,
     clearInterval: () => {},
   });
@@ -97,4 +96,45 @@ export function installDom() {
     documentElement: fakeElement(),
     createElement: () => fakeElement(),
   });
+}
+
+/**
+ * A canvas whose 2D context records each call with the styles set at the time.
+ *
+ * @param {{ width: number, height: number }} size
+ */
+export function fakeCanvas({ width, height }) {
+  /** @type {{ op: string, args: any[], fillStyle: string, strokeStyle: string }[]} */
+  const calls = [];
+  /** @type {Record<string, any>} */
+  const ctx = { calls, fillStyle: "", strokeStyle: "" };
+  const ops = [
+    "clearRect",
+    "fillRect",
+    "strokeRect",
+    "fillText",
+    "beginPath",
+    "moveTo",
+    "lineTo",
+    "arc",
+    "fill",
+    "stroke",
+  ];
+  for (const op of ops) {
+    ctx[op] = (/** @type {any[]} */ ...args) =>
+      calls.push({
+        op,
+        args,
+        fillStyle: ctx.fillStyle,
+        strokeStyle: ctx.strokeStyle,
+      });
+  }
+  return {
+    clientWidth: width,
+    clientHeight: height,
+    width,
+    height,
+    ctx,
+    getContext: () => ctx,
+  };
 }

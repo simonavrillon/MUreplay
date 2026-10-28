@@ -1,7 +1,7 @@
-// Typed handles for every element the app scripts. A missing id yields null,
-// so callers keep their optional chaining.
+// Typed handles for every element the app scripts; each id is in index.html.
 /** @param {string} id */
-const element = (id) => document.getElementById(id);
+const element = (id) =>
+  /** @type {HTMLElement} */ (document.getElementById(id));
 /** @param {string} id */
 const button = (id) => /** @type {HTMLButtonElement} */ (element(id));
 /** @param {string} id */
@@ -13,18 +13,18 @@ const canvas = (id) => /** @type {HTMLCanvasElement} */ (element(id));
 
 export const els = {
   status: element("status"),
-  editStatus: element("editStatus"),
+  replayStatus: element("replayStatus"),
   loadMenuBtn: button("loadMenuBtn"),
-  editMuGridSelect: select("editMuGridSelect"),
-  editMuSelect: select("editMuSelect"),
+  gridSelect: select("gridSelect"),
+  muSelect: select("muSelect"),
   prevStepBtn: button("prevStepBtn"),
   playPauseBtn: button("playPauseBtn"),
   nextStepBtn: button("nextStepBtn"),
   timelineSlider: input("timelineSlider"),
   timelineCounter: element("timelineCounter"),
-  editDrCanvas: canvas("editDrCanvas"),
-  editPulseCanvas: canvas("editPulseCanvas"),
-  editTimelineCanvas: canvas("editTimelineCanvas"),
+  dischargeRateCanvas: canvas("dischargeRateCanvas"),
+  pulseTrainCanvas: canvas("pulseTrainCanvas"),
+  timelineCanvas: canvas("timelineCanvas"),
 };
 
 /** @typedef {typeof els} Els */

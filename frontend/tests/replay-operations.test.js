@@ -2,62 +2,31 @@
 import { test, describe } from "node:test";
 import assert from "node:assert/strict";
 import {
-  applyLoggedDiffBackward,
-  applyLoggedDiffForward,
+  applyDiff,
   clamp,
   inactiveMusBefore,
   isSpikeEditStep,
-  stepMuKey,
+  shiftViewInside,
 } from "../src/replay/operations.js";
 
-describe("applyLoggedDiffForward", () => {
+describe("applyDiff", () => {
   test("applies removals then additions", () => {
     // A spike present in both removed and added lists survives (edit-in-place).
-    const result = applyLoggedDiffForward([10, 20, 30], {
-      spikesRemoved: [20],
-      spikesAdded: [25, 20],
-    });
-    assert.deepEqual(result, [10, 20, 25, 30]);
+    assert.deepEqual(applyDiff([10, 20, 30], [25, 20], [20]), [10, 20, 25, 30]);
   });
 
   test("returns a sorted, deduplicated array", () => {
-    const result = applyLoggedDiffForward([30, 10], {
-      spikesAdded: [20, 20, 5],
-    });
-    assert.deepEqual(result, [5, 10, 20, 30]);
+    assert.deepEqual(applyDiff([30, 10], [20, 20, 5], []), [5, 10, 20, 30]);
   });
 
-  test("filters negative and non-finite spikes", () => {
-    const result = applyLoggedDiffForward([10], {
-      spikesAdded: [-1, Number.NaN, Infinity, 40],
-    });
-    assert.deepEqual(result, [10, 40]);
+  test("filters negative spikes", () => {
+    assert.deepEqual(applyDiff([10], [-1, 40], []), [10, 40]);
   });
 
-  test("tolerates missing spikes and step fields", () => {
-    assert.deepEqual(applyLoggedDiffForward(null, {}), []);
-    assert.deepEqual(applyLoggedDiffForward([1, 2], {}), [1, 2]);
-    assert.deepEqual(
-      applyLoggedDiffForward([1, 2], { spikesAdded: [] }),
-      [1, 2],
-    );
-  });
-});
-
-describe("applyLoggedDiffBackward", () => {
-  test("inverts a forward step", () => {
+  test("swapping the lists undoes a step", () => {
     const before = [10, 20, 30];
-    const step = { spikesRemoved: [20], spikesAdded: [25] };
-    const after = applyLoggedDiffForward(before, step);
-    assert.deepEqual(applyLoggedDiffBackward(after, step), before);
-  });
-
-  test("removes added and restores removed spikes", () => {
-    const result = applyLoggedDiffBackward([10, 25, 30], {
-      spikesAdded: [25],
-      spikesRemoved: [20],
-    });
-    assert.deepEqual(result, [10, 20, 30]);
+    const after = applyDiff(before, [25], [20]);
+    assert.deepEqual(applyDiff(after, [20], [25]), before);
   });
 });
 
@@ -71,54 +40,49 @@ describe("isSpikeEditStep", () => {
     ]) {
       assert.equal(isSpikeEditStep({ type }), true, type);
     }
-    // Type matching is case-insensitive.
-    assert.equal(isSpikeEditStep({ type: "Add_Spikes" }), true);
   });
 
-  test("rejects non-edit steps and bad input", () => {
+  test("rejects steps that are not spike edits", () => {
     assert.equal(isSpikeEditStep({ type: "update_filter" }), false);
-    assert.equal(isSpikeEditStep({}), false);
-    assert.equal(isSpikeEditStep(null), false);
-    assert.equal(isSpikeEditStep(undefined), false);
-  });
-});
-
-describe("stepMuKey", () => {
-  test("prefers muUid, then muIdx, then unknown", () => {
-    assert.equal(stepMuKey({ muUid: "g0_mu1" }), "uid:g0_mu1");
-    assert.equal(stepMuKey({ muIdx: 3 }), "idx:3");
-    assert.equal(stepMuKey({}), "unknown");
-    assert.equal(stepMuKey(null), "unknown");
-    // Negative or non-finite indices are not valid.
-    assert.equal(stepMuKey({ muIdx: -1 }), "unknown");
-    assert.equal(stepMuKey({ muIdx: Number.NaN }), "unknown");
-    assert.equal(stepMuKey({ muUid: "u", muIdx: 2 }), "uid:u");
+    assert.equal(isSpikeEditStep({ type: "add_artifact" }), false);
   });
 });
 
 describe("inactiveMusBefore", () => {
+  /**
+   * The log-entry fields `inactiveMusBefore` reads, as `normalizeLogEntry` fills them.
+   *
+   * @param {{ type: string, muUid?: string, flagged?: boolean, removedMuUids?: string[] }} fields
+   */
+  const entry = (fields) => ({
+    muUid: "",
+    flagged: true,
+    removedMuUids: [],
+    ...fields,
+  });
+
   test("lists the MUs flagged or removed before the step", () => {
     const uids = ["g0_mu0", "g0_mu1", "g0_mu2", "g1_mu0"];
-    const history = [
-      { type: "flag_mu", muUid: "g0_mu0", raw: { flagged: true } },
-      { type: "flag_mu", muUid: "g0_mu1", raw: { flagged: true } },
-      { type: "add_spikes", muUid: "g0_mu1" },
-      { type: "remove_duplicates", raw: { removed_mu_uids: ["g1_mu0"] } },
-      { type: "update_filter", muUid: "g0_mu2" },
+    const editHistory = [
+      entry({ type: "flag_mu", muUid: "g0_mu0" }),
+      entry({ type: "flag_mu", muUid: "g0_mu1" }),
+      entry({ type: "add_spikes", muUid: "g0_mu1" }),
+      entry({ type: "remove_duplicates", removedMuUids: ["g1_mu0"] }),
+      entry({ type: "update_filter", muUid: "g0_mu2" }),
     ];
     // An edit clears g0_mu1's flag, as MUedit2's session does.
-    assert.deepEqual(inactiveMusBefore(history, 4, uids), [0, 3]);
+    assert.deepEqual(inactiveMusBefore(editHistory, 4, uids), [0, 3]);
     // Only steps before the one being replayed count.
-    assert.deepEqual(inactiveMusBefore(history, 1, uids), [0]);
+    assert.deepEqual(inactiveMusBefore(editHistory, 1, uids), [0]);
   });
 
   test("honours an unflag and ignores unknown uids", () => {
-    const history = [
-      { type: "flag_mu", muUid: "g0_mu0", raw: { flagged: true } },
-      { type: "flag_mu", muUid: "g0_mu0", raw: { flagged: false } },
-      { type: "remove_flagged", raw: { removed_mu_uids: ["g9_mu9"] } },
+    const editHistory = [
+      entry({ type: "flag_mu", muUid: "g0_mu0" }),
+      entry({ type: "flag_mu", muUid: "g0_mu0", flagged: false }),
+      entry({ type: "remove_flagged", removedMuUids: ["g9_mu9"] }),
     ];
-    assert.deepEqual(inactiveMusBefore(history, 3, ["g0_mu0"]), []);
+    assert.deepEqual(inactiveMusBefore(editHistory, 3, ["g0_mu0"]), []);
   });
 });
 
@@ -138,5 +102,19 @@ describe("clamp", () => {
     assert.equal(clamp(11, 10, 0), 10);
     assert.equal(clamp(-1, 10, 0), 10);
     assert.equal(clamp(5, 10, 0), 10);
+  });
+});
+
+describe("shiftViewInside", () => {
+  test("shifts a view back inside the recording, keeping its width", () => {
+    assert.deepEqual(shiftViewInside(-20, 80, 1000), { start: 0, end: 100 });
+    assert.deepEqual(shiftViewInside(950, 1050, 1000), {
+      start: 900,
+      end: 1000,
+    });
+  });
+
+  test("trims a view wider than the recording to the whole of it", () => {
+    assert.deepEqual(shiftViewInside(-50, 1500, 1000), { start: 0, end: 1000 });
   });
 });

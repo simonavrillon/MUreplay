@@ -3,23 +3,24 @@
  */
 
 /** @typedef {import("./state.js").State} State */
-/** @typedef {ReturnType<typeof import("../api/payloads.js").normalizeEditedPayload>} EditedPayload */
+/** @typedef {ReturnType<typeof import("../api/payloads.js").normalizeSessionPayload>} SessionPayload */
 
 /**
- * A loaded session replaces the one shown: its file, its decomposition, and
- * nothing of the previous session's log, timeline or marks. The caller then
- * sets the log and starts the replay.
+ * A loaded session replaces the one shown: its file, its decomposition and its
+ * log. The caller then starts the replay, which rebuilds the timeline and the
+ * marks from the log.
+ *
+ * `sourceFilename` is the decomposition's: an `_edited.npz` stands in when no
+ * `_decomp.npz` was found.
  *
  * @param {State} state
- * @param {{ filename: string, bidsRoot: string, entityLabel: string }} file
- *   `filename` is the decomposition's: an `_edited.npz` stands in when no `_decomp.npz` was found.
- * @param {EditedPayload} payload
+ * @param {SessionPayload} payload
  */
-export function beginSession(state, file, payload) {
+export function beginSession(state, payload) {
   // An edited file already holds the edits; the replay rewinds them to find its start.
-  state.loadedFromDecomp = /_decomp\.npz$/i.test(file.filename);
-  state.bidsRoot = file.bidsRoot;
-  state.entityLabel = file.entityLabel;
+  state.loadedFromDecomp = /_decomp\.npz$/i.test(payload.sourceFilename);
+  state.bidsRoot = payload.bidsRoot;
+  state.entityLabel = payload.entityLabel;
   state.fsamp = payload.fsamp;
   state.pulseTrains = payload.pulseTrains;
   state.spikeTimes = payload.spikeTimes;
@@ -29,9 +30,5 @@ export function beginSession(state, file, payload) {
   state.artifactTimes = payload.artifactTimes;
   state.artifactRegions = payload.artifactRegions;
   state.refitSettings = payload.refitSettings;
-  state.history = [];
-  state.replayGroups = [];
-  state.filteredReplayGroups = [];
-  state.muMarks = {};
-  state.muGhostUids = [];
+  state.editHistory = payload.editHistory;
 }

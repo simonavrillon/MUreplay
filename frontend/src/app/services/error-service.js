@@ -5,7 +5,7 @@
 /**
  * @param {unknown} err
  * @param {(text: string, tone?: import("../context.js").Tone) => void} setStatus
- * @param {string} label  Human-readable action name, e.g. "Load failed"
+ * @param {string} label  What failed, as a sentence: "Could not load the session"
  */
 export function handleError(err, setStatus, label) {
   console.error(err);

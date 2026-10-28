@@ -14,17 +14,17 @@ export function createUiService(app) {
 
   /** @type {UiService["setStatus"]} */
   function setStatus(text, tone = "muted") {
-    if (!els.status) return;
     els.status.textContent = text;
     els.status.title = text;
     els.status.dataset.tone = tone;
     els.status.hidden = !text;
   }
 
-  /** @type {UiService["setEditStatus"]} */
-  function setEditStatus(text) {
-    if (els.editStatus) els.editStatus.textContent = text;
+  /** @type {UiService["setReplayStatus"]} */
+  function setReplayStatus(text, tone = "muted") {
+    els.replayStatus.textContent = text;
+    els.replayStatus.dataset.tone = tone;
   }
 
-  return { setStatus, setEditStatus };
+  return { setStatus, setReplayStatus };
 }

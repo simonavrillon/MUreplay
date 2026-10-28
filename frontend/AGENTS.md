@@ -68,12 +68,12 @@ Architecture: [dev/architecture.md](../dev/architecture.md#frontend-shape). Wire
 - Tests are type-checked too (`tsconfig.test.json`), so a fake that drifts from what it stands
   in for fails the build.
 
-| Helper    | For                                                                                                             |
-| --------- | --------------------------------------------------------------------------------------------------------------- |
-| `_dom.js` | `installDom` (window, document, `getComputedStyle` over the real `css/tokens.css`), `fakeElement`, `fakeSelect` |
+| Helper    | For                                                                                                                                                  |
+| --------- | ---------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `_dom.js` | `installDom` (window, document, `getComputedStyle` over the real `css/tokens.css`), `fakeElement`, `fakeSelect`, `fakeCanvas` (records its 2D calls) |
 
-Call `installDom()` before importing a source module that reads the page: `config.js` reads
-`window.location` at import.
+Call `installDom()` before running code that reads the page: `config.js` reads the tokens
+through `getComputedStyle`, and the replay service creates `<option>` elements.
 
 ## Before you finish
 

@@ -1,52 +1,50 @@
 /**
- * API client seam. Wraps URL composition and response decoding so domain
- * modules never import routes directly. Created once in the container and
- * injected via deps.
+ * The API client: the one module that calls the backend. Each method is one
+ * route, with its method and JSON body.
  */
-import { routes } from "./routes.js";
+import { API_BASE, routes } from "./routes.js";
 
 /** @typedef {import("../app/context.js").JsonObject} JsonObject */
 
 /**
- * @param {{ apiJson: typeof import("../app/http.js").apiJson, API_BASE: string }} deps
+ * @param {JsonObject} body
+ * @returns {RequestInit}
  */
-export function createApiClient({ apiJson, API_BASE }) {
-  /**
-   * @param {string} url
-   * @param {JsonObject} body
-   * @param {number} [timeoutMs]
-   */
-  function postJson(url, body, timeoutMs) {
-    return apiJson(
-      url,
-      {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify(body),
-      },
-      timeoutMs,
-    );
-  }
+function jsonPost(body) {
+  return {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify(body),
+  };
+}
 
+/** @param {string} route */
+const urlOf = (route) => `${API_BASE}${route}`;
+
+/**
+ * @param {{ apiJson: typeof import("./http.js").apiJson }} deps
+ */
+export function createApiClient({ apiJson }) {
   return {
     healthUrl() {
-      return `${API_BASE}${routes.health}`;
+      return urlOf(routes.health);
     },
 
     /** @param {string} filePath */
     loadPairedFromPath(filePath) {
-      return postJson(`${API_BASE}${routes.loadPairedFromPath}`, {
-        file_path: filePath,
-      });
+      return apiJson(
+        urlOf(routes.loadPairedFromPath),
+        jsonPost({ file_path: filePath }),
+      );
     },
 
-    async openFileDialog() {
-      return apiJson(`${API_BASE}${routes.dialogOpenFile}`);
+    openFileDialog() {
+      return apiJson(urlOf(routes.dialogOpenFile));
     },
 
     /** @param {JsonObject} payload */
     updateFilter(payload) {
-      return postJson(`${API_BASE}${routes.editUpdateFilter}`, payload, 120000);
+      return apiJson(urlOf(routes.editUpdateFilter), jsonPost(payload));
     },
   };
 }

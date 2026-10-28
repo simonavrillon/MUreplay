@@ -15,7 +15,7 @@
         <div class="workspace-header">
           <h1>MUreplay</h1>
           <div class="header-actions">
-            <span class="headline load-headline">Load log file</span>
+            <span class="headline">Load log file</span>
             <button
               class="browse-icon-btn"
               id="loadMenuBtn"
@@ -28,7 +28,6 @@
                 viewBox="0 0 24 24"
                 stroke-width="1.5"
                 stroke="currentColor"
-                class="size-6"
                 aria-hidden="true"
               >
                 <path
@@ -38,20 +37,20 @@
                 />
               </svg>
             </button>
-            <span id="status" class="status-pill" hidden
+            <span id="status" class="status-line" hidden
               >Load edited file and log</span
             >
           </div>
         </div>
 
         <section class="workspace">
-          <div class="stage stage-edit active" id="stageEdit">
+          <div class="stage stage-edit" id="stageEdit">
             <div class="edit-top-row">
-              <div class="chart-card glass">
+              <div class="chart-card">
                 <div class="edit-controls-row">
-                  <div class="mu-controls edit-selects">
-                    <select id="editMuGridSelect" aria-label="Grid"></select>
-                    <select id="editMuSelect" aria-label="Motor unit"></select>
+                  <div class="edit-selects">
+                    <select id="gridSelect" aria-label="Grid"></select>
+                    <select id="muSelect" aria-label="Motor unit"></select>
                   </div>
 
                   <div
@@ -91,37 +90,27 @@
                     >
                       ▶
                     </button>
-                    <span id="timelineCounter" class="timeline-counter"
-                      >Step 0 / 0</span
-                    >
+                    <span id="timelineCounter">Step 0 / 0</span>
                   </div>
                 </div>
                 <span
-                  id="editStatus"
-                  class="status-pill"
+                  id="replayStatus"
+                  class="status-line"
                   aria-live="polite"
                 ></span>
               </div>
             </div>
 
-            <div class="chart-card glass edit-full" id="editDrCard">
-              <div class="chart-title">Firing Rate (pps)</div>
-              <canvas
-                id="editDrCanvas"
-                height="180"
-                class="mu-canvas muted-bg"
-              ></canvas>
+            <div class="chart-card edit-full" id="editDrCard">
+              <div class="chart-title">Firing rate (pps)</div>
+              <canvas id="dischargeRateCanvas" height="180"></canvas>
             </div>
 
-            <div class="chart-card glass edit-full" id="editPulseCard">
-              <div class="chart-title">Pulse Train / Discharge Times</div>
+            <div class="chart-card edit-full" id="editPulseCard">
+              <div class="chart-title">Pulse train / discharge times</div>
+              <canvas id="pulseTrainCanvas" height="220"></canvas>
               <canvas
-                id="editPulseCanvas"
-                height="220"
-                class="mu-canvas"
-              ></canvas>
-              <canvas
-                id="editTimelineCanvas"
+                id="timelineCanvas"
                 class="edit-timeline-canvas"
                 aria-label="Navigation timeline"
               ></canvas>

@@ -1,10 +1,11 @@
-// Payload normalisation at the API boundary: loaded sessions, log entries, artifact regions.
+// Payload normalisation at the API boundary: loaded sessions, log entries, refit results.
 import { test, describe } from "node:test";
 import assert from "node:assert/strict";
 import {
   buildMuUids,
-  normalizeEditedPayload,
   normalizeLogEntry,
+  normalizeRefitResult,
+  normalizeSessionPayload,
 } from "../src/api/payloads.js";
 
 /**
@@ -27,12 +28,17 @@ function minimalPayload() {
     fsamp: 2048,
     grid_names: ["Grid 1"],
     mu_grid_index: [0],
+    parameters: {},
+    edit_history: [],
+    source_filename: "sub-01_decomp.npz",
+    bids_root: "/data",
+    entity_label: "sub-01",
   };
 }
 
-describe("normalizeEditedPayload", () => {
+describe("normalizeSessionPayload", () => {
   test("reads the run's refit settings, with MUedit2's defaults", () => {
-    const run = normalizeEditedPayload({
+    const run = normalizeSessionPayload({
       ...minimalPayload(),
       parameters: {
         nbextchan: 640,
@@ -45,7 +51,7 @@ describe("normalizeEditedPayload", () => {
       peelOffWin: 0.02,
       computeDtype: "float64",
     });
-    const odd = normalizeEditedPayload({
+    const odd = normalizeSessionPayload({
       ...minimalPayload(),
       parameters: { nbextchan: -3, peel_off_win: "x", compute_dtype: "int8" },
     });
@@ -56,98 +62,57 @@ describe("normalizeEditedPayload", () => {
     });
   });
 
-  test("requires the core arrays", () => {
-    assert.throws(() => normalizeEditedPayload({}), /pulse_trains/);
-    assert.throws(
-      () => normalizeEditedPayload({ pulse_trains: [[0]] }),
-      /spike_times/,
-    );
-  });
-
   test("applies defaults for optional fields", () => {
-    const normalized = normalizeEditedPayload(minimalPayload());
+    const normalized = normalizeSessionPayload(minimalPayload());
     assert.deepEqual(normalized.muUids, ["g0_mu0"]);
-    assert.deepEqual(normalized.artifactTimes, []);
+    assert.deepEqual(normalized.artifactTimes, [[]]);
     assert.deepEqual(normalized.artifactRegions, []);
   });
 
-  test("normalizes numeric fields", () => {
-    const normalized = normalizeEditedPayload({
-      ...minimalPayload(),
-      pulse_trains: [["1", "2"], "not-a-row"],
-      spike_times: [["5", null, "x"]],
-      fsamp: "4096",
-    });
-    assert.equal(normalized.fsamp, 4096);
-    assert.deepEqual(normalized.pulseTrains, [[1, 2], []]);
-    assert.deepEqual(normalized.spikeTimes, [[5, 0, 0]]);
-  });
-
-  test("keeps NaN out of the pulse trains", () => {
-    // The plots scale to the pulse train's extent, and a single NaN there makes
-    // the whole trace unrenderable, so junk coerces to 0 as it does for the
-    // discharge times rather than propagating.
-    const normalized = normalizeEditedPayload({
-      ...minimalPayload(),
-      pulse_trains: [[0.5, "junk", null, "0.25"]],
-      spike_times: [[100]],
-    });
-    assert.deepEqual(normalized.pulseTrains, [[0.5, 0, 0, 0.25]]);
-  });
-
-  test("builds mu uids when absent", () => {
-    const normalized = normalizeEditedPayload({
-      ...minimalPayload(),
-      mu_grid_index: [1],
-    });
-    assert.deepEqual(normalized.muUids, ["g1_mu0"]);
-  });
-
-  test("keeps provided mu uids and grid names", () => {
-    const normalized = normalizeEditedPayload({
+  test("keeps the log's mu uids only when it has one per MU", () => {
+    const kept = normalizeSessionPayload({
       ...minimalPayload(),
       mu_uids: ["custom-uid"],
-      mu_grid_index: [3],
-      grid_names: ["Grid A"],
     });
-    assert.deepEqual(normalized.muUids, ["custom-uid"]);
-    assert.deepEqual(normalized.muGridIndex, [3]);
-    assert.deepEqual(normalized.gridNames, ["Grid A"]);
+    assert.deepEqual(kept.muUids, ["custom-uid"]);
+    const built = normalizeSessionPayload({
+      ...minimalPayload(),
+      mu_grid_index: [1],
+      mu_uids: ["a", "b"],
+    });
+    assert.deepEqual(built.muUids, ["g1_mu0"]);
   });
 
-  test("flattens artifact times", () => {
-    const normalized = normalizeEditedPayload({
+  test("reads artifact times as one row per MU", () => {
+    const normalized = normalizeSessionPayload({
       ...minimalPayload(),
+      spike_times: [[1], [2], [3], [4]],
+      mu_grid_index: [0, 0, 0, 0],
       artifact_times: [[1, "2"], "bad", [3]],
     });
-    assert.deepEqual(normalized.artifactTimes, [[1, 2], [], [3]]);
+    assert.deepEqual(normalized.artifactTimes, [[1, 2], [], [3], []]);
   });
-});
 
-describe("normalizeArtifactRegions", () => {
-  test("keeps the [start, end) pairs that span samples", () => {
-    const normalized = normalizeEditedPayload({
+  test("reads the file fields and normalises the log against the session's uids", () => {
+    const session = normalizeSessionPayload({
       ...minimalPayload(),
-      artifact_regions: [
-        [10.4, 20.6],
-        [30, 40],
-        [50, 50], // empty region: dropped
-        [60, 55], // inverted region: dropped
-        ["x", "y"], // non-numeric: dropped
-        "junk",
-      ],
+      mu_uids: ["g0_mu7"],
+      artifact_regions: [[10, 20]],
+      edit_history: [{ type: "add_spikes", mu_uid: "g0_mu7" }, "junk"],
     });
-    assert.deepEqual(normalized.artifactRegions, [
-      [10, 21],
-      [30, 40],
-    ]);
+    assert.equal(session.sourceFilename, "sub-01_decomp.npz");
+    assert.equal(session.bidsRoot, "/data");
+    assert.equal(session.entityLabel, "sub-01");
+    assert.deepEqual(session.artifactRegions, [[10, 20]]);
+    assert.equal(session.editHistory.length, 1);
+    assert.equal(session.editHistory[0].mu, 0);
   });
 });
 
 describe("normalizeLogEntry", () => {
   test("returns null for non-object entries", () => {
-    // Deliberately off-contract input: the log is backend JSON, so a row that
-    // is not an object has to be survivable.
+    // The backend passes the user's log through unchecked, so a row that is
+    // not an object has to be survivable.
     const junk = /** @type {any} */ (null);
     assert.equal(normalizeLogEntry(junk, []), null);
     assert.equal(normalizeLogEntry(/** @type {any} */ ("step"), []), null);
@@ -157,7 +122,7 @@ describe("normalizeLogEntry", () => {
     const entry = normalized({}, []);
     assert.equal(entry.type, "unknown");
     assert.equal(entry.muUid, "");
-    assert.equal(entry.muIdx, -1);
+    assert.equal(entry.mu, -1);
     assert.equal(entry.viewStart, null);
     assert.equal(entry.viewEnd, null);
     assert.deepEqual(entry.spikesAdded, []);
@@ -181,13 +146,13 @@ describe("normalizeLogEntry", () => {
     assert.deepEqual(entry.artifactsRemoved, [300, 400]);
   });
 
-  test("resolves muIdx from muUid", () => {
+  test("resolves mu from muUid", () => {
     const muUids = ["g0_mu0", "g0_mu1"];
     const entry = normalized({ mu_uid: "g0_mu1", type: "add_spikes" }, muUids);
-    assert.equal(entry.muIdx, 1);
+    assert.equal(entry.mu, 1);
     // An unknown uid, or none, leaves the index at -1.
-    assert.equal(normalized({ mu_uid: "nope" }, muUids).muIdx, -1);
-    assert.equal(normalized({ type: "remove_flagged" }, muUids).muIdx, -1);
+    assert.equal(normalized({ mu_uid: "nope" }, muUids).mu, -1);
+    assert.equal(normalized({ type: "remove_flagged" }, muUids).mu, -1);
   });
 
   test("reads MUedit2's fields", () => {
@@ -205,7 +170,7 @@ describe("normalizeLogEntry", () => {
       ["g0_mu0", "g0_mu1"],
     );
     assert.equal(entry.type, "delete_spikes");
-    assert.equal(entry.muIdx, 1);
+    assert.equal(entry.mu, 1);
     assert.deepEqual(entry.spikesAdded, [1, 2, 3, 4]);
     assert.deepEqual(entry.spikesRemoved, [5, 6]);
     assert.equal(entry.viewStart, 11);
@@ -213,10 +178,39 @@ describe("normalizeLogEntry", () => {
     assert.equal(entry.usePeeloff, true);
   });
 
-  test("keeps the raw entry", () => {
-    const raw = { type: "update_filter", comment: "keep" };
-    const entry = normalized(raw, []);
-    assert.equal(entry.raw, raw);
+  test("lowercases the step type", () => {
+    assert.equal(normalized({ type: "Update_Filter" }).type, "update_filter");
+  });
+
+  test("reads the fields of MU flag, duplicate and removal steps", () => {
+    assert.equal(normalized({ type: "flag_mu" }).flagged, true);
+    assert.equal(
+      normalized({ type: "flag_mu", flagged: false }).flagged,
+      false,
+    );
+    const duplicate = normalized({
+      type: "duplicate_mu",
+      source_mu_uid: "g0_mu1",
+    });
+    assert.equal(duplicate.sourceMuUid, "g0_mu1");
+    const removal = normalized({
+      type: "remove_flagged",
+      removed_mu_uids: ["g0_mu0", 3],
+    });
+    assert.deepEqual(removal.removedMuUids, ["g0_mu0", "3"]);
+    assert.deepEqual(normalized({ type: "remove_flagged" }).removedMuUids, []);
+  });
+});
+
+describe("normalizeRefitResult", () => {
+  test("renames the refit's discharges and pulse train", () => {
+    assert.deepEqual(
+      normalizeRefitResult({ spikes: [5], pulse_train: [0.5] }),
+      {
+        spikes: [5],
+        pulseTrain: [0.5],
+      },
+    );
   });
 });
 
@@ -224,8 +218,6 @@ describe("buildMuUids", () => {
   test("numbers MUs per grid", () => {
     assert.deepEqual(buildMuUids([0, 0, 1]), ["g0_mu0", "g0_mu1", "g1_mu0"]);
     assert.deepEqual(buildMuUids([]), []);
-    // Non-numeric entries fall back to grid 0.
-    assert.deepEqual(buildMuUids([null, undefined]), ["g0_mu0", "g0_mu1"]);
   });
 
   test("counts independently per grid index", () => {

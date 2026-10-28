@@ -1,14 +1,13 @@
 /**
  * The app state: its shape (typedefs) and the single `state` object.
  */
-/** @typedef {import("../app/context.js").JsonObject} JsonObject */
 /** @typedef {import("../app/context.js").Span} Span */
 
 /**
  * @typedef {object} EditLogEntry
  * @property {string} type
  * @property {string} muUid
- * @property {number} muIdx
+ * @property {number} mu
  * @property {number | null} viewStart
  * @property {number | null} viewEnd
  * @property {number[]} spikesAdded
@@ -17,25 +16,36 @@
  * @property {number[]} artifactsRemoved
  * @property {boolean} usePeeloff
  * @property {boolean} lockSpikes
- * @property {number} [groupedCount]
- * @property {JsonObject} raw
+ * @property {boolean} flagged Whether a `flag_mu` step flags its MU (false unflags it).
+ * @property {string} sourceMuUid The MU a `duplicate_mu` step's MU duplicates.
+ * @property {string[]} removedMuUids The MUs a `remove_flagged` or `remove_duplicates` step removed.
  */
 
 /**
  * @typedef {object} ReplayBackup
- * @property {number} stepIdx
- * @property {number} muIdx
+ * @property {number} mu
  * @property {number[]} spikes
  * @property {number[]} pulseTrain
- * @property {number[]} artifactTimes
+ * @property {number[]} artifacts
  */
 
 /**
  * @typedef {object} ReplayGroup
  * @property {number[]} indices
  * @property {string} type
- * @property {EditLogEntry | null} displayStep
+ * @property {EditLogEntry} displayStep
  */
+
+/**
+ * The decomposition a replay starts from, one row per MU.
+ *
+ * @typedef {object} ReplayBase
+ * @property {number[][]} spikeTimes
+ * @property {number[][]} pulseTrains
+ * @property {number[][]} artifactTimes
+ */
+
+/** @typedef {"flagged" | "duplicate" | "removed"} MuMark */
 
 /**
  * How the decomposition was run, which a filter refit repeats.
@@ -47,6 +57,17 @@
  */
 
 /**
+ * MUedit2's run settings, for a decomposition that saved none.
+ *
+ * @type {Readonly<RefitSettings>}
+ */
+export const DEFAULT_REFIT_SETTINGS = {
+  nbextchan: 1000,
+  peelOffWin: 0.025,
+  computeDtype: "float32",
+};
+
+/**
  * @typedef {object} State
  * @property {number} fsamp
  * @property {number[][]} pulseTrains
@@ -56,10 +77,9 @@
  * @property {string[]} muUids
  * @property {number} currentGrid
  * @property {number} currentMu
- * @property {EditLogEntry[]} history
+ * @property {EditLogEntry[]} editHistory
  * @property {ReplayGroup[]} replayGroups
- * @property {ReplayGroup[]} filteredReplayGroups
- * @property {boolean} isPlaying
+ * @property {ReplayGroup[]} timelineGroups The replay groups that touch the current MU.
  * @property {number | null} playTimer
  * @property {number[][]} replayBaseSpikeTimes
  * @property {number[][]} replayBasePulseTrains
@@ -68,11 +88,11 @@
  * @property {Span | null} replayView
  * @property {boolean} loadedFromDecomp Whether the decomposition is the one the edits started from (`_decomp.npz`).
  * @property {RefitSettings} refitSettings
- * @property {Record<string, string>} muMarks
+ * @property {Record<string, MuMark>} muMarks
  * @property {string[]} muGhostUids Uids the log marks but the loaded file no longer has.
  * @property {string} bidsRoot The session's BIDS dataset: the file's location, else the server's data root.
  * @property {string} entityLabel The BIDS entity label of the session's recording.
- * @property {number[][]} artifactTimes
+ * @property {number[][]} artifactTimes One row per MU, like `spikeTimes`.
  * @property {number[][]} replayBaseArtifactTimes
  * @property {number[][]} artifactRegions
  */
@@ -87,10 +107,9 @@ export const state = {
   muUids: [],
   currentGrid: 0,
   currentMu: 0,
-  history: [],
+  editHistory: [],
   replayGroups: [],
-  filteredReplayGroups: [],
-  isPlaying: false,
+  timelineGroups: [],
   playTimer: null,
   replayBaseSpikeTimes: [],
   replayBasePulseTrains: [],
@@ -98,11 +117,7 @@ export const state = {
   replayBackups: [],
   replayView: null,
   loadedFromDecomp: false,
-  refitSettings: {
-    nbextchan: 1000,
-    peelOffWin: 0.025,
-    computeDtype: "float32",
-  },
+  refitSettings: { ...DEFAULT_REFIT_SETTINGS },
   muMarks: {},
   muGhostUids: [],
   bidsRoot: "",

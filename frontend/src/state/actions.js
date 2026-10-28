@@ -4,29 +4,21 @@
  */
 
 /** @typedef {import("./state.js").State} State */
-/** @typedef {import("./state.js").EditLogEntry} EditLogEntry */
+/** @typedef {import("./state.js").MuMark} MuMark */
 /** @typedef {import("./state.js").ReplayBackup} ReplayBackup */
+/** @typedef {import("./state.js").ReplayBase} ReplayBase */
 /** @typedef {import("./state.js").ReplayGroup} ReplayGroup */
 /** @typedef {import("../app/context.js").Span} Span */
 
-/**
- * The decomposition a replay starts from, one row per MU.
- *
- * @typedef {object} ReplayBase
- * @property {number[][]} spikeTimes
- * @property {number[][]} pulseTrains
- * @property {number[][]} artifactTimes
- */
-
 /** @param {number[][]} rows */
-const copyRows = (rows) => rows.map((row) => [...(row || [])]);
+const copyRows = (rows) => rows.map((row) => [...row]);
 
 /**
  * @param {State} state
  * @param {number} grid
  */
 export function setCurrentGrid(state, grid) {
-  state.currentGrid = Math.max(0, grid || 0);
+  state.currentGrid = grid;
 }
 
 /**
@@ -34,7 +26,7 @@ export function setCurrentGrid(state, grid) {
  * @param {number} mu
  */
 export function setCurrentMu(state, mu) {
-  state.currentMu = Math.max(0, mu || 0);
+  state.currentMu = mu;
 }
 
 /**
@@ -53,7 +45,6 @@ export function setReplayView(state, view) {
  */
 export function setPlayTimer(state, timer) {
   state.playTimer = timer;
-  state.isPlaying = timer !== null;
 }
 
 /**
@@ -85,28 +76,20 @@ export function popReplayBackup(state) {
  *
  * @param {State} state
  * @param {number} mu
- * @param {{ spikes?: number[], pulseTrain?: number[], artifactTimes?: number[] }} rows
+ * @param {{ spikes?: number[], pulseTrain?: number[], artifacts?: number[] }} rows
  */
-export function setMuRows(state, mu, { spikes, pulseTrain, artifactTimes }) {
+export function setMuRows(state, mu, { spikes, pulseTrain, artifacts }) {
   if (spikes) state.spikeTimes[mu] = spikes;
   if (pulseTrain) state.pulseTrains[mu] = pulseTrain;
-  if (artifactTimes) state.artifactTimes[mu] = artifactTimes;
+  if (artifacts) state.artifactTimes[mu] = artifacts;
 }
 
 /**
- * @param {State} state
- * @param {EditLogEntry[]} history
- */
-export function setHistory(state, history) {
-  state.history = history;
-}
-
-/**
- * The timeline's groups, and the marks the log puts on MUs.
+ * The replay groups, and the marks the log puts on MUs.
  *
  * @param {State} state
  * @param {ReplayGroup[]} groups
- * @param {Record<string, string>} marks
+ * @param {Record<string, MuMark>} marks
  * @param {string[]} ghostUids
  */
 export function setReplayGroups(state, groups, marks, ghostUids) {
@@ -119,8 +102,8 @@ export function setReplayGroups(state, groups, marks, ghostUids) {
  * @param {State} state
  * @param {ReplayGroup[]} groups The groups that touch the current MU.
  */
-export function setFilteredReplayGroups(state, groups) {
-  state.filteredReplayGroups = groups;
+export function setTimelineGroups(state, groups) {
+  state.timelineGroups = groups;
 }
 
 /**
@@ -145,10 +128,7 @@ export function restoreReplayBase(state) {
   state.replayBackups = [];
   state.replayPosition = 0;
   state.replayView = null;
-  if (state.replayBaseSpikeTimes.length)
-    state.spikeTimes = copyRows(state.replayBaseSpikeTimes);
-  if (state.replayBasePulseTrains.length)
-    state.pulseTrains = copyRows(state.replayBasePulseTrains);
-  if (state.replayBaseArtifactTimes.length)
-    state.artifactTimes = copyRows(state.replayBaseArtifactTimes);
+  state.spikeTimes = copyRows(state.replayBaseSpikeTimes);
+  state.pulseTrains = copyRows(state.replayBasePulseTrains);
+  state.artifactTimes = copyRows(state.replayBaseArtifactTimes);
 }

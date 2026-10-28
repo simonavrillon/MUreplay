@@ -9,7 +9,7 @@
 /** @typedef {import("../state/state.js").State} State */
 /** @typedef {import("./dom.js").Els} Els */
 /** @typedef {ReturnType<typeof import("../api/client.js").createApiClient>} Api */
-/** @typedef {"muted" | "success" | "error"} Tone */
+/** @typedef {"muted" | "error"} Tone */
 /** @typedef {{ start: number, end: number }} Span */
 /** @typedef {Record<string, any>} JsonObject A decoded backend JSON object whose fields are not typed. */
 
@@ -23,13 +23,12 @@
 /**
  * @typedef {object} UiService
  * @property {(text: string, tone?: Tone) => void} setStatus
- * @property {(text: string) => void} setEditStatus
+ * @property {(text: string, tone?: Tone) => void} setReplayStatus
  */
 
 /**
  * @typedef {object} FileSessionService
  * @property {() => Promise<void>} onOpenDialog
- * @property {(filePath: string) => Promise<void>} onLoadByPath
  */
 
 /**
@@ -45,11 +44,11 @@
  * @property {() => void} updateTimelineUi
  */
 
-/** @typedef {Core & UiService & FileSessionService & ReplayService & Renderer} App */
-
 /**
  * @typedef {object} Renderer
  * @property {() => void} renderAll
  */
+
+/** @typedef {Core & UiService & FileSessionService & ReplayService & Renderer} App */
 
 export {};

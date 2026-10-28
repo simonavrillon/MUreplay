@@ -23,7 +23,7 @@ Click **Load log file** (top right) and pick one of the files MUedit2 saved for 
 Whichever you pick, MUreplay opens the decomposition MUedit2 started from (`_decomp.npz`) with
 the edit log beside it (`_edited.json`), and finds the original EMG recording in the dataset for
 the filter steps. The status line under the selectors then reports what was loaded, for example
-`Loaded 36 MUs + 4 replay steps`. The full pairing rules are in
+`Loaded 36 MUs and 4 replay steps.` The full pairing rules are in
 [file-formats.md](file-formats.md#how-files-are-paired).
 
 ---
@@ -35,8 +35,8 @@ and next unit of the grid. The two plots show the unit:
 
 | Plot | Shows |
 |---|---|
-| **Firing Rate (pps)** | the instantaneous discharge rate, one dot per pair of discharges |
-| **Pulse Train / Discharge Times** | the pulse train, with a dot on each discharge |
+| **Firing rate (pps)** | the instantaneous discharge rate, one dot per pair of discharges |
+| **Pulse train / discharge times** | the pulse train, with a dot on each discharge |
 
 ### Motor unit marks
 
@@ -67,7 +67,7 @@ consecutive spike edits on the same unit is one timeline step.
 | **Play or pause** (`▶` / `⏸`) | Apply the steps one after another |
 
 The counter beside them reads `Step 3 / 12`, and the status line says what the last step did,
-for example `Applied replay step 3/12: update_filter`. The plots mark the current step's window
+for example `Applied step 3 of 12: update_filter.` The plots mark the current step's window
 and, on the pulse train, its added (green) and removed (red) discharges.
 
 ### Timeline colours
@@ -91,7 +91,7 @@ The slider's track is coloured by what each step did to the selected unit:
 | `delete_spikes` | Removes the discharges the edit removed. When the box also covered artifact markers, MUedit2 logged a separate `delete_artifact` step. |
 | `delete_dr` | Removes the discharges the edit removed. |
 | `remove_outliers` | Removes the discharges the edit removed. |
-| `update_filter` | Recomputes the unit's filter over the logged window on the original EMG, as MUedit2 did, and redetects its discharges there; the pulse train is updated too. **Peel-off** (`use_peeloff`) first subtracts the other units of the grid that were live at that point, and **Lock spikes** (`lock_spikes`) keeps the existing discharges, moved to their nearest peak. The unit's artifact markers are always subtracted. If the EMG cannot be read, the step's logged result is applied instead and the status line says `update_filter step fallback`. |
+| `update_filter` | Recomputes the unit's filter over the logged window on the original EMG, as MUedit2 did, and redetects its discharges there; the pulse train is updated too. **Peel-off** (`use_peeloff`) first subtracts the other units of the grid that were live at that point, and **Lock spikes** (`lock_spikes`) keeps the existing discharges, moved to their nearest peak. The unit's artifact markers are always subtracted. If the EMG cannot be read, the step's logged result is applied instead and the status line says, in red, `Replayed step … from the edit log: could not recompute the filter`. |
 | `add_artifact` | Marks the peaks as artifacts, shown as orange dots on the pulse train. They change no discharge, but every later `update_filter` on the unit subtracts them. |
 | `delete_artifact` | Removes those artifact markers. |
 | `flag_mu` | Flags the unit for removal (`✕` in the dropdown). |
@@ -112,7 +112,8 @@ They are read from the decomposition and do not change during the replay.
 ## Navigate the plots
 
 The bar under the pulse train shows the whole recording, with the selected unit's discharges,
-the current step's added and removed discharges, and the part in view outlined. Drag it to pan;
+the current step's added and removed discharges and artifact markers, and the part in view
+outlined. Drag it to pan;
 click it to centre the view there.
 
 | Key | Action |

@@ -15,6 +15,11 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Changed
 
+- Status messages are plain sentences: a failed load reads "Could not load the session: …", and
+  a filter step that could not be recomputed says it was replayed from the edit log instead.
+- Errors on the status line under the selectors show in red, as they do in the header.
+- The bar under the pulse train also marks the artifact markers the current step added or
+  removed, as MUedit2's does.
 - The app and its API run as one server, at <http://127.0.0.1:8000>; the launchers start it with
   `uv run mureplay api`, which also opens the browser.
 - MUreplay answers only this machine's browser by default; set `MUREPLAY_HOST=0.0.0.0` to open it
@@ -53,6 +58,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Fixed
 
+- The current step's window is no longer shaded twice as dark while the plots are zoomed out.
 - Errors on the header's status line show in red.
 - The motor unit dropdown shows the flagged, duplicated and removed marks as soon as a session
   opens, and never opens on a removed unit.

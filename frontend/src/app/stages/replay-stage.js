@@ -2,9 +2,14 @@
  * Replay stage: binds the replay workspace controls (selectors, timeline,
  * play/pause, the timeline bar's drag and click) and the keyboard shortcuts.
  */
+import { clamp, shiftViewInside } from "../../replay/operations.js";
 import { setReplayView } from "../../state/actions.js";
-import { getReplayView, pulseForCurrentMu } from "../../state/selectors.js";
-import { TIMELINE_PADDING } from "../../view/replay-renderer.js";
+import {
+  clampedReplayView,
+  pulseTrainForCurrentMu,
+} from "../../state/selectors.js";
+import { PLOT_PADDING } from "../../view/plots.js";
+import { timelineBarWidth } from "../../view/replay-renderer.js";
 
 /** Pixels the pointer moves before a press on the timeline bar becomes a drag. */
 const DRAG_THRESHOLD_PX = 3;
@@ -26,8 +31,8 @@ const SHORTCUTS = {
 export function setupReplayEvents(app) {
   const { els } = app;
 
-  els.editMuGridSelect.addEventListener("change", app.onGridChange);
-  els.editMuSelect.addEventListener("change", app.onMuChange);
+  els.gridSelect.addEventListener("change", app.onGridChange);
+  els.muSelect.addEventListener("change", app.onMuChange);
   els.timelineSlider.addEventListener("input", app.onTimelineChange);
   els.prevStepBtn.addEventListener("click", () => app.moveStep(-1));
   els.nextStepBtn.addEventListener("click", () => app.moveStep(1));
@@ -53,80 +58,66 @@ export function setupReplayEvents(app) {
  */
 function bindTimelineBar(app) {
   const { els, state } = app;
-  const canvas = els.editTimelineCanvas;
-  if (!canvas) return;
+  const canvas = els.timelineCanvas;
 
   let dragging = false;
   let didMove = false;
   let startClientX = 0;
   let dragViewStart = 0;
 
-  /** @param {number} clientWidth */
-  const barWidth = (clientWidth) =>
-    Math.max(1, clientWidth - TIMELINE_PADDING.left - TIMELINE_PADDING.right);
-
   /**
    * Show `[start, end)`, shifted back inside the recording.
    *
    * @param {number} start
    * @param {number} end
-   * @param {number} total
+   * @param {number} totalSamples
    */
-  const showView = (start, end, total) => {
-    if (start < 0) {
-      end -= start;
-      start = 0;
-    }
-    if (end > total) {
-      start = Math.max(0, start - (end - total));
-      end = total;
-    }
-    if (end <= start) end = Math.min(total, start + 1);
-    setReplayView(state, { start, end });
+  const showView = (start, end, totalSamples) => {
+    setReplayView(state, shiftViewInside(start, end, totalSamples));
     app.renderAll();
   };
 
   canvas.addEventListener("mousedown", (e) => {
-    const total = pulseForCurrentMu(state).length;
-    if (!total) return;
+    const totalSamples = pulseTrainForCurrentMu(state).length;
+    if (!totalSamples) return;
     dragging = true;
     didMove = false;
     startClientX = e.clientX;
-    dragViewStart = getReplayView(state, total).start;
+    dragViewStart = clampedReplayView(state, totalSamples).start;
   });
 
   window.addEventListener("mousemove", (e) => {
     if (!dragging) return;
     if (Math.abs(e.clientX - startClientX) > DRAG_THRESHOLD_PX) didMove = true;
     if (!didMove) return;
-    const total = pulseForCurrentMu(state).length;
-    if (!total) return;
+    const totalSamples = pulseTrainForCurrentMu(state).length;
+    if (!totalSamples) return;
     const rect = canvas.getBoundingClientRect();
     const delta = Math.round(
-      ((e.clientX - startClientX) / barWidth(rect.width)) * total,
+      ((e.clientX - startClientX) / timelineBarWidth(rect.width)) *
+        totalSamples,
     );
-    const view = getReplayView(state, total);
+    const view = clampedReplayView(state, totalSamples);
     const span = view.end - view.start;
-    showView(dragViewStart + delta, dragViewStart + delta + span, total);
+    showView(dragViewStart + delta, dragViewStart + delta + span, totalSamples);
   });
 
   window.addEventListener("mouseup", (e) => {
     if (!dragging) return;
     dragging = false;
     if (didMove) return;
-    const total = pulseForCurrentMu(state).length;
-    if (!total) return;
-    const view = getReplayView(state, total);
+    const totalSamples = pulseTrainForCurrentMu(state).length;
+    if (!totalSamples) return;
+    const view = clampedReplayView(state, totalSamples);
     const span = view.end - view.start;
     const rect = canvas.getBoundingClientRect();
-    const frac = Math.max(
+    const frac = clamp(
+      (e.clientX - rect.left - PLOT_PADDING.left) /
+        timelineBarWidth(rect.width),
       0,
-      Math.min(
-        1,
-        (e.clientX - rect.left - TIMELINE_PADDING.left) / barWidth(rect.width),
-      ),
+      1,
     );
-    const start = Math.round(frac * total - span / 2);
-    showView(start, start + span, total);
+    const start = Math.round(frac * totalSamples - span / 2);
+    showView(start, start + span, totalSamples);
   });
 }

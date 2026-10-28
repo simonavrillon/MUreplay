@@ -1,147 +1,149 @@
 /**
- * Backend JSON normalised at the boundary: a loaded session and its log
- * entries become the shapes the state holds.
+ * Backend JSON normalised at the boundary: a loaded session, its log entries
+ * and a refit result become the shapes the state holds. Past this module no
+ * code reads a snake_case key. The backend types the decomposition's arrays,
+ * so only what it passes through from the user's files unchecked is checked
+ * here: the run's saved parameters, and the log with its uids and artifact
+ * markers.
  */
+import { DEFAULT_REFIT_SETTINGS } from "../state/state.js";
 
 /** @typedef {import("../app/context.js").JsonObject} JsonObject */
+/** @typedef {import("../state/state.js").EditLogEntry} EditLogEntry */
 
 /**
- * @param {JsonObject} source
+ * @param {JsonObject} raw
  */
-export function normalizeEditedPayload(source) {
-  const pulseTrains = source.pulse_trains;
-  const spikeTimes = source.spike_times;
-  if (!Array.isArray(pulseTrains) || !Array.isArray(spikeTimes)) {
-    throw new Error("Expected pulse_trains and spike_times arrays");
+export function normalizeSessionPayload(raw) {
+  const muUids =
+    Array.isArray(raw.mu_uids) && raw.mu_uids.length === raw.spike_times.length
+      ? raw.mu_uids.map((v) => String(v))
+      : buildMuUids(raw.mu_grid_index);
+
+  /** @type {EditLogEntry[]} */
+  const editHistory = [];
+  for (const entry of raw.edit_history) {
+    const step = normalizeLogEntry(entry, muUids);
+    if (step) editHistory.push(step);
   }
 
-  // The backend fills fsamp, grid_names and one mu_grid_index entry per MU.
-  const fsamp = Number(source.fsamp);
-  const muCount = spikeTimes.length;
-  const gridNames = source.grid_names.map((/** @type {unknown} */ v) =>
-    String(v),
-  );
-  const muGridIndex = source.mu_grid_index.map(
-    (/** @type {unknown} */ v) => Number(v) || 0,
-  );
-  const muUids =
-    Array.isArray(source.mu_uids) && source.mu_uids.length === muCount
-      ? source.mu_uids.map((v) => String(v))
-      : buildMuUids(muGridIndex);
-
-  const artifactTimes = Array.isArray(source.artifact_times)
-    ? source.artifact_times.map((row) =>
-        Array.isArray(row) ? row.map(Number) : [],
-      )
-    : [];
-
-  const artifactRegions = normalizeArtifactRegions(source.artifact_regions);
-  const refitSettings = normalizeRefitSettings(source.parameters);
-
   return {
-    fsamp,
-    pulseTrains: pulseTrains.map((row) =>
-      Array.isArray(row) ? row.map((n) => Number(n) || 0) : [],
-    ),
-    spikeTimes: spikeTimes.map((row) =>
-      Array.isArray(row) ? row.map((n) => Number(n) || 0) : [],
-    ),
-    gridNames,
-    muGridIndex,
+    /** @type {string} */
+    sourceFilename: raw.source_filename,
+    /** @type {string} */
+    bidsRoot: raw.bids_root,
+    /** @type {string} */
+    entityLabel: raw.entity_label,
+    /** @type {number} */
+    fsamp: raw.fsamp,
+    /** @type {number[][]} */
+    pulseTrains: raw.pulse_trains,
+    /** @type {number[][]} */
+    spikeTimes: raw.spike_times,
+    /** @type {string[]} */
+    gridNames: raw.grid_names,
+    /** @type {number[]} */
+    muGridIndex: raw.mu_grid_index,
     muUids,
-    artifactTimes,
-    artifactRegions,
-    refitSettings,
+    artifactTimes: artifactRows(raw.artifact_times, raw.spike_times.length),
+    // No key when the decomposition has no artifact windows.
+    /** @type {number[][]} */
+    artifactRegions: raw.artifact_regions ?? [],
+    refitSettings: normalizeRefitSettings(raw.parameters),
+    editHistory,
   };
+}
+
+/**
+ * The log's artifact markers as one row per MU, empty where it has none.
+ *
+ * @param {unknown} artifactTimes
+ * @param {number} nMu
+ * @returns {number[][]}
+ */
+function artifactRows(artifactTimes, nMu) {
+  return Array.from({ length: nMu }, (_, mu) => {
+    const row = Array.isArray(artifactTimes) ? artifactTimes[mu] : null;
+    return Array.isArray(row) ? row.map(Number) : [];
+  });
 }
 
 /**
  * The run settings a filter refit uses, from the decomposition's saved
  * parameters; MUedit2's defaults where the file has none.
  *
- * @param {unknown} raw
+ * @param {JsonObject} params
  * @returns {import("../state/state.js").RefitSettings}
  */
-function normalizeRefitSettings(raw) {
-  const params =
-    raw && typeof raw === "object" ? /** @type {JsonObject} */ (raw) : {};
+function normalizeRefitSettings(params) {
   const nbextchan = Number(params.nbextchan);
   const peelOffWin = Number(params.peel_off_win);
   return {
-    nbextchan: Number.isInteger(nbextchan) && nbextchan > 0 ? nbextchan : 1000,
-    peelOffWin: peelOffWin > 0 ? peelOffWin : 0.025,
-    computeDtype: params.compute_dtype === "float64" ? "float64" : "float32",
+    nbextchan:
+      Number.isInteger(nbextchan) && nbextchan > 0
+        ? nbextchan
+        : DEFAULT_REFIT_SETTINGS.nbextchan,
+    peelOffWin: peelOffWin > 0 ? peelOffWin : DEFAULT_REFIT_SETTINGS.peelOffWin,
+    computeDtype:
+      params.compute_dtype === "float64"
+        ? "float64"
+        : DEFAULT_REFIT_SETTINGS.computeDtype,
   };
 }
 
 /**
  * MU uids as MUedit2 numbers the MUs of a file that has none: per grid, from 0.
  *
- * @param {(number | null | undefined)[]} muGridIndex
+ * @param {number[]} muGridIndex
  * @returns {string[]}
  */
 export function buildMuUids(muGridIndex) {
   /** @type {Record<number, number>} */
   const counts = {};
-  return muGridIndex.map((gridIdx) => {
-    const k = Number(gridIdx) || 0;
-    const n = counts[k] || 0;
-    counts[k] = n + 1;
-    return `g${k}_mu${n}`;
+  return muGridIndex.map((grid) => {
+    const n = counts[grid] || 0;
+    counts[grid] = n + 1;
+    return `g${grid}_mu${n}`;
   });
-}
-
-/**
- * @param {unknown} raw
- * @returns {number[][]}
- */
-function normalizeArtifactRegions(raw) {
-  if (!Array.isArray(raw)) return [];
-  const regions = [];
-  for (const row of raw) {
-    if (!Array.isArray(row) || row.length !== 2) continue;
-    const start = Number(row[0]);
-    const end = Number(row[1]);
-    if (Number.isFinite(start) && Number.isFinite(end) && end > start) {
-      regions.push([Math.round(start), Math.round(end)]);
-    }
-  }
-  return regions;
 }
 
 /**
  * @param {JsonObject} entry
  * @param {string[]} muUids
+ * @returns {EditLogEntry | null}
  */
 export function normalizeLogEntry(entry, muUids) {
   if (!entry || typeof entry !== "object") return null;
-  const type = String(entry.type || "unknown");
   const muUid = entry.mu_uid ? String(entry.mu_uid) : "";
-  const muIdx = muUid ? muUids.indexOf(muUid) : -1;
-
-  const viewStart = toOptionalInt(entry.view_start);
-  const viewEnd = toOptionalInt(entry.view_end);
-  const spikesAdded = asNumberArray(entry.spikes_added);
-  const spikesRemoved = asNumberArray(entry.spikes_removed);
-  const artifactsAdded = asNumberArray(entry.artifacts_added);
-  const artifactsRemoved = asNumberArray(entry.artifacts_removed);
-  const usePeeloff = !!entry.use_peeloff;
-  const lockSpikes = !!entry.lock_spikes;
-
   return {
-    type,
+    type: String(entry.type || "unknown").toLowerCase(),
     muUid,
-    muIdx,
-    viewStart,
-    viewEnd,
-    spikesAdded,
-    spikesRemoved,
-    artifactsAdded,
-    artifactsRemoved,
-    usePeeloff,
-    lockSpikes,
-    raw: entry,
+    mu: muUid ? muUids.indexOf(muUid) : -1,
+    viewStart: toOptionalInt(entry.view_start),
+    viewEnd: toOptionalInt(entry.view_end),
+    spikesAdded: toNumberArray(entry.spikes_added),
+    spikesRemoved: toNumberArray(entry.spikes_removed),
+    artifactsAdded: toNumberArray(entry.artifacts_added),
+    artifactsRemoved: toNumberArray(entry.artifacts_removed),
+    usePeeloff: !!entry.use_peeloff,
+    lockSpikes: !!entry.lock_spikes,
+    // MUedit2 writes `flagged: false` to unflag; a `flag_mu` without it flags.
+    flagged: entry.flagged !== false,
+    sourceMuUid: entry.source_mu_uid ? String(entry.source_mu_uid) : "",
+    removedMuUids: Array.isArray(entry.removed_mu_uids)
+      ? entry.removed_mu_uids.map((v) => String(v))
+      : [],
   };
+}
+
+/**
+ * An `update_filter` refit's new discharges and pulse train for its MU.
+ *
+ * @param {JsonObject} raw
+ * @returns {{ spikes: number[], pulseTrain: number[] }}
+ */
+export function normalizeRefitResult(raw) {
+  return { spikes: raw.spikes, pulseTrain: raw.pulse_train };
 }
 
 /**
@@ -158,7 +160,7 @@ function toOptionalInt(value) {
  * @param {unknown} value
  * @returns {number[]}
  */
-function asNumberArray(value) {
+function toNumberArray(value) {
   if (!Array.isArray(value)) return [];
   return value.map((n) => Number(n)).filter((n) => Number.isFinite(n));
 }
