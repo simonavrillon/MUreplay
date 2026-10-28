@@ -12,9 +12,9 @@ It runs as a small app in your browser. Nothing is uploaded anywhere: the
 interface is a local web page, the computation happens on your own machine, and
 your recordings and results stay in the folders you choose.
 
-MUreplay is a research tool, actively used and actively maintained. It works,
-and we keep extending it as our own projects need it to do more. If something
-is awkward or missing, we would rather hear about it than not.
+MUreplay is a research tool, actively used and actively maintained. We keep
+extending it as our own projects need it. If something is awkward or missing,
+we would rather hear about it than not.
 
 ## Before your first run
 
@@ -35,7 +35,9 @@ powershell -c "irm https://astral.sh/uv/install.ps1 | iex"
 ```
 
 Then close that window and open a new one, so it picks up the freshly installed
-`uv`. Move into the MUreplay folder and install everything MUreplay needs:
+`uv`. Move into the MUreplay folder and install everything MUreplay needs.
+
+On macOS or Linux:
 
 ```bash
 cd path/to/MUreplay
@@ -57,23 +59,17 @@ minutes the first time.
 
 Open the MUreplay folder and double-click **MUreplay** — `MUreplay.command` on
 macOS, `MUreplay.bat` on Windows. A terminal window appears and reports what it
-is doing; leave it open, because that window *is* MUreplay running.
-
-Your browser should open on MUreplay's landing page by itself. If it does not,
-go to <http://127.0.0.1:8000> — the app is already running and waiting for you.
-
-When you are finished, quit MUreplay from that terminal window rather than the
-browser: press `Ctrl+C` in it, or simply close the window. Either one stops the
-app cleanly. Closing the browser tab on its own does **not** quit MUreplay —
-the tab is only a window onto the app, which keeps running in the background
-and holding on to its port. If you close the tab by accident, nothing is
-lost: reopen <http://127.0.0.1:8000> and carry on where you were.
+is doing, then MUreplay opens in your browser, at <http://127.0.0.1:8000>. The
+app runs in that terminal window. When you are finished, quit it there with
+`Ctrl+C`, or by closing the window. Closing the browser tab on its own does
+**not** quit MUreplay, and nothing is lost if you close it by accident: reopen
+<http://127.0.0.1:8000> and carry on where you were.
 
 Two things to know the first time. On macOS, if you downloaded MUreplay rather
 than cloning it, macOS will refuse to open the launcher from an unidentified
-developer; right-click **MUreplay.command**, choose **Open**, and confirm once.
+developer. Right-click **MUreplay.command**, choose **Open**, and confirm once.
 Every double-click after that works normally. On Windows, nothing special is
-needed — the `.bat` launcher already tells PowerShell to allow this one script,
+needed. The `.bat` launcher already tells PowerShell to allow this one script,
 so you do not have to change any system-wide setting.
 
 If you prefer a terminal, or you are on Linux, the same launchers live in
@@ -84,120 +80,56 @@ If you prefer a terminal, or you are on Linux, the same launchers live in
 .\scripts\run_MUreplay.ps1         # Windows PowerShell
 ```
 
-## Replaying an editing session
+## A first session
 
-A session in MUreplay moves through three stages: open the edited
-decomposition, pick a motor unit, then step through the edits that were made
-to it.
+A session moves through three steps:
 
-### Opening the files
+1. **Open** — click **Load log file** and pick the decomposition MUedit2 saved (the `.npz`, or
+   its `_edited.json` edit log). MUreplay finds the other files of the session beside it.
+2. **Pick a motor unit** — with the **Grid** and **Motor unit** dropdowns, or `<` and `>`. The
+   dropdown also shows the units the editor flagged (`✕`), duplicated (`⊕`) or removed (`⊗`).
+3. **Step through its edits** — the timeline holds every edit made to the unit, in order and
+   coloured by type. Step one at a time, drag the slider, or press play, and watch the
+   discharges and the pulse train change.
 
-Click **Load** and pick the decomposition file — the `.npz` that MUedit2 saved.
-In recent MUedit2 versions these live under
-`<bids_root>/derivatives/muedit/sub-XX/[ses-YY]/decomp/`; older sessions keep
-them under `<bids_root>/sub-XX/decomp/`, and MUreplay reads both. From the
-filename it works out which recording the file belongs to, finds the matching
-`_edited.json` sidecar next to it — that sidecar is the edit history MUreplay
-will replay — and locates the original EMG recording in the dataset.
+Most edits are replayed from what MUedit2 recorded. A filter recomputation is rerun on the
+original EMG with MUedit2's own algorithm, so you see the filter actually recomputed. Nothing
+you do here changes a file.
 
-The EMG matters for one thing only: when the editor recomputed a unit's filter
-(a common and powerful edit), MUreplay reruns that same computation against
-the original signal. If the EMG file has moved or is missing, everything else
-still replays; the filter steps are simply skipped and the discharge times
-stay as they were at that point.
-
-### Picking a motor unit
-
-Use the **Grid** and **Motor Unit** dropdowns, or `<` and `>`, to move between
-units. Each unit shows its firing rate over time on top and its pulse train
-underneath. The dropdowns also carry the marks the editor left: a `✕` prefix
-means the unit was flagged for deletion, `⊕` that it was created as a
-duplicate, and `⊗` that it was later removed. Removed and duplicated units
-are greyed out — they are listed so you can see what happened, but hold no
-replay of their own.
-
-### Stepping through the edits
-
-The timeline at the bottom shows the edits that touch the unit you are looking
-at, in the order they were made. **Prev** and **Next** step one edit at a time,
-the slider jumps anywhere directly, and **Play** advances through them on its
-own. The status bar always says what the current step did: which spikes were
-added or removed, over what time range.
-
-Each step type keeps its colour: green for added discharges, red for deleted
-ones, blue for a filter recomputation, orange for artifact markers. Move
-around the pulse train with the arrow keys — left and right to scroll, up and
-down to zoom — and `Space` to play or pause.
-
-Nothing you do here changes anything on disk. MUreplay is a viewer: it rebuilds
-the session from the recorded history, so you can step backward and forward
-as much as you like and the saved files are never touched.
+The [user guide](docs/user-guide.md) covers every control, step type, colour and keyboard
+shortcut, and [file formats](docs/file-formats.md) covers which files MUreplay reads and how it
+finds them.
 
 ## When something goes wrong
 
-If the browser never opens, go to <http://127.0.0.1:8000> manually. If the
-launcher complains that the port is already in use, something else on your
-machine has taken it — set `MUREPLAY_PORT` to a free number and relaunch. If
-the app tells you the backend is unreachable, the Python process behind the
-interface has stopped; close the terminal and run the launcher again. To check
-whether the backend is alive at all, visit
-<http://127.0.0.1:8000/api/v1/health> in your browser.
+If the browser never opens, go to <http://127.0.0.1:8000> manually. Errors show on the status
+line under the dropdowns, and the launcher's terminal window shows what reached the server.
+[Troubleshooting](docs/troubleshooting.md) lists common symptoms and their fixes: a port already
+in use, an unreachable backend, a file that will not load, a filter step that could not be
+recomputed. If something is awkward or missing, please
+[open an issue](https://github.com/simonavrillon/MUreplay/issues).
 
-If a file will not load, check that it is the `.npz` MUedit2 saved and that the
-`_edited.json` sidecar really is sitting next to it. If filter steps are being
-skipped, the original EMG recording is no longer where it was when the session
-was edited — point `MUREPLAY_DATA_ROOT` at the dataset root to fix that. And
-if the timeline shows no steps, the log may simply be empty, or the unit you
-selected may not have been edited.
+## Command line
 
-## Learning more
-
-The [user guide](docs/user-guide.md) covers every control, colour, and keyboard
-shortcut in detail — read it when you want to know exactly what a step type
-does. [File formats](docs/file-formats.md) documents the contents of the
-`.npz` and `_edited.json` files MUreplay reads, which is what you want when
-you start inspecting edit histories in your own scripts.
-
-The launchers run `uv run mureplay api`, which serves the interface and its
-API together at <http://127.0.0.1:8000>; you can run that command yourself from
-a terminal in the MUreplay folder. `MUREPLAY_PORT` changes the port, and
-`MUREPLAY_OPEN_BROWSER=1` opens the browser once the server is listening.
+`mureplay api` starts the server the launchers start. See the
+[command-line reference](docs/cli.md) for it and the environment variables.
 
 ## For developers
-
-Install the development tooling and enable the commit hooks:
 
 ```bash
 uv sync --extra dev
 uv run pre-commit install
 ```
 
-`uv run` executes inside the project environment, so there is nothing to
-activate:
+Then start at [AGENTS.md](AGENTS.md): the documentation map, the commands to test and lint,
+the rules every change follows, and links to the architecture, contracts and change recipes
+in [dev/](dev/).
 
-```bash
-uv run pytest          # backend tests (the data tier needs recordings under data/)
-uv run pytest -m "not data"   # the tier CI runs, no recordings needed
-uv run mypy            # backend type checks
-uv run ruff check .    # backend lint
-```
+## License
 
-The frontend is plain ES-module JavaScript with no build step — the browser
-loads `frontend/app.js` directly. It is checked with the usual Node tooling:
-
-```bash
-cd frontend
-npm ci
-npm run check           # eslint + prettier + tsc + node --test
-```
-
-One server holds both halves; run it without the launcher with:
-
-```bash
-uv run mureplay api    # page and API, http://127.0.0.1:8000
-```
+MUreplay is free software, released under the [GNU General Public License v3.0](LICENSE).
 
 ## Acknowledgment
 
-MUreplay is a companion to MUedit for high-density EMG decomposition; it
-replays the editing sessions produced by MUedit2.
+MUreplay is a companion to [MUedit2](https://github.com/simonavrillon/MUedit2), the motor unit
+decomposition and editing app; it replays the editing sessions MUedit2 saves.

@@ -59,6 +59,11 @@ function makeState(overrides = {}) {
     replayBackups: [],
     replayView: null,
     loadedFromDecomp: true,
+    refitSettings: {
+      nbextchan: 1000,
+      peelOffWin: 0.025,
+      computeDtype: "float32",
+    },
     muMarks: {},
     muGhostUids: [],
     bidsRoot: "/data",
@@ -646,6 +651,11 @@ describe("update_filter", () => {
         muGridIndex: [0],
         muUids: ["g0_mu0"],
         bidsEntityLabel: "sub-01_task-rest",
+        refitSettings: {
+          nbextchan: 500,
+          peelOffWin: 0.03,
+          computeDtype: "float64",
+        },
         history: [
           step({
             idx: 0,
@@ -675,6 +685,10 @@ describe("update_filter", () => {
     assert.deepEqual(payload.artifact_regions, [[1, 2]]);
     assert.equal(payload.grid_name, "Grid 1");
     assert.deepEqual(payload.inactive_mus, []);
+    // The run's settings, as MUedit2's session refits with them.
+    assert.equal(payload.nbextchan, 500);
+    assert.equal(payload.peel_off_win, 0.03);
+    assert.equal(payload.compute_dtype, "float64");
 
     assert.deepEqual(app.state.distimes[0], [10, 25]);
     assert.deepEqual(app.state.pulseTrains[0], [0.1, 0.9]);

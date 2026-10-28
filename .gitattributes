@@ -1,0 +1,12 @@
+* text=auto eol=lf
+
+# Binary scientific/recording artifacts
+*.npz binary
+*.bdf binary
+*.edf binary
+
+# Launchers: CMD and PowerShell want CRLF, the shell launcher must stay LF
+*.bat text eol=crlf
+*.ps1 text eol=crlf
+*.command text eol=lf
+*.sh text eol=lf

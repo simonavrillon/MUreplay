@@ -45,6 +45,10 @@ class TestRejectedRequests:
         )
         assert error(resp, 404)["detail"] == {"field": "bids_root"}
 
+    def test_an_unknown_compute_dtype_is_refused(self, client: TestClient) -> None:
+        resp = client.post(f"{API}/edit/update-filter", json=_step(compute_dtype="int8"))
+        error(resp, 422, "validation_error")
+
     def test_artifact_regions_reach_the_service(self, client: TestClient) -> None:
         # Without BIDS data the service fails on the missing EMG; a message naming the EMG
         # folder proves the request passed validation with its artifact_regions.

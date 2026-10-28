@@ -233,6 +233,7 @@ class TestSessionReplay:
         # out the MUs flagged or removed at that step.
         log = json.loads(muedit2_session.with_suffix(".json").read_text(encoding="utf-8"))
         payload = load_paired_from_path(muedit2_session)
+        run = payload["parameters"]
         mu_grid_index = payload["mu_grid_index"]
         state = [list(row) for row in payload["discharge_times"]]
         # The log lists the uids that survived; the page numbers the file's MUs as MUedit2 does.
@@ -269,6 +270,10 @@ class TestSessionReplay:
                         "inactive_mus": sorted(flagged | removed),
                         "artifact_times": artifacts[mu],
                         "artifact_regions": payload["artifact_regions"],
+                        # MUedit2's session refits with the run's saved settings.
+                        "nbextchan": run["nbextchan"],
+                        "peel_off_win": run["peel_off_win"],
+                        "compute_dtype": run["compute_dtype"],
                     }
                 )
                 state[mu] = resp["distimes"]

@@ -29,6 +29,31 @@ function minimalPayload() {
 }
 
 describe("normalizeEditedPayload", () => {
+  test("reads the run's refit settings, with MUedit2's defaults", () => {
+    const run = normalizeEditedPayload({
+      ...minimalPayload(),
+      parameters: {
+        nbextchan: 640,
+        peel_off_win: 0.02,
+        compute_dtype: "float64",
+      },
+    });
+    assert.deepEqual(run.refitSettings, {
+      nbextchan: 640,
+      peelOffWin: 0.02,
+      computeDtype: "float64",
+    });
+    const odd = normalizeEditedPayload({
+      ...minimalPayload(),
+      parameters: { nbextchan: -3, peel_off_win: "x", compute_dtype: "int8" },
+    });
+    assert.deepEqual(odd.refitSettings, {
+      nbextchan: 1000,
+      peelOffWin: 0.025,
+      computeDtype: "float32",
+    });
+  });
+
   test("requires the core arrays", () => {
     assert.throws(() => normalizeEditedPayload({}), /pulse_trains/);
     assert.throws(

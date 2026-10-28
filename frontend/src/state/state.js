@@ -41,6 +41,15 @@
  */
 
 /**
+ * How the decomposition was run, which a filter refit repeats.
+ *
+ * @typedef {object} RefitSettings
+ * @property {number} nbextchan
+ * @property {number} peelOffWin Seconds.
+ * @property {"float32" | "float64"} computeDtype
+ */
+
+/**
  * @typedef {object} State
  * @property {string} editedFilename
  * @property {string} logFilename
@@ -63,7 +72,8 @@
  * @property {number} replayPosition
  * @property {ReplayBackup[]} replayBackups
  * @property {Span | null} replayView
- * @property {boolean} loadedFromDecomp
+ * @property {boolean} loadedFromDecomp Whether the decomposition is the one the edits started from (`_decomp.npz`).
+ * @property {RefitSettings} refitSettings
  * @property {Record<string, string>} muMarks
  * @property {string[]} muGhostUids Uids the log marks but the loaded file no longer has.
  * @property {string} bidsRoot The session's BIDS dataset, from the file's location.
@@ -99,6 +109,11 @@ export const state = {
   replayBackups: [],
   replayView: null,
   loadedFromDecomp: false,
+  refitSettings: {
+    nbextchan: 1000,
+    peelOffWin: 0.025,
+    computeDtype: "float32",
+  },
   muMarks: {},
   muGhostUids: [],
   bidsRoot: "",

@@ -48,5 +48,8 @@ frontend/node_modules/
 *.npz
 *.json.bak
 
-# ── Local data (full MUedit2 BIDS output; sample dataset for IO tests) ──────
-data/
+# ── Local recordings (files, folders and symlinks) ─────────────────────────
+data/*
+
+# ── Logs ───────────────────────────────────────────────────────────────────
+*.log

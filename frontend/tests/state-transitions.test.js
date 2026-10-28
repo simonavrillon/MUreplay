@@ -30,11 +30,18 @@ describe("beginSession", () => {
         muUids: ["g0_mu0"],
         artifactTimes: [],
         artifactRegions: [],
+        refitSettings: {
+          nbextchan: 1000,
+          peelOffWin: 0.025,
+          computeDtype: "float32",
+        },
       },
     );
     assert.equal(state.editedFilename, "b_edited.npz");
     assert.equal(state.bidsRoot, "/b");
     assert.deepEqual(state.distimes, [[1]]);
+    // A plain file name: not the decomposition the edits started from.
+    assert.equal(state.loadedFromDecomp, false);
     for (const key of [
       "history",
       "editHistory",

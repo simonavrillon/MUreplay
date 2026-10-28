@@ -64,6 +64,18 @@ def _json_member(data: dict[str, Any], key: str) -> Any | None:
     return raw
 
 
+def _run_parameters(raw: Any) -> dict[str, Any]:
+    """The run's saved settings: JSON in one string (schema v2) or a pickled dict (v1)."""
+    if isinstance(raw, np.ndarray) and raw.size == 1:
+        raw = raw.item()
+    if isinstance(raw, str):
+        try:
+            raw = json.loads(raw)
+        except json.JSONDecodeError:
+            return {}
+    return to_serializable(raw) if isinstance(raw, dict) else {}
+
+
 def _unpack_spike_csr(data: dict[str, Any]) -> list[list[int]]:
     """Per-MU discharge times from the schema v2 ``spike_times`` CSR pair."""
     spikes = data.get("spike_times")
@@ -83,6 +95,7 @@ def load_npz_payload(raw_bytes: bytes) -> dict[str, Any]:
     # and schema v2 (CSR spike_times/spike_offsets, JSON members, artifact_intervals).
     with np.load(io.BytesIO(raw_bytes), allow_pickle=True) as npz:
         data = {key: to_serializable(npz[key]) for key in npz.files}
+        parameters = _run_parameters(npz["parameters"]) if "parameters" in npz.files else {}
 
     distimes = first_present(data, "discharge_times", "distimes", "dischargeTimes", default=None)
     if distimes is None:
@@ -112,6 +125,7 @@ def load_npz_payload(raw_bytes: bytes) -> dict[str, Any]:
         "mu_grid_index": first_present(data, "mu_grid_index", default=[]),
         "mu_uids": first_present(data, "mu_uids", default=[]),
         "total_samples": int(first_present(data, "total_samples", default=0) or 0),
+        "parameters": parameters,
     }
 
     raw_hist = first_present(data, "edit_history", "history", default=[])

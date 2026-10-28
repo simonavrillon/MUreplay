@@ -58,6 +58,18 @@ class TestLoadNpzPayload:
         assert payload["artifact_regions"] == [[100, 150]]
         assert payload["artifact_samples"] == 50
 
+    def test_the_run_parameters_load_from_either_schema(self) -> None:
+        assert load_npz_payload(_v2_npz(with_pulse_trains=False))["parameters"] == {"niter": 25}
+        buffer = io.BytesIO()
+        run = {"nbextchan": np.int64(640), "peel_off_win": 0.02, "compute_dtype": "float64"}
+        np.savez(buffer, discharge_times=np.array([[1]], dtype=object), parameters=np.array(run))
+        # v1 pickles the dict; it must not come back as a list of its keys.
+        assert load_npz_payload(buffer.getvalue())["parameters"] == {
+            "nbextchan": 640,
+            "peel_off_win": 0.02,
+            "compute_dtype": "float64",
+        }
+
     def test_a_file_without_pulse_trains_gets_binary_trains(self) -> None:
         payload = load_npz_payload(_v2_npz(with_pulse_trains=False))
         assert len(payload["pulse_trains"]) == 2

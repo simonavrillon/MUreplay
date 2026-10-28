@@ -48,8 +48,6 @@ import { errorMessage, handleError } from "./error-service.js";
 /** @typedef {import("../../state/state.js").ReplayGroup} ReplayGroup */
 /** @typedef {import("../context.js").ReplayService} ReplayService */
 
-/** The filter extension MUedit2 decomposes with unless a run says otherwise. */
-const DEFAULT_NBEXTCHAN = 1000;
 /** Milliseconds between steps while playing. */
 const PLAY_INTERVAL_MS = 700;
 /**
@@ -360,7 +358,9 @@ export function createReplayService(app) {
         inactive_mus: inactiveMusBefore(state.history, stepIdx, state.muUids),
         view_start: step.viewStart ?? 0,
         view_end: step.viewEnd ?? pulse.length,
-        nbextchan: DEFAULT_NBEXTCHAN,
+        nbextchan: state.refitSettings.nbextchan,
+        peel_off_win: state.refitSettings.peelOffWin,
+        compute_dtype: state.refitSettings.computeDtype,
         use_peeloff: step.usePeeloff ?? false,
         lock_spikes: step.lockSpikes ?? false,
         artifact_times: state.artifactTimes[mu] || [],

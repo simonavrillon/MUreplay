@@ -86,7 +86,7 @@ describe("onLoadByPath", () => {
     const { state } = app;
     assert.equal(state.editedFilename, "sub-01_edited.json");
     assert.equal(state.logFilename, "sub-01_edited.json");
-    assert.equal(state.loadedFromDecomp, true);
+    assert.equal(state.loadedFromDecomp, false);
     assert.equal(state.bidsRoot, "/data");
     assert.equal(state.entityLabel, "sub-01");
     assert.equal(state.bidsEntityLabel, "sub-01_task-rest");
@@ -96,6 +96,11 @@ describe("onLoadByPath", () => {
     assert.deepEqual(state.gridNames, ["Grid 1"]);
     assert.deepEqual(state.muGridIndex, [0]);
     assert.deepEqual(state.muUids, ["g0_mu0"]);
+    assert.deepEqual(state.refitSettings, {
+      nbextchan: 1000,
+      peelOffWin: 0.025,
+      computeDtype: "float32",
+    });
     // Nothing of a previous session's log or timeline survives the load.
     assert.deepEqual(state.editHistory, []);
     assert.deepEqual(state.history, []);
@@ -115,6 +120,23 @@ describe("onLoadByPath", () => {
       statuses[statuses.length - 1],
       /Loaded 1 MUs \+ 0 replay steps/,
     );
+  });
+
+  test("starts from the decomposition only when the edits started from it", async () => {
+    /** @type {[string, boolean][]} */
+    const cases = [
+      ["sub-01_decomp.npz", true],
+      ["sub-01_run-1_x_decomp.npz", true],
+      // No _decomp.npz beside the log: the edited file stands in, and holds the edits.
+      ["sub-01_edited.npz", false],
+    ];
+    for (const [source, fromDecomp] of cases) {
+      const app = createFakeApp({
+        loadPayload: loadPayload({ source_filename: source }),
+      });
+      await createFileSessionService(app).onLoadByPath("/r/sub-01_edited.npz");
+      assert.equal(app.state.loadedFromDecomp, fromDecomp, source);
+    }
   });
 
   test("falls back to the file basename", async () => {

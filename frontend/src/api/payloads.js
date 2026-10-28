@@ -38,6 +38,7 @@ export function normalizeEditedPayload(source) {
     : [];
 
   const artifactRegions = normalizeArtifactRegions(source.artifact_regions);
+  const refitSettings = normalizeRefitSettings(source.parameters);
 
   return {
     fsamp,
@@ -52,6 +53,26 @@ export function normalizeEditedPayload(source) {
     muUids,
     artifactTimes,
     artifactRegions,
+    refitSettings,
+  };
+}
+
+/**
+ * The run settings a filter refit uses, from the decomposition's saved
+ * parameters; MUedit2's defaults where the file has none.
+ *
+ * @param {unknown} raw
+ * @returns {import("../state/state.js").RefitSettings}
+ */
+function normalizeRefitSettings(raw) {
+  const params =
+    raw && typeof raw === "object" ? /** @type {JsonObject} */ (raw) : {};
+  const nbextchan = Number(params.nbextchan);
+  const peelOffWin = Number(params.peel_off_win);
+  return {
+    nbextchan: Number.isInteger(nbextchan) && nbextchan > 0 ? nbextchan : 1000,
+    peelOffWin: peelOffWin > 0 ? peelOffWin : 0.025,
+    computeDtype: params.compute_dtype === "float64" ? "float64" : "float32",
   };
 }
 

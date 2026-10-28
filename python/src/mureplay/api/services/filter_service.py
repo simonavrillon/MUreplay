@@ -83,6 +83,7 @@ def run_update_filter(payload: dict[str, Any]) -> dict[str, Any]:
         artifact_times=artifact_times,
         lock_spikes=bool(payload.get("lock_spikes", False)),
         artifact_mask=artifact_mask,
+        compute_dtype=str(payload.get("compute_dtype") or "float32"),
     )
     updated_pulse = None
     if pulse_train.size and pt is not None:

@@ -12,12 +12,14 @@
  *
  * @param {State} state
  * @param {{ filename: string, bidsRoot: string, entityLabel: string, bidsEntityLabel: string }} file
+ *   `filename` is the decomposition's: an `_edited.npz` stands in when no `_decomp.npz` was found.
  * @param {EditedPayload} payload
  */
 export function beginSession(state, file, payload) {
   state.editedFilename = file.filename;
   state.logFilename = file.filename;
-  state.loadedFromDecomp = true;
+  // An edited file already holds the edits; the replay rewinds them to find its start.
+  state.loadedFromDecomp = /_decomp\.npz$/i.test(file.filename);
   state.bidsRoot = file.bidsRoot;
   state.entityLabel = file.entityLabel;
   state.bidsEntityLabel = file.bidsEntityLabel;
@@ -29,6 +31,7 @@ export function beginSession(state, file, payload) {
   state.muUids = payload.muUids;
   state.artifactTimes = payload.artifactTimes;
   state.artifactRegions = payload.artifactRegions;
+  state.refitSettings = payload.refitSettings;
   state.editHistory = [];
   state.history = [];
   state.replayGroups = [];

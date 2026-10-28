@@ -1,0 +1,81 @@
+# Frontend conventions
+
+Rules for `frontend/`. ESLint, Prettier and `tsc --checkJs` (`npm run check`) already enforce
+formatting, kebab-case filenames, unused names and types; this file covers what they can't.
+Architecture: [dev/architecture.md](../dev/architecture.md#frontend-shape). Wire formats:
+[dev/contracts.md](../dev/contracts.md).
+
+## Shape
+
+- Vanilla ES modules, no framework, no bundler, no runtime dependencies. The browser loads
+  `app.js` directly; don't add a build step.
+- Every feature function takes the `app` context (`@param {App} app`) and destructures what it
+  uses. A member goes on `app` (and on its typedef in `app/context.js`) only when another module
+  calls it through `app`; everything else is imported where it's used.
+- A service factory reads only `state`, `els` and `api` while it is constructed. Other services
+  are reached as `app.x()` inside function bodies (the renderer too: `app.renderAll()`).
+- Service methods are typed from `context.js`: `/** @type {ReplayService["name"]} */`. Only
+  private helpers carry their own `@param`s.
+- Type parameters as what callers should pass. When a function guards against missing input,
+  write `T | null | undefined` and keep the guard. `unknown` is only for caught errors and
+  validators of raw input. Name a shape next to the code that owns it (state shapes in
+  `state/state.js`, cross-module ones in `context.js`); single-use bags stay inline.
+
+## State and DOM
+
+- Change state only through the setters in `state/actions.js`; read with `state/selectors.js`
+  where a selector exists. A newly opened session replaces the old one through
+  `state/transitions.js: beginSession`.
+- Every step applied forward pushes a backup, and undoing it restores the backup. Keep that
+  pairing when adding a step type: a replay stepped forward and back must leave the arrays
+  exactly as they were.
+- Every scripted element has a typed handle in `app/dom.js`, used as `app.els.x`. Element ids
+  in `index.html` are referenced by the docs, so rename them with care.
+- Hide elements with the `hidden` attribute (`el.hidden = true`); `css/base.css` makes it win
+  over any `display` a class sets. There is no `.hidden` class.
+- View modules (`view/`) only draw the state they're given; input handling lives in the stages
+  (`app/stages/`).
+- Colours are CSS tokens in `css/tokens.css`. Canvases read them through `COLORS` in
+  `config.js`: a new canvas colour is a token plus a `COLOR_TOKENS` entry, never a literal.
+
+## Backend calls
+
+- Paths live only in `api/routes.js`; calls only in `api/client.js`. `tests/test_api_app.py`
+  fails if `routes.js` names a path the backend doesn't serve.
+- Backend JSON is `JsonObject` until it is normalised at the boundary (`api/payloads.js`).
+- Branch on `ApiError.field` / `.status`, never on message text. Report failures with
+  `handleError(err, setStatus, label)` (`app/services/error-service.js`).
+
+## Style
+
+- Each module opens with a comment stating its role and its rules (see
+  `app/services/replay-service.js`). Elsewhere, comment only what the code can't say.
+- Reuse the names the backend, MUedit2 and other modules use for the same concept (`fsamp`,
+  `gridNames`, `muGridIndex`, `muUids`, `distimes`).
+- Write the simplest change that does the job.
+
+## Tests
+
+`node --test tests/*.test.js`, laid out like the pytest suite (`tests/AGENTS.md`):
+
+- One file per source module: `<package>-<module>.test.js` (`api-payloads.test.js` for
+  `src/api/payloads.js`). Under `app/`, the `services/` and `stages/` folders and the `-service`
+  suffix drop: `app-replay.test.js` is `app/services/replay-service.js`. Add to the existing
+  file before creating one.
+- One `describe` per function or behaviour; test names are sentences about behaviour.
+- Test what the user would notice, or what the other side of a contract relies on; no guards
+  for input the backend never sends.
+- Tests are type-checked too (`tsconfig.test.json`), so a fake that drifts from what it stands
+  in for fails the build.
+
+| Helper    | For                                                                                                             |
+| --------- | --------------------------------------------------------------------------------------------------------------- |
+| `_dom.js` | `installDom` (window, document, `getComputedStyle` over the real `css/tokens.css`), `fakeElement`, `fakeSelect` |
+
+Call `installDom()` before importing a source module that reads the page: `config.js` reads
+`window.location` at import.
+
+## Before you finish
+
+`npm run check` (eslint, prettier --check, tsc, node --test). For UI changes, run the app and
+look. Update `docs/user-guide.md` for any label, control or shortcut you changed.
