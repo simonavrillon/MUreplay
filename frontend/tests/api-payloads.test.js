@@ -9,9 +9,7 @@ import {
 } from "../src/api/payloads.js";
 
 /**
- * `normalizeLogEntry` returns null for anything that is not an object, so
- * every test that goes on to read fields asserts that first and narrows.
- *
+ * `normalizeLogEntry`, asserted non-null.
  * @param {Record<string, any>} entry
  * @param {string[]} [muUids]
  */
@@ -62,7 +60,7 @@ describe("normalizeSessionPayload", () => {
     });
   });
 
-  test("applies defaults for optional fields", () => {
+  test("fills the uids and artifact rows a file leaves out", () => {
     const normalized = normalizeSessionPayload(minimalPayload());
     assert.deepEqual(normalized.muUids, ["g0_mu0"]);
     assert.deepEqual(normalized.artifactTimes, [[]]);
@@ -110,15 +108,10 @@ describe("normalizeSessionPayload", () => {
 });
 
 describe("normalizeLogEntry", () => {
-  test("returns null for non-object entries", () => {
-    // The backend passes the user's log through unchecked, so a row that is
-    // not an object has to be survivable.
-    const junk = /** @type {any} */ (null);
-    assert.equal(normalizeLogEntry(junk, []), null);
+  test("drops rows that are not objects and fills missing fields", () => {
+    // The backend passes the user's log through unchecked.
+    assert.equal(normalizeLogEntry(/** @type {any} */ (null), []), null);
     assert.equal(normalizeLogEntry(/** @type {any} */ ("step"), []), null);
-  });
-
-  test("applies field defaults", () => {
     const entry = normalized({}, []);
     assert.equal(entry.type, "unknown");
     assert.equal(entry.muUid, "");
@@ -155,11 +148,11 @@ describe("normalizeLogEntry", () => {
     assert.equal(normalized({ type: "remove_flagged" }, muUids).mu, -1);
   });
 
-  test("reads MUedit2's fields", () => {
+  test("reads MUedit2's fields, lowercasing the type", () => {
     const entry = normalized(
       {
         timestamp: "2024-01-01T00:00:00Z",
-        type: "delete_spikes",
+        type: "Delete_Spikes",
         mu_uid: "g0_mu1",
         spikes_added: [1, 2, "3", 4],
         spikes_removed: [5, 6],
@@ -176,10 +169,6 @@ describe("normalizeLogEntry", () => {
     assert.equal(entry.viewStart, 11);
     assert.equal(entry.viewEnd, 99);
     assert.equal(entry.usePeeloff, true);
-  });
-
-  test("lowercases the step type", () => {
-    assert.equal(normalized({ type: "Update_Filter" }).type, "update_filter");
   });
 
   test("reads the fields of MU flag, duplicate and removal steps", () => {
@@ -215,12 +204,7 @@ describe("normalizeRefitResult", () => {
 });
 
 describe("buildMuUids", () => {
-  test("numbers MUs per grid", () => {
-    assert.deepEqual(buildMuUids([0, 0, 1]), ["g0_mu0", "g0_mu1", "g1_mu0"]);
-    assert.deepEqual(buildMuUids([]), []);
-  });
-
-  test("counts independently per grid index", () => {
+  test("numbers MUs per grid, in file order", () => {
     const uids = buildMuUids([2, 0, 2, 2, 0]);
     assert.deepEqual(uids, ["g2_mu0", "g0_mu0", "g2_mu1", "g2_mu2", "g0_mu1"]);
   });

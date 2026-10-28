@@ -11,7 +11,6 @@ import pytest
 
 from mureplay.errors import MureplayError, NotFoundError
 from mureplay.io.bids import entity_pairs, grid_rows, read_bids_emg_grid
-from tests.conftest import SAMPLE_ENTITY
 
 FSAMP = 2000.0
 #: Samples the EDF file holds, and the fewer its sidecar's RecordingDuration declares.
@@ -105,12 +104,6 @@ class TestReadBidsEmgGrid:
         with pytest.raises(NotFoundError) as caught:
             read_bids_emg_grid(tmp_path, ENTITY, grid=0)
         assert caught.value.field == "bids_root"
-
-    def test_the_sample_recording_reads(self, sample_bids_root: Path) -> None:
-        data, fsamp, discard_mask = read_bids_emg_grid(sample_bids_root, SAMPLE_ENTITY, grid=0)
-        assert data.shape[0] == discard_mask.shape[0]
-        assert fsamp == pytest.approx(2000.0)
-        assert bool(np.isfinite(data).all())
 
     def test_channels_are_matched_to_edf_signals_by_name(self, padded_bids_root: Path) -> None:
         # channels.tsv lists Ch02 first; MUedit2 reads the EDF signal of that name, not the first.

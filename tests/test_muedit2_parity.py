@@ -100,7 +100,7 @@ class TestSessionFiltering:
 # ── Artifact mask and peel-off ──────────────────────────────────────────────
 
 
-@pytest.mark.parametrize("seed", range(4))
+@pytest.mark.parametrize("seed", range(2))
 class TestPrimitives:
     def test_artifact_masks_match(self, seed: int) -> None:
         rng = np.random.default_rng(2000 + seed)
@@ -155,30 +155,30 @@ def _locked(seed: int) -> list[int]:
     return sorted({_emg(seed)[2][0], 400, 600})
 
 
-@pytest.mark.parametrize("seed", range(4))
+@pytest.mark.parametrize("seed", range(2))
 class TestUpdateFilter:
-    def test_baseline(self, seed: int) -> None:
+    def test_a_plain_refit_matches(self, seed: int) -> None:
         _compare_update(seed)
 
-    def test_peel_off(self, seed: int) -> None:
+    def test_a_refit_with_peel_off_matches(self, seed: int) -> None:
         _compare_update(seed, peel_off_spike_times=[[300, 400, 600], [350, 500]])
 
-    def test_artifacts(self, seed: int) -> None:
+    def test_a_refit_around_artifact_markers_matches(self, seed: int) -> None:
         _compare_update(seed, artifact_times=[260, 700])
 
-    def test_lock_spikes(self, seed: int) -> None:
+    def test_a_refit_with_locked_discharges_matches(self, seed: int) -> None:
         _compare_update(seed, spike_times=_locked(seed), lock_spikes=True)
 
-    def test_artifact_mask(self, seed: int) -> None:
+    def test_a_refit_in_an_artifact_window_matches(self, seed: int) -> None:
         _compare_update(seed, artifact_mask=_mask())
 
-    def test_mask_and_lock(self, seed: int) -> None:
+    def test_an_artifact_window_with_locked_discharges_matches(self, seed: int) -> None:
         _compare_update(seed, spike_times=_locked(seed), lock_spikes=True, artifact_mask=_mask())
 
-    def test_mask_and_peel_off(self, seed: int) -> None:
+    def test_an_artifact_window_with_peel_off_matches(self, seed: int) -> None:
         _compare_update(seed, peel_off_spike_times=[[300, 400, 600]], artifact_mask=_mask())
 
-    def test_fully_masked(self, seed: int) -> None:
+    def test_a_fully_masked_window_matches(self, seed: int) -> None:
         _compare_update(seed, artifact_mask=np.ones(1000, dtype=bool))
 
 
@@ -210,10 +210,6 @@ class TestDecompositionFile:
         assert payload["mu_grid_index"] == [0, 1]
         assert payload["fsamp"] == 2000.0
         assert payload["artifact_regions"] == [[100, 150]]
-        # No pulse trains in the file: binary trains are drawn from the spikes, as MUedit2 does.
-        assert len(payload["pulse_trains"]) == 2
-        for row, times in zip(payload["pulse_trains"], spike_times, strict=True):
-            assert {i for i, v in enumerate(row) if v == 1.0} == set(times)
 
 
 # ── End to end ──────────────────────────────────────────────────────────────

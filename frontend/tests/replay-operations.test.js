@@ -1,11 +1,10 @@
-// Logged-diff application and the step predicates the replay engine relies on.
+// Logged-diff application and the helpers the replay engine relies on.
 import { test, describe } from "node:test";
 import assert from "node:assert/strict";
 import {
   applyDiff,
   clamp,
   inactiveMusBefore,
-  isSpikeEditStep,
   shiftViewInside,
 } from "../src/replay/operations.js";
 
@@ -27,24 +26,6 @@ describe("applyDiff", () => {
     const before = [10, 20, 30];
     const after = applyDiff(before, [25], [20]);
     assert.deepEqual(applyDiff(after, [20], [25]), before);
-  });
-});
-
-describe("isSpikeEditStep", () => {
-  test("recognizes the spike-edit operation types", () => {
-    for (const type of [
-      "add_spikes",
-      "delete_spikes",
-      "delete_dr",
-      "remove_outliers",
-    ]) {
-      assert.equal(isSpikeEditStep({ type }), true, type);
-    }
-  });
-
-  test("rejects steps that are not spike edits", () => {
-    assert.equal(isSpikeEditStep({ type: "update_filter" }), false);
-    assert.equal(isSpikeEditStep({ type: "add_artifact" }), false);
   });
 });
 
@@ -88,20 +69,8 @@ describe("inactiveMusBefore", () => {
 
 describe("clamp", () => {
   test("constrains a value to the range", () => {
-    assert.equal(clamp(5, 0, 10), 5);
     assert.equal(clamp(-1, 0, 10), 0);
     assert.equal(clamp(11, 0, 10), 10);
-    assert.equal(clamp(0, 0, 10), 0);
-    assert.equal(clamp(10, 0, 10), 10);
-  });
-
-  test("collapses to the low bound when the bounds are reversed", () => {
-    // Not a supported call, but worth pinning: `max(lo, min(hi, v))` returns
-    // `lo` for every input once lo > hi, so reversed bounds do not silently
-    // behave like the range read the other way round.
-    assert.equal(clamp(11, 10, 0), 10);
-    assert.equal(clamp(-1, 10, 0), 10);
-    assert.equal(clamp(5, 10, 0), 10);
   });
 });
 

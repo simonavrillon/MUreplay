@@ -1,27 +1,12 @@
-"""Helpers for the API tests: the app's client and its response envelopes."""
+"""Helpers for the API tests: the route prefix and the response envelopes."""
 
 from __future__ import annotations
 
-from collections.abc import Iterator
-from contextlib import contextmanager
 from typing import Any
 
 from httpx import Response
-from starlette.testclient import TestClient
-
-from mureplay.api.app_factory import create_app
-from mureplay.api.routes import include_routers
 
 API = "/api/v1"
-
-
-@contextmanager
-def api_client() -> Iterator[TestClient]:
-    """The app as ``cli.serve_api`` builds it, without the page."""
-    app = create_app()
-    include_routers(app)
-    with TestClient(app, raise_server_exceptions=False) as test_client:
-        yield test_client
 
 
 def ok(resp: Response) -> Any:

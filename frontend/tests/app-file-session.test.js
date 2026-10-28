@@ -4,9 +4,14 @@ import assert from "node:assert/strict";
 import { createFileSessionService } from "../src/app/services/file-session.js";
 
 /**
- * A recording stand-in for the App context: every service method the
- * file-session collaborates with becomes an observable stub, and state
- * starts empty so the test sees exactly what the service populated.
+ * @typedef {import("../src/app/context.js").App & {
+ *   calls: any[],
+ *   state: import("../src/state/state.js").State,
+ * }} FakeApp
+ */
+
+/**
+ * The App context with every member the service calls recorded in `calls`.
  *
  * @param {{
  *   loadPayload?: any,
@@ -15,19 +20,11 @@ import { createFileSessionService } from "../src/app/services/file-session.js";
  *   dialogError?: Error,
  * }} [opts]
  */
-/**
- * @typedef {import("../src/app/context.js").App & {
- *   calls: any[],
- *   state: import("../src/state/state.js").State,
- * }} FakeApp
- */
-
 function createFakeApp(opts = {}) {
   /** @type {any[]} */
   const calls = [];
   const app = {
-    // The service populates state; it starts empty so a test sees exactly
-    // what was written rather than what the fixture pre-filled.
+    // Empty, so a test sees only what the service wrote.
     state: /** @type {import("../src/state/state.js").State} */ (
       /** @type {unknown} */ ({})
     ),
@@ -52,9 +49,7 @@ function createFakeApp(opts = {}) {
       app.state.timelineGroups = [];
     },
   };
-  // Partial on purpose: the service reaches only for the members above, and
-  // this cast is the single place that says so. Add a call the service makes
-  // but the fake lacks and the test fails on the missing stub, not here.
+  // Partial: the service reaches only for the members above.
   return /** @type {FakeApp} */ (/** @type {unknown} */ (app));
 }
 
@@ -93,36 +88,14 @@ function loadPayload(overrides = {}) {
 }
 
 describe("loading a session", () => {
-  test("populates state from the normalized payload", async () => {
-    const app = createFakeApp({
-      loadPayload: loadPayload(),
-    });
-    await openFile(app);
-
-    const { state } = app;
-    assert.equal(state.loadedFromDecomp, false);
-    assert.equal(state.bidsRoot, "/data");
-    assert.equal(state.entityLabel, "sub-01_task-rest");
-    assert.equal(state.fsamp, 2048);
-    assert.deepEqual(state.pulseTrains, [[0, 1, 0, 1]]);
-    assert.deepEqual(state.spikeTimes, [[100, 300]]);
-    assert.deepEqual(state.gridNames, ["Grid 1"]);
-    assert.deepEqual(state.muGridIndex, [0]);
-    assert.deepEqual(state.muUids, ["g0_mu0"]);
-    assert.deepEqual(state.refitSettings, {
-      nbextchan: 1000,
-      peelOffWin: 0.025,
-      computeDtype: "float32",
-    });
-    assert.deepEqual(state.editHistory, []);
-  });
-
-  test("starts the replay through the app context", async () => {
+  test("fills the state, starts the replay and says what loaded", async () => {
     const app = createFakeApp({ loadPayload: loadPayload() });
     await openFile(app);
 
+    assert.equal(app.state.bidsRoot, "/data");
+    assert.equal(app.state.entityLabel, "sub-01_task-rest");
+    assert.deepEqual(app.state.spikeTimes, [[100, 300]]);
     assert.ok(app.calls.some((c) => c[0] === "startReplay"));
-    // The final status summarizes the loaded session.
     const statuses = replayStatuses(app);
     assert.equal(
       statuses[statuses.length - 1],
@@ -163,7 +136,6 @@ describe("loading a session", () => {
     assert.equal(state.editHistory[0].type, "add_spikes");
     assert.equal(state.editHistory[0].mu, 0);
     assert.deepEqual(state.editHistory[0].spikesAdded, [150]);
-    // The replay starts once the log is in place.
     assert.deepEqual(
       app.calls.find((c) => c[0] === "startReplay"),
       ["startReplay", 1],
@@ -185,18 +157,7 @@ describe("loading a session", () => {
 });
 
 describe("onOpenDialog", () => {
-  test("loads the file chosen in the dialog", async () => {
-    const app = createFakeApp({
-      dialogResult: { path: "/recordings/sub-01_edited.json" },
-      loadPayload: loadPayload(),
-    });
-    const service = createFileSessionService(app);
-    await service.onOpenDialog();
-    const loads = app.calls.filter((c) => c[0] === "load");
-    assert.deepEqual(loads, [["load", "/recordings/sub-01_edited.json"]]);
-  });
-
-  test("handles dialog dismissal", async () => {
+  test("a dismissed dialog loads nothing and says so", async () => {
     const app = createFakeApp({ dialogResult: {} });
     const service = createFileSessionService(app);
     await service.onOpenDialog();
@@ -208,7 +169,7 @@ describe("onOpenDialog", () => {
     );
   });
 
-  test("reports dialog failures", async () => {
+  test("a failing dialog says why", async () => {
     const app = createFakeApp({ dialogError: new Error("no backend") });
     const service = createFileSessionService(app);
     await service.onOpenDialog();

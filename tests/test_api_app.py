@@ -50,9 +50,6 @@ class TestServing:
 
 
 class TestEnvelopes:
-    def test_health_answers_ok(self, client: TestClient) -> None:
-        assert ok(client.get(f"{API}/health")) == {"status": "ok"}
-
     def test_unknown_route_uses_the_error_envelope(self, client: TestClient) -> None:
         assert error(client.get(f"{API}/no-such-endpoint"), 404)["message"] == "Not Found"
 

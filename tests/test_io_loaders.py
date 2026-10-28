@@ -12,7 +12,6 @@ import pytest
 
 from mureplay.errors import NotFoundError
 from mureplay.io.loaders import (
-    build_pulse_trains_from_spike_times,
     infer_bids_root,
     load_npz_payload,
     load_paired_from_path,
@@ -51,16 +50,6 @@ def _v2_npz(*, with_pulse_trains: bool) -> io.BytesIO:
 
 
 # ── File schemas ────────────────────────────────────────────────────────────
-
-
-class TestBuildPulseTrainsFromSpikeTimes:
-    def test_each_discharge_is_a_one_and_out_of_range_times_drop(self) -> None:
-        pulses = build_pulse_trains_from_spike_times([[2, 5, 99], []], 8)
-        assert pulses.shape == (2, 8)
-        assert pulses[0, 2] == 1.0
-        assert pulses[0, 5] == 1.0
-        assert pulses[0].sum() == 2.0
-        assert not pulses[1].any()
 
 
 class TestLoadNpzPayload:

@@ -59,21 +59,13 @@ Repository = "https://github.com/simonavrillon/MUreplay"
 "Bug Tracker" = "https://github.com/simonavrillon/MUreplay/issues"
 
 [tool.pytest.ini_options]
-# The ``mureplay`` package lives under ``python/src`` (see [tool.setuptools]
-# above).  Adding it to ``pythonpath`` lets the suite run from a fresh
-# checkout without an editable install (``pip install -e .``), which is
-# convenient for CI and local one-shot runs.  The repo root is added so the
-# ``from tests._helpers import ...`` imports resolve under a bare ``pytest``.
+# python/src runs the suite without an editable install; the repo root lets
+# the tests import ``tests._api`` and ``tests.conftest``.
 pythonpath = ["python/src", "."]
 testpaths = ["tests"]
-# Report a one-line summary for every non-passed outcome (skips, xfails,
-# failures).  Useful here because the data-dependent tests skip when the
-# git-ignored sample files are absent, so a clean run still emits skips worth
-# seeing at a glance.
+# -ra lists every skip, so a run without the sample data says so.
 addopts = ["-ra", "--strict-markers"]
-# CI runs ``-m "not data"``: runners have no recordings under data/.  Run
-# everything locally with a plain ``pytest``.  conftest.py applies ``data`` to
-# any test that declares a sample-file fixture (``DATA_FIXTURES``).
+# conftest.py applies ``data`` to any test using a ``DATA_FIXTURES`` fixture.
 markers = [
   "data: needs git-ignored sample recordings under data/ (auto-applied to declared fixtures)",
 ]

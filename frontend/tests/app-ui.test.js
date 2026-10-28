@@ -17,24 +17,16 @@ function createApp(els = {}) {
 }
 
 describe("setStatus", () => {
-  test("writes text and hides the line while it is empty", () => {
-    const status = fakeElement();
-    const ui = createUiService(createApp({ status }));
-    ui.setStatus("Loading…");
-    assert.equal(status.textContent, "Loading…");
-    assert.equal(status.hidden, false);
-    ui.setStatus("");
-    assert.equal(status.textContent, "");
-    assert.equal(status.hidden, true);
-  });
-
-  test("sets the tone the stylesheet colours by, muted by default", () => {
+  test("writes text in its tone, muted by default, and hides while empty", () => {
     const status = fakeElement();
     const ui = createUiService(createApp({ status }));
     ui.setStatus("Backend unreachable", "error");
+    assert.equal(status.textContent, "Backend unreachable");
     assert.equal(status.dataset.tone, "error");
-    ui.setStatus("Connecting");
+    assert.equal(status.hidden, false);
+    ui.setStatus("");
     assert.equal(status.dataset.tone, "muted");
+    assert.equal(status.hidden, true);
   });
 });
 

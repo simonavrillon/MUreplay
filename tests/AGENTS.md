@@ -21,7 +21,7 @@ Tests are linted and type-checked like the package (`uv run ruff check .`, `uv r
 | Helper | For |
 |---|---|
 | `conftest.py` | `client` (`TestClient`), the sample-data fixtures (`sample_bids_root`, `muedit2_session`), `REPO_ROOT`, `MUEDIT2_ROOT`, `SAMPLE_ENTITY` |
-| `_api.py` | `API` prefix, `api_client`, envelope readers (`ok`, `error`) |
+| `_api.py` | `API` prefix, envelope readers (`ok`, `error`) |
 
 ## Data
 

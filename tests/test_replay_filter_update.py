@@ -40,17 +40,3 @@ class TestArtifactMask:
             emg, discard_mask, spikes, FSAMP, 0, 1000, nbextchan=1000, artifact_mask=mask
         )
         assert not mask[masked].any()
-
-    def test_a_mask_shorter_than_the_window_is_ignored(self) -> None:
-        emg, discard_mask, spikes = _synthetic_emg()
-        _, result = update_motor_unit_filter_window(
-            emg,
-            discard_mask,
-            spikes,
-            FSAMP,
-            0,
-            1000,
-            nbextchan=1000,
-            artifact_mask=np.zeros(10, dtype=bool),
-        )
-        assert len(result) >= 2

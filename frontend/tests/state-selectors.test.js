@@ -35,7 +35,7 @@ function stateWith(fields) {
 const entry = (fields) => /** @type {any} */ ({ mu: -1, muUid: "", ...fields });
 
 describe("musForGrid", () => {
-  test("read the grid assignment", () => {
+  test("lists the MUs on a grid, in file order", () => {
     const state = stateWith({ muGridIndex: [2, 0, 2] });
     assert.deepEqual(musForGrid(state, 2), [0, 2]);
     assert.deepEqual(musForGrid(state, 0), [1]);

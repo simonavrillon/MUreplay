@@ -3,14 +3,10 @@ import { test, describe } from "node:test";
 import assert from "node:assert/strict";
 import { ApiError, apiJson, waitForBackend } from "../src/api/http.js";
 
-/**
- * What a stubbed fetch may hand back: a Response stand-in, a promise for one,
- * or a rejection.
- * @typedef {any} StubResult
- */
+/** What a stubbed fetch hands back: a Response stand-in, a promise for one, or a rejection. @typedef {any} StubResult */
 
 /**
- * Minimal Response stand-in: enough for the http seam (ok, status, json).
+ * A Response stand-in with ok, status and json.
  * @param {unknown} payload
  * @param {{ ok?: boolean, status?: number, jsonError?: boolean }} [opts]
  * @returns {StubResult}
@@ -26,7 +22,6 @@ function fakeResponse(payload, opts = {}) {
   };
 }
 
-/** Installs a per-test fetch stub and records the calls it serves. */
 const originalFetch = globalThis.fetch;
 /** @type {{ url: any, init: any }[]} */
 const recorded = [];
@@ -36,11 +31,7 @@ let stubBehavior = defaultBehavior;
 
 test.beforeEach(() => {
   recorded.length = 0;
-  // Reset the stub as well as the log, so a test that forgets to set one
-  // fails on its own terms instead of inheriting the previous test's.
   stubBehavior = defaultBehavior;
-  // A stand-in cannot satisfy the full fetch signature, and does not need to:
-  // the http seam only awaits it and reads ok/status/json.
   globalThis.fetch = /** @type {any} */ (
     (url, init) => {
       recorded.push({ url, init });

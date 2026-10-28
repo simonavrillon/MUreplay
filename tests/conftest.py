@@ -9,6 +9,9 @@ from pathlib import Path
 import pytest
 from starlette.testclient import TestClient
 
+from mureplay.api.app_factory import create_app
+from mureplay.api.routes import include_routers
+
 REPO_ROOT = Path(__file__).resolve().parents[1]
 DATA_DIR = REPO_ROOT / "data"
 #: The MUedit2 checkout the parity tests compare against.
@@ -57,7 +60,7 @@ def muedit2_session() -> Path:
 @pytest.fixture
 def client() -> Iterator[TestClient]:
     """The app as ``cli.serve_api`` builds it, without the page."""
-    from tests._api import api_client
-
-    with api_client() as test_client:
+    app = create_app()
+    include_routers(app)
+    with TestClient(app, raise_server_exceptions=False) as test_client:
         yield test_client
