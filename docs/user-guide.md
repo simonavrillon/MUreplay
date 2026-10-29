@@ -41,7 +41,7 @@ The buttons at the top centre switch pages, as MUedit2's do:
 | Page | Shows |
 |---|---|
 | **Audit** | the replay: the plots and the timeline this guide describes |
-| **Monitor** | coming soon: a page of the metrics clinicians use, from the same session |
+| **Monitor** | coming soon: a page of metrics drawn from the same session |
 
 ### Session settings
 
