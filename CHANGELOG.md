@@ -7,6 +7,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [1.1.0] - 2026-10-29
+
 ### Added
 
 - A **Projects** tree at the top of the settings rail lists the BIDS projects in the data folder,
@@ -90,3 +92,5 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - Opening a second session no longer keeps the first one's motor unit marks.
 - A session whose folder has no `_decomp.npz` replays from where its edits started, not from
   their result.
+
+[1.1.0]: https://github.com/simonavrillon/MUreplay/releases/tag/v1.1.0
