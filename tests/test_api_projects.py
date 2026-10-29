@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import json
 from pathlib import Path
 
 import pytest
@@ -53,7 +54,7 @@ class TestChooseDataFolder:
         _pick(monkeypatch, picked)
         assert ok(client.post(f"{API}/dialog/data-folder")) == {"data_root": str(picked)}
         assert ok(client.get(f"{API}/projects"))["data_root"] == str(picked)
-        assert str(picked) in config_file.read_text(encoding="utf-8")
+        assert json.loads(config_file.read_text(encoding="utf-8"))["data_root"] == str(picked)
 
     def test_a_cancelled_dialog_keeps_the_folder(
         self,
