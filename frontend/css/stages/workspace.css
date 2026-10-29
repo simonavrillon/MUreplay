@@ -87,12 +87,12 @@
   transition: border-color 0.2s ease;
 }
 
-.workflow-stepper:has(.step-chip.active[data-step="research"]) {
-  border-color: var(--research);
+.workflow-stepper:has(.step-chip.active[data-step="audit"]) {
+  border-color: var(--audit);
 }
 
-.workflow-stepper:has(.step-chip.active[data-step="clinic"]) {
-  border-color: var(--clinic);
+.workflow-stepper:has(.step-chip.active[data-step="monitor"]) {
+  border-color: var(--monitor);
 }
 
 .step-indicator {
@@ -164,12 +164,12 @@
   font-weight: var(--fw-semibold);
 }
 
-.step-chip.active[data-step="research"] {
-  color: var(--research);
+.step-chip.active[data-step="audit"] {
+  color: var(--audit);
 }
 
-.step-chip.active[data-step="clinic"] {
-  color: var(--clinic);
+.step-chip.active[data-step="monitor"] {
+  color: var(--monitor);
 }
 
 .layout {
@@ -385,7 +385,7 @@
 
 .tree-trial[aria-current] {
   background: var(--surface-active);
-  color: var(--research);
+  color: var(--audit);
   font-weight: var(--fw-semibold);
 }
 
@@ -568,9 +568,9 @@
   margin-bottom: 8px;
 }
 
-/* ── Clinic page ── */
+/* ── Monitor page ── */
 
-.clinic-placeholder {
+.monitor-placeholder {
   flex: 1;
   display: flex;
   flex-direction: column;
@@ -583,14 +583,14 @@
   text-align: center;
 }
 
-.clinic-placeholder h2 {
+.monitor-placeholder h2 {
   margin: 0;
-  color: var(--clinic);
+  color: var(--monitor);
   font-size: var(--fs-lg);
   font-weight: var(--fw-semibold);
 }
 
-.clinic-placeholder p {
+.monitor-placeholder p {
   margin: 0;
   max-width: 42ch;
 }

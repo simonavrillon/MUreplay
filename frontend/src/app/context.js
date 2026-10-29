@@ -29,7 +29,7 @@
  * @property {Api} api
  */
 
-/** @typedef {"research" | "clinic"} StageKey The pages the header's stepper switches between. */
+/** @typedef {"audit" | "monitor"} StageKey The pages the header's stepper switches between. */
 
 /**
  * @typedef {object} UiService

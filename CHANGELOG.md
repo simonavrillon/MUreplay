@@ -16,8 +16,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - A settings rail on the left, as in MUedit2, shows the session's fields read-only: the BIDS
   entities, participant, placement and hardware from the dataset's sidecars, and the run's
   decomposition settings and quality filters.
-- **Research** and **Clinic** buttons at the top centre switch pages. Research is the replay;
-  Clinic is a placeholder for an upcoming page of clinical metrics.
+- **Audit** and **Monitor** buttons at the top centre switch pages. Audit is the replay;
+  Monitor is a placeholder for an upcoming page of clinical metrics.
 - Decompositions saved in MUedit2's schema v2 `.npz` format open, as older v1 files still do.
 - Filter steps on intramuscular grids are recomputed with the intramuscular bandpass
   (100–4400 Hz), as MUedit2 does.

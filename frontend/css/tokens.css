@@ -24,9 +24,9 @@
   --mu-4: #e7c1ff;
   --mu-4-dim: rgba(231, 193, 255, 0.12);
   --artifact: #ff8c66;
-  /* The two pages: Research takes MUedit2's edit colour, Clinic an orange of its own. */
-  --research: var(--mu-4);
-  --clinic: #ffb98a;
+  /* The two pages: Audit takes MUedit2's edit colour, Monitor an orange of its own. */
+  --audit: var(--mu-4);
+  --monitor: #ffb98a;
 
   /* Canvas plots; src/config.js reads these by name. */
   --plot-trace-2: #f5f5f5;

@@ -13,10 +13,10 @@ const canvas = (id) => /** @type {HTMLCanvasElement} */ (element(id));
 
 export const els = {
   replayStatus: element("replayStatus"),
-  stepResearch: button("stepResearch"),
-  stepClinic: button("stepClinic"),
-  stageResearch: element("stageResearch"),
-  stageClinic: element("stageClinic"),
+  stepAudit: button("stepAudit"),
+  stepMonitor: button("stepMonitor"),
+  stageAudit: element("stageAudit"),
+  stageMonitor: element("stageMonitor"),
   workspace: element("workspace"),
   settingsOverlay: element("settingsOverlay"),
   settingsPanel: element("settingsPanel"),

@@ -1,6 +1,6 @@
 /**
  * The UI service: the header's status pill, where the replay reports; the
- * page stepper (Research, Clinic); and the settings rail: its open state, its
+ * page stepper (Audit, Monitor); and the settings rail: its open state, its
  * project tree and the session's fields.
  */
 
@@ -25,8 +25,8 @@ export function createUiService(app) {
 
   /** @type {Record<StageKey, [HTMLButtonElement, HTMLElement]>} */
   const stages = {
-    research: [els.stepResearch, els.stageResearch],
-    clinic: [els.stepClinic, els.stageClinic],
+    audit: [els.stepAudit, els.stageAudit],
+    monitor: [els.stepMonitor, els.stageMonitor],
   };
 
   /** @type {UiService["switchStage"]} */
@@ -37,12 +37,12 @@ export function createUiService(app) {
     }
     positionStepIndicator();
     // A hidden stage's canvases have no size, so they draw once it shows.
-    if (target === "research") app.renderAll();
+    if (target === "audit") app.renderAll();
   }
 
   /** @type {UiService["positionStepIndicator"]} */
   function positionStepIndicator() {
-    const stepper = els.stepResearch.parentElement;
+    const stepper = els.stepAudit.parentElement;
     const indicator = stepper?.querySelector(".step-indicator");
     const active = stepper?.querySelector(".step-chip.active");
     if (!(indicator instanceof HTMLElement)) return;

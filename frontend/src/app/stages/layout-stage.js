@@ -9,8 +9,8 @@
 export function setupLayoutEvents(app) {
   const { els } = app;
 
-  els.stepResearch.addEventListener("click", () => app.switchStage("research"));
-  els.stepClinic.addEventListener("click", () => app.switchStage("clinic"));
+  els.stepAudit.addEventListener("click", () => app.switchStage("audit"));
+  els.stepMonitor.addEventListener("click", () => app.switchStage("monitor"));
 
   els.settingsPanel.querySelectorAll(".section-header").forEach((head) => {
     head.setAttribute("tabindex", "0");
