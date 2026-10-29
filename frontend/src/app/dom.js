@@ -13,7 +13,6 @@ const canvas = (id) => /** @type {HTMLCanvasElement} */ (element(id));
 
 export const els = {
   replayStatus: element("replayStatus"),
-  loadMenuBtn: button("loadMenuBtn"),
   stepResearch: button("stepResearch"),
   stepClinic: button("stepClinic"),
   stageResearch: element("stageResearch"),
@@ -22,6 +21,10 @@ export const els = {
   settingsOverlay: element("settingsOverlay"),
   settingsPanel: element("settingsPanel"),
   settingsToggleBtn: button("settingsToggleBtn"),
+  projectsHeader: element("projectsHeader"),
+  projectTree: element("projectTree"),
+  projectTreeHint: element("projectTreeHint"),
+  openFileBtn: button("openFileBtn"),
   fileName: element("fileName"),
   bidsProject: input("bidsProject"),
   bidsSubject: input("bidsSubject"),

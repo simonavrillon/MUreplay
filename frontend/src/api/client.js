@@ -40,6 +40,10 @@ export function createApiClient({ apiJson }) {
       );
     },
 
+    listProjects() {
+      return apiJson(urlOf(routes.projects));
+    },
+
     openFileDialog() {
       return apiJson(urlOf(routes.dialogOpenFile), {}, DIALOG_TIMEOUT_MS);
     },

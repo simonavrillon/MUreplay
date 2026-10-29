@@ -26,7 +26,7 @@ pick a file ──> load + pair (backend) ──> start the replay ──> step 
 
 | Part | Frontend | Backend |
 |---|---|---|
-| Open | `app/services/file-session.js`, `state/transitions.js`, `view/settings-renderer.js` | `routes/dialog.py`, `routes/replay.py`, `io/loaders.py`, `io/bids.py: read_sidecar_meta` |
+| Open | `app/services/file-session.js`, `state/transitions.js`, `view/project-tree.js`, `view/settings-renderer.js` | `routes/projects.py`, `io/projects.py`, `routes/dialog.py`, `routes/replay.py`, `io/loaders.py`, `io/bids.py: read_sidecar_meta` |
 | Replay | `app/services/replay-service.js`, `replay/operations.js` | — |
 | Refit | `replay-service.js: refitStep` | `routes/editing.py`, `services/filter_service.py`, `replay/filter_update.py`, `io/bids.py` |
 | Draw | `view/replay-renderer.js`, `view/plots.js` (MUedit2's `drawTrace`) | — |

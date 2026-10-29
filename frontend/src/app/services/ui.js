@@ -1,8 +1,10 @@
 /**
  * The UI service: the header's status pill, where the replay reports; the
- * page stepper (Research, Clinic); and the settings rail's open state.
+ * page stepper (Research, Clinic); and the settings rail: its open state, its
+ * project tree and the session's fields.
  */
 
+import { markOpenedTrial, renderProjectTree } from "../../view/project-tree.js";
 import { renderSessionSettings } from "../../view/settings-renderer.js";
 
 /** @typedef {import("../context.js").UiService} UiService */
@@ -66,11 +68,23 @@ export function createUiService(app) {
     renderSessionSettings(els, session);
   }
 
+  /** @type {UiService["showProjects"]} */
+  function showProjects(list) {
+    renderProjectTree(els, list);
+  }
+
+  /** @type {UiService["showOpenedTrial"]} */
+  function showOpenedTrial(path) {
+    markOpenedTrial(els, path);
+  }
+
   return {
     setReplayStatus,
     switchStage,
     positionStepIndicator,
     setSettingsOpen,
     showSessionSettings,
+    showProjects,
+    showOpenedTrial,
   };
 }

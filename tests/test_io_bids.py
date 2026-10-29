@@ -10,7 +10,7 @@ import pyedflib
 import pytest
 
 from mureplay.errors import MureplayError, NotFoundError
-from mureplay.io.bids import _entity_pairs, _grid_rows, read_bids_emg_grid, read_sidecar_meta
+from mureplay.io.bids import _grid_rows, entity_pairs, read_bids_emg_grid, read_sidecar_meta
 
 FSAMP = 2000.0
 #: Samples the EDF file holds, and the fewer its sidecar's RecordingDuration declares.
@@ -147,7 +147,7 @@ class TestGridRows:
 
 class TestEntityLabel:
     def test_its_entities_are_read(self) -> None:
-        assert _entity_pairs("sub-1_ses-2_task-x_run-1") == {
+        assert entity_pairs("sub-1_ses-2_task-x_run-1") == {
             "sub": "1",
             "ses": "2",
             "task": "x",

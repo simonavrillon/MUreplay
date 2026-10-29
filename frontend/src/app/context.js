@@ -13,6 +13,15 @@
 /** @typedef {{ start: number, end: number }} Span */
 /** @typedef {Record<string, any>} JsonObject A decoded backend JSON object whose fields are not typed. */
 
+/** @typedef {{ name: string, path: string }} ProjectTrial A recording with an edit log; `path` is the log's. */
+
+/**
+ * @typedef {object} ProjectList The BIDS projects in the data folder, down to their trials.
+ * @property {string} dataRoot
+ * @property {{ name: string, subjects: { name: string, sessions: { name: string, trials: ProjectTrial[] }[] }[] }[]} projects
+ *   A session's name is "" when its subject was recorded without sessions.
+ */
+
 /**
  * @typedef {object} Core
  * @property {State} state
@@ -29,10 +38,14 @@
  * @property {() => void} positionStepIndicator Slide the stepper's highlight under the active page.
  * @property {(open: boolean) => void} setSettingsOpen
  * @property {(session: import("../state/transitions.js").SessionPayload) => void} showSessionSettings Fill the settings rail with a loaded session's fields.
+ * @property {(list: ProjectList) => void} showProjects Draw the rail's project tree.
+ * @property {(path: string) => void} showOpenedTrial Mark the tree's trial whose edit log is at `path` as opened.
  */
 
 /**
  * @typedef {object} FileSessionService
+ * @property {() => Promise<void>} loadProjects Refresh the project tree from the data folder.
+ * @property {(filePath: string) => Promise<void>} loadSession Open the session paired with `filePath`.
  * @property {() => Promise<void>} onOpenDialog
  */
 

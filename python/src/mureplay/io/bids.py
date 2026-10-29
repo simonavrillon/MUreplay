@@ -16,14 +16,14 @@ from mureplay.errors import MureplayError, NotFoundError
 _GRID_LABEL = re.compile(r"^grid\s*(\d+)$", re.IGNORECASE)
 
 
-def _entity_pairs(stem: str) -> dict[str, str]:
+def entity_pairs(stem: str) -> dict[str, str]:
     """The ``key-value`` entities of a BIDS file stem."""
     return dict(part.split("-", 1) for part in stem.split("_") if "-" in part)
 
 
 def _resolve_bids_emg_path(bids_root: Path, entity_label: str) -> Path:
     """The ``.bdf``/``.edf`` recording of ``entity_label`` under ``bids_root``."""
-    entities = _entity_pairs(entity_label)
+    entities = entity_pairs(entity_label)
     if not entities.get("sub"):
         raise MureplayError(
             f"The file name {entity_label!r} names no BIDS subject (sub-<label>).",
@@ -81,7 +81,7 @@ def _grid_rows(rows: list[dict[str, str]]) -> list[list[int]]:
 
 def _inherited(bids_root: Path, emg_path: Path, entity_label: str, suffix: str) -> list[Path]:
     """Files named ``…_<suffix>`` whose entities all match the recording's, least specific first."""
-    wanted = _entity_pairs(entity_label)
+    wanted = entity_pairs(entity_label)
     folders = [bids_root]
     if "sub" in wanted:
         folders.append(bids_root / f"sub-{wanted['sub']}")
@@ -93,7 +93,7 @@ def _inherited(bids_root: Path, emg_path: Path, entity_label: str, suffix: str) 
         for path in folder.glob(f"*{suffix}"):
             if path.name != suffix and not path.name.endswith(f"_{suffix}"):
                 continue
-            entities = _entity_pairs(path.name[: -len(suffix)].rstrip("_"))
+            entities = entity_pairs(path.name[: -len(suffix)].rstrip("_"))
             if all(wanted.get(k) == v for k, v in entities.items()):
                 found.append((level, len(entities), path))
     return [path for *_, path in sorted(found)]
@@ -203,7 +203,7 @@ def _read_tsv(path: Path) -> list[dict[str, str]]:
 def read_sidecar_meta(bids_root: Path, entity_label: str) -> dict[str, Any]:
     """The participant, placement and hardware fields MUedit2's session form shows, from the sidecars."""
     meta: dict[str, Any] = {}
-    subject = _entity_pairs(entity_label).get("sub")
+    subject = entity_pairs(entity_label).get("sub")
     participants = bids_root / "participants.tsv"
     if subject and participants.exists():
         row = next(

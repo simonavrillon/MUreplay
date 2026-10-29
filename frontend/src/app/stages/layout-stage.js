@@ -30,9 +30,10 @@ export function setupLayoutEvents(app) {
     head.addEventListener("click", toggle);
     head.addEventListener("keydown", (e) => {
       const { key } = /** @type {KeyboardEvent} */ (e);
+      // Through click, so the header's other listeners hear it too.
       if (key === " " || key === "Enter") {
         e.preventDefault();
-        toggle();
+        /** @type {HTMLElement} */ (head).click();
       }
     });
   });

@@ -1,5 +1,6 @@
-/* Workspace shell, as MUedit2 lays it out: the header with the load button,
-   page stepper and status pill, the settings rail, the stages, chart cards. */
+/* Workspace shell, as MUedit2 lays it out: the header with the page stepper
+   and status pill, the settings rail and its project tree, the stages, chart
+   cards. */
 
 .workspace {
   padding: 14px 14px 14px 52px;
@@ -19,37 +20,6 @@
   padding: 8px 14px 4px;
   /* Equal sides clear the settings rail and keep the stepper on the window's centre. */
   margin: 10px 52px 0;
-}
-
-.header-actions {
-  grid-column: 1;
-  justify-self: start;
-  display: inline-flex;
-  align-items: center;
-  gap: 10px;
-}
-
-.headline {
-  margin: 0;
-  font-size: var(--fs-md);
-  font-weight: var(--fw-semibold);
-}
-
-.browse-icon-btn {
-  color: var(--text);
-  padding: 0;
-  display: inline-flex;
-  align-items: center;
-  justify-content: center;
-}
-
-.browse-icon-btn svg {
-  width: 30px;
-  height: 30px;
-}
-
-.browse-icon-btn:hover {
-  color: var(--accent);
 }
 
 .app-status {
@@ -271,7 +241,8 @@
   border-bottom: 1px solid var(--border);
 }
 
-.panel-section:not(.collapsed) {
+/* Only in the open rail: contracted, every icon keeps the same pitch. */
+.workspace.settings-open .panel-section:not(.collapsed) {
   padding-bottom: 10px;
 }
 
@@ -319,6 +290,107 @@
 
 .panel-section.collapsed .section-content {
   display: none;
+}
+
+/* ── Project tree ── */
+
+.project-tree {
+  display: flex;
+  flex-direction: column;
+  font-size: var(--fs-sm);
+}
+
+.tree-fold > summary {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  min-height: 28px;
+  padding: 0 6px;
+  border-radius: 5px;
+  color: var(--text);
+  cursor: pointer;
+  list-style: none;
+}
+
+.tree-fold > summary::-webkit-details-marker {
+  display: none;
+}
+
+/* The section headers' chevron, on the left as trees put it. */
+.tree-fold > summary::before {
+  content: "▾";
+  flex: 0 0 10px;
+  font-size: var(--fs-xs);
+  line-height: 1;
+  color: var(--muted);
+  transform: rotate(-90deg);
+  transition: transform 0.2s ease;
+}
+
+.tree-fold[open] > summary::before {
+  transform: none;
+}
+
+.tree-fold > summary svg {
+  width: 16px;
+  height: 16px;
+  flex: 0 0 16px;
+  color: var(--muted);
+}
+
+.tree-fold > summary span {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.tree-fold > summary:hover {
+  background: var(--surface);
+}
+
+.tree-fold > summary:focus-visible,
+.tree-trial:focus-visible {
+  outline: 2px solid var(--accent);
+  outline-offset: -2px;
+}
+
+/* Each level indents under its parent's chevron, along a guide line. */
+.tree-children {
+  display: flex;
+  flex-direction: column;
+  margin-left: 10px;
+  padding-left: 8px;
+  border-left: 1px solid var(--border);
+}
+
+.tree-trial {
+  min-height: 28px;
+  padding: 0 8px;
+  border: none;
+  border-radius: 5px;
+  background: transparent;
+  color: var(--muted);
+  font-size: var(--fs-sm);
+  text-align: left;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  cursor: pointer;
+}
+
+.tree-trial:hover {
+  background: var(--surface);
+  color: var(--text);
+}
+
+.tree-trial[aria-current] {
+  background: var(--surface-active);
+  color: var(--research);
+  font-weight: var(--fw-semibold);
+}
+
+#openFileBtn {
+  margin-top: 6px;
 }
 
 .form-subsection-label {

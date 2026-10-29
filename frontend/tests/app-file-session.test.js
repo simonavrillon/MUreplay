@@ -1,4 +1,4 @@
-// Opening a session: the file dialog, the load call, and the state it fills.
+// Opening a session: the project tree, the file dialog, the load call, and the state it fills.
 import { test, describe } from "node:test";
 import assert from "node:assert/strict";
 import { createFileSessionService } from "../src/app/services/file-session.js";
@@ -18,6 +18,8 @@ import { createFileSessionService } from "../src/app/services/file-session.js";
  *   loadError?: Error,
  *   dialogResult?: any,
  *   dialogError?: Error,
+ *   projects?: any,
+ *   projectsError?: Error,
  * }} [opts]
  */
 function createFakeApp(opts = {}) {
@@ -35,6 +37,10 @@ function createFakeApp(opts = {}) {
         if (opts.loadError) throw opts.loadError;
         return opts.loadPayload;
       },
+      listProjects: async () => {
+        if (opts.projectsError) throw opts.projectsError;
+        return opts.projects;
+      },
       openFileDialog: async () => {
         calls.push(["dialog"]);
         if (opts.dialogError) throw opts.dialogError;
@@ -44,6 +50,8 @@ function createFakeApp(opts = {}) {
     setReplayStatus: (text) => calls.push(["replayStatus", text]),
     showSessionSettings: (session) =>
       calls.push(["settings", session.entityLabel]),
+    showProjects: (list) => calls.push(["projects", list]),
+    showOpenedTrial: (path) => calls.push(["openedTrial", path]),
     startReplay: () => {
       calls.push(["startReplay", app.state.editHistory.length]);
       // The real replay builds the timeline from the log.
@@ -182,6 +190,48 @@ describe("onOpenDialog", () => {
     assert.equal(
       statuses[statuses.length - 1],
       "Could not open the file dialog: no backend",
+    );
+  });
+});
+
+describe("loadProjects", () => {
+  test("draws the data folder's projects in the tree", async () => {
+    const projects = [{ name: "Test", subjects: [] }];
+    const app = createFakeApp({ projects: { projects, data_root: "/data" } });
+    await createFileSessionService(app).loadProjects();
+    assert.deepEqual(
+      app.calls.find((c) => c[0] === "projects"),
+      ["projects", { projects, dataRoot: "/data" }],
+    );
+  });
+
+  test("a failing listing says why", async () => {
+    const app = createFakeApp({ projectsError: new Error("no backend") });
+    await createFileSessionService(app).loadProjects();
+    assert.deepEqual(replayStatuses(app), [
+      "Could not list the projects: no backend",
+    ]);
+  });
+});
+
+describe("loadSession", () => {
+  test("opens a trial's edit log and marks the trial as opened", async () => {
+    const path = "/data/Test/sub-1/decomp/sub-1_task-a_edited.json";
+    const app = createFakeApp({ loadPayload: loadPayload() });
+    await createFileSessionService(app).loadSession(path);
+    assert.deepEqual(
+      app.calls.find((c) => c[0] === "load"),
+      ["load", path],
+    );
+    assert.ok(app.calls.some((c) => c[0] === "openedTrial" && c[1] === path));
+  });
+
+  test("a trial that fails to load stays unmarked", async () => {
+    const app = createFakeApp({ loadError: new Error("file not found") });
+    await createFileSessionService(app).loadSession("/data/x_edited.json");
+    assert.equal(
+      app.calls.some((c) => c[0] === "openedTrial"),
+      false,
     );
   });
 });

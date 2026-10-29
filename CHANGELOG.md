@@ -9,6 +9,9 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Added
 
+- A **Projects** tree at the top of the settings rail lists the BIDS projects in the data folder,
+  down to their participants, sessions and trials; clicking a trial opens it. It replaces the
+  **Load log file** button, whose file dialog moves under the tree as **Open another file…**.
 - `B` and `N` step back and forward through the replay.
 - A settings rail on the left, as in MUedit2, shows the session's fields read-only: the BIDS
   entities, participant, placement and hardware from the dataset's sidecars, and the run's

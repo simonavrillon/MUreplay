@@ -11,6 +11,14 @@
 
 /**
  * @param {JsonObject} raw
+ * @returns {import("../app/context.js").ProjectList}
+ */
+export function normalizeProjectList(raw) {
+  return { projects: raw.projects, dataRoot: raw.data_root };
+}
+
+/**
+ * @param {JsonObject} raw
  */
 export function normalizeSessionPayload(raw) {
   const muUids =

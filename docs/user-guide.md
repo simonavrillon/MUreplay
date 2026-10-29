@@ -16,11 +16,19 @@ can step backward and forward as often as you like.
 
 ## Open a session
 
-Click **Load log file** (top left) and pick one of the files MUedit2 saved for the recording:
-`<entity>_decomp.npz`, `<entity>_edited.npz` or `<entity>_edited.json`. They usually sit in
-`<dataset>/derivatives/muedit/sub-XX/[ses-YY]/decomp/`.
+Click the folder icon at the top of the rail on the left to open **Projects**: the BIDS projects
+in the data folder (`data/` in the MUreplay folder, or `MUREPLAY_DATA_ROOT`; see
+[cli.md](cli.md#environment-variables)). Click a project to unfold its participants, a
+participant to unfold its sessions, and a session to list its trials: every recording with an
+edit log (`<entity>_edited.json`). Click a trial to open it: the rail closes onto the replay,
+and the trial you opened stays highlighted in the tree. The tree is read again each time you
+click the **Projects** header, so a session saved in MUedit2 meanwhile shows up.
 
-Whichever you pick, MUreplay opens the decomposition MUedit2 started from (`_decomp.npz`) with
+For a file outside the data folder, click **Open another file…** under the tree and pick one of
+the files MUedit2 saved for the recording: `<entity>_decomp.npz`, `<entity>_edited.npz` or
+`<entity>_edited.json`. They usually sit in `<dataset>/derivatives/muedit/sub-XX/[ses-YY]/decomp/`.
+
+Whichever you open, MUreplay opens the decomposition MUedit2 started from (`_decomp.npz`) with
 the edit log beside it (`_edited.json`), and finds the original EMG recording in the dataset for
 the filter steps. The status at the top right then reports what was loaded, for example
 `Loaded 36 MUs and 4 replay steps.` The full pairing rules are in
@@ -37,11 +45,13 @@ The buttons at the top centre switch pages, as MUedit2's do:
 
 ### Session settings
 
-The rail on the left holds the fields of MUedit2's settings panel, filled from the session: click
-an icon, or the panel button at the top, to open it. Every field is read-only.
+The rail on the left holds the project tree and the fields of MUedit2's settings panel, filled
+from the session: click an icon, or the panel button at the top, to open it. Every field is
+read-only.
 
 | Section | Shows |
 |---|---|
+| **Projects** | the BIDS projects in the data folder, down to their trials; click a trial to open its session |
 | **Session info** | the decomposition file; the project (the dataset's folder) and the subject, session, acquisition, run and task from the file name; the participant from `participants.tsv`; the placement, reference, ground, hardware and power line from the recording's `_emg.json`; one **Muscle Grid N** per grid from its `channels.tsv`; and **Fs (Hz)** |
 | **Decomposition settings** | the run settings MUedit2 saved in the decomposition: **Iterations**, **Analysis windows**, **Duplicates thresh**, **Peeloff** and its **Window (ms)**, and **Post-processing** |
 | **Quality filters** | the **SIL threshold**, and the **COV tool** with its **COV threshold** |

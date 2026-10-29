@@ -84,8 +84,9 @@ If you prefer a terminal, or you are on Linux, the same launchers live in
 
 A session moves through three steps:
 
-1. **Open** — click **Load log file** and pick the decomposition MUedit2 saved (the `.npz`, or
-   its `_edited.json` edit log). MUreplay finds the other files of the session beside it.
+1. **Open** — click the folder icon at the top of the rail on the left, unfold a project, a
+   participant and a session, and click a trial. MUreplay lists the BIDS projects in its
+   `data/` folder; **Open another file…** picks a session saved anywhere else.
 2. **Pick a motor unit** — with the **Grid** and **Motor unit** dropdowns, or `<` and `>`. The
    dropdown also shows the units the editor flagged (`✕`), duplicated (`⊕`) or removed (`⊗`).
 3. **Step through its edits** — the timeline holds every edit made to the unit, in order and

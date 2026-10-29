@@ -1,9 +1,13 @@
 /**
- * File session service: opening a session from the native dialog. The loaded
+ * File session service: listing the projects in the data folder, and opening a
+ * session from one of their trials or from the native dialog. The loaded
  * decomposition replaces the shown one through `beginSession`; its log,
  * normalised, then starts the replay.
  */
-import { normalizeSessionPayload } from "../../api/payloads.js";
+import {
+  normalizeProjectList,
+  normalizeSessionPayload,
+} from "../../api/payloads.js";
 import { beginSession } from "../../state/transitions.js";
 import { handleError } from "./error-service.js";
 
@@ -15,6 +19,15 @@ import { handleError } from "./error-service.js";
  */
 export function createFileSessionService(app) {
   const { state } = app;
+
+  /** @type {FileSessionService["loadProjects"]} */
+  async function loadProjects() {
+    try {
+      app.showProjects(normalizeProjectList(await app.api.listProjects()));
+    } catch (err) {
+      handleError(err, app.setReplayStatus, "Could not list the projects");
+    }
+  }
 
   /** @type {FileSessionService["onOpenDialog"]} */
   async function onOpenDialog() {
@@ -33,7 +46,7 @@ export function createFileSessionService(app) {
     await loadSession(path);
   }
 
-  /** @param {string} filePath */
+  /** @type {FileSessionService["loadSession"]} */
   async function loadSession(filePath) {
     try {
       app.setReplayStatus("Loading the session…");
@@ -42,6 +55,7 @@ export function createFileSessionService(app) {
       );
       beginSession(state, payload);
       app.showSessionSettings(payload);
+      app.showOpenedTrial(filePath);
       app.startReplay();
       const nMu = state.spikeTimes.length;
       const nSteps = state.timelineGroups.length;
@@ -53,5 +67,5 @@ export function createFileSessionService(app) {
     }
   }
 
-  return { onOpenDialog };
+  return { loadProjects, loadSession, onOpenDialog };
 }
