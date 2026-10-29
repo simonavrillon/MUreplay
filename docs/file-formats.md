@@ -46,8 +46,9 @@ belongs to. MUreplay takes the dataset from the opened file's location, the fold
 ```
 
 The older layout with `decomp/` directly under `<dataset>/sub-XX/` works too. When the opened
-file is not inside a `sub-*` folder, MUreplay reads the EMG from `MUREPLAY_DATA_ROOT` (`data/`
-in the MUreplay folder by default; see [cli.md](cli.md#environment-variables)).
+file is not inside a `sub-*` folder, MUreplay reads the EMG from the data folder (the one
+chosen with **Change data folder**, else `data/` in the MUreplay folder; see
+[cli.md](cli.md#environment-variables)).
 
 From the recording, MUreplay reads a grid's channels as MUedit2 does:
 

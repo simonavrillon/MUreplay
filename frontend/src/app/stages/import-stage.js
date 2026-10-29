@@ -1,6 +1,6 @@
 /**
  * Import stage: the settings rail's project tree, where a trial opens its
- * session, and the button that opens another file through the native dialog.
+ * session, and the button that picks another data folder for the tree.
  */
 
 /**
@@ -22,8 +22,7 @@ export function setupImportEvents(app) {
     app.setSettingsOpen(false);
     void app.loadSession(trial.dataset.path);
   });
-  els.openFileBtn.addEventListener("click", () => {
-    app.setSettingsOpen(false);
-    void app.onOpenDialog();
+  els.dataFolderBtn.addEventListener("click", () => {
+    void app.onChooseDataFolder();
   });
 }

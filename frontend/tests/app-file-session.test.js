@@ -1,4 +1,4 @@
-// Opening a session: the project tree, the file dialog, the load call, and the state it fills.
+// Opening a session: the project tree, the data folder dialog, the load call, and the state it fills.
 import { test, describe } from "node:test";
 import assert from "node:assert/strict";
 import { createFileSessionService } from "../src/app/services/file-session.js";
@@ -41,8 +41,7 @@ function createFakeApp(opts = {}) {
         if (opts.projectsError) throw opts.projectsError;
         return opts.projects;
       },
-      openFileDialog: async () => {
-        calls.push(["dialog"]);
+      chooseDataFolder: async () => {
         if (opts.dialogError) throw opts.dialogError;
         return opts.dialogResult;
       },
@@ -71,13 +70,12 @@ function replayStatuses(app) {
 }
 
 /**
- * Open `filePath` through the dialog, as the user does.
+ * Open `filePath`, as a click on its trial does.
  * @param {FakeApp} app
  * @param {string} [filePath]
  */
-function openFile(app, filePath = "/recordings/sub-01_edited.json") {
-  app.api.openFileDialog = async () => ({ path: filePath });
-  return createFileSessionService(app).onOpenDialog();
+function openTrial(app, filePath = "/recordings/sub-01_edited.json") {
+  return createFileSessionService(app).loadSession(filePath);
 }
 
 function loadPayload(overrides = {}) {
@@ -103,7 +101,7 @@ function loadPayload(overrides = {}) {
 describe("loading a session", () => {
   test("fills the state, starts the replay and says what loaded", async () => {
     const app = createFakeApp({ loadPayload: loadPayload() });
-    await openFile(app);
+    await openTrial(app);
 
     assert.equal(app.state.bidsRoot, "/data");
     assert.equal(app.state.entityLabel, "sub-01_task-rest");
@@ -128,7 +126,7 @@ describe("loading a session", () => {
       const app = createFakeApp({
         loadPayload: loadPayload({ source_filename: source }),
       });
-      await openFile(app, "/r/sub-01_edited.npz");
+      await openTrial(app, "/r/sub-01_edited.npz");
       assert.equal(app.state.loadedFromDecomp, fromDecomp, source);
     }
   });
@@ -142,7 +140,7 @@ describe("loading a session", () => {
         ],
       }),
     });
-    await openFile(app);
+    await openTrial(app);
 
     const { state } = app;
     assert.equal(state.editHistory.length, 1);
@@ -159,7 +157,7 @@ describe("loading a session", () => {
     const app = createFakeApp({
       loadError: new Error("file not found"),
     });
-    await openFile(app, "/recordings/missing.json");
+    await openTrial(app, "/recordings/missing.json");
     const statuses = replayStatuses(app);
     assert.equal(statuses[statuses.length - 2], "Loading the session…");
     assert.equal(
@@ -169,27 +167,42 @@ describe("loading a session", () => {
   });
 });
 
-describe("onOpenDialog", () => {
-  test("a dismissed dialog loads nothing and says so", async () => {
-    const app = createFakeApp({ dialogResult: {} });
-    const service = createFileSessionService(app);
-    await service.onOpenDialog();
+describe("onChooseDataFolder", () => {
+  test("redraws the tree from the folder picked", async () => {
+    const projects = { projects: [], data_root: "/lab" };
+    const app = createFakeApp({
+      dialogResult: { data_root: "/lab" },
+      projects,
+    });
+    await createFileSessionService(app).onChooseDataFolder();
+    assert.ok(replayStatuses(app).includes("The data folder is now /lab."));
+    assert.deepEqual(
+      app.calls.find((c) => c[0] === "projects"),
+      ["projects", { projects: [], dataRoot: "/lab" }],
+    );
+  });
+
+  test("a dismissed dialog keeps the tree and says so", async () => {
+    const app = createFakeApp({ dialogResult: { data_root: null } });
+    await createFileSessionService(app).onChooseDataFolder();
     const statuses = replayStatuses(app);
-    assert.equal(statuses[statuses.length - 1], "No file selected.");
     assert.equal(
-      app.calls.some((c) => c[0] === "load"),
+      statuses[statuses.length - 1],
+      "The data folder is unchanged.",
+    );
+    assert.equal(
+      app.calls.some((c) => c[0] === "projects"),
       false,
     );
   });
 
   test("a failing dialog says why", async () => {
     const app = createFakeApp({ dialogError: new Error("no backend") });
-    const service = createFileSessionService(app);
-    await service.onOpenDialog();
+    await createFileSessionService(app).onChooseDataFolder();
     const statuses = replayStatuses(app);
     assert.equal(
       statuses[statuses.length - 1],
-      "Could not open the file dialog: no backend",
+      "Could not change the data folder: no backend",
     );
   });
 });

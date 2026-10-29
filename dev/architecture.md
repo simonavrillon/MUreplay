@@ -9,7 +9,7 @@ How MUreplay is put together, and the decisions behind its shape. The code holds
 `mureplay api` (`cli.py`) starts one FastAPI server that serves the API under `/api/v1` and
 `frontend/` at `/`. Because the page and the API share one origin there is no CORS, and when the
 server is bound to loopback a `TrustedHostMiddleware` rejects DNS-rebound requests: the load
-route and the file dialog read any local path. The frontend has no build step: the browser
+route and the folder dialog read any local path. The frontend has no build step: the browser
 loads `frontend/app.js` as an ES module.
 
 ## What a replay is

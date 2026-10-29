@@ -7,6 +7,6 @@ export const API_BASE = "/api/v1";
 export const routes = {
   loadPairedFromPath: "/load-paired-from-path",
   editUpdateFilter: "/edit/update-filter",
-  dialogOpenFile: "/dialog/open-file",
+  dialogDataFolder: "/dialog/data-folder",
   projects: "/projects",
 };

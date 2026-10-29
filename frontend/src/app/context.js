@@ -46,7 +46,7 @@
  * @typedef {object} FileSessionService
  * @property {() => Promise<void>} loadProjects Refresh the project tree from the data folder.
  * @property {(filePath: string) => Promise<void>} loadSession Open the session paired with `filePath`.
- * @property {() => Promise<void>} onOpenDialog
+ * @property {() => Promise<void>} onChooseDataFolder Pick another data folder in the native dialog, then redraw the tree from it.
  */
 
 /**

@@ -16,17 +16,17 @@ can step backward and forward as often as you like.
 
 ## Open a session
 
-Click the folder icon at the top of the rail on the left to open **Projects**: the BIDS projects
-in the data folder (`data/` in the MUreplay folder, or `MUREPLAY_DATA_ROOT`; see
-[cli.md](cli.md#environment-variables)). Click a project to unfold its participants, a
-participant to unfold its sessions, and a session to list its trials: every recording with an
-edit log (`<entity>_edited.json`). Click a trial to open it: the rail closes onto the replay,
-and the trial you opened stays highlighted in the tree. The tree is read again each time you
-click the **Projects** header, so a session saved in MUedit2 meanwhile shows up.
+Click the folder icon at the top of the rail on the left to open **Projects**: the BIDS
+projects in the data folder. Click a project to unfold its participants, a participant to
+unfold its sessions, and a session to list its trials: every recording with an edit log
+(`<entity>_edited.json`). Click a trial to open it: the rail closes onto the replay, and the
+trial you opened stays highlighted in the tree. The tree is read again each time you click
+the **Projects** header, so a session saved in MUedit2 meanwhile shows up.
 
-For a file outside the data folder, click **Open another file…** under the tree and pick one of
-the files MUedit2 saved for the recording: `<entity>_decomp.npz`, `<entity>_edited.npz` or
-`<entity>_edited.json`. They usually sit in `<dataset>/derivatives/muedit/sub-XX/[ses-YY]/decomp/`.
+To browse other projects, click **Change data folder** under the tree and pick a BIDS dataset,
+or a folder of them; the tree is redrawn from it. MUreplay remembers the folder for the next
+launch. Until you choose one, the data folder is `data/` in the MUreplay folder; when
+`MUREPLAY_DATA_ROOT` is set, it fixes the folder instead (see [cli.md](cli.md#environment-variables)).
 
 Whichever you open, MUreplay opens the decomposition MUedit2 started from (`_decomp.npz`) with
 the edit log beside it (`_edited.json`), and finds the original EMG recording in the dataset for

@@ -7,8 +7,8 @@ import { API_BASE, routes } from "./routes.js";
 /** @typedef {import("../app/context.js").JsonObject} JsonObject */
 
 /**
- * Longer than the 120 s the server keeps its file dialog open, so the
- * server's "File dialog timed out" arrives before this request gives up.
+ * Longer than the 120 s the server keeps its folder dialog open, so the
+ * server's "Folder dialog timed out" arrives before this request gives up.
  */
 const DIALOG_TIMEOUT_MS = 130000;
 
@@ -44,8 +44,13 @@ export function createApiClient({ apiJson }) {
       return apiJson(urlOf(routes.projects));
     },
 
-    openFileDialog() {
-      return apiJson(urlOf(routes.dialogOpenFile), {}, DIALOG_TIMEOUT_MS);
+    /** Pick another data folder in the native dialog; the server remembers it. */
+    chooseDataFolder() {
+      return apiJson(
+        urlOf(routes.dialogDataFolder),
+        { method: "POST" },
+        DIALOG_TIMEOUT_MS,
+      );
     },
 
     /** @param {JsonObject} payload */

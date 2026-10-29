@@ -90,7 +90,7 @@ export function renderProjectTree(els, { projects, dataRoot }) {
     }),
   );
   els.projectTreeHint.hidden = projects.length > 0;
-  els.projectTreeHint.textContent = `No BIDS project in ${dataRoot}. Set MUREPLAY_DATA_ROOT to the folder that holds yours, then reopen this section.`;
+  els.projectTreeHint.textContent = `No BIDS project in ${dataRoot}. Change the data folder to the one that holds yours.`;
 }
 
 /**

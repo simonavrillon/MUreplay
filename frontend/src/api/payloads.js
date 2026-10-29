@@ -18,6 +18,16 @@ export function normalizeProjectList(raw) {
 }
 
 /**
+ * The data folder the dialog picked, `null` when the dialog was cancelled.
+ *
+ * @param {JsonObject} raw
+ * @returns {{ dataRoot: string | null }}
+ */
+export function normalizeDataFolder(raw) {
+  return { dataRoot: raw.data_root };
+}
+
+/**
  * @param {JsonObject} raw
  */
 export function normalizeSessionPayload(raw) {

@@ -24,7 +24,7 @@ export const els = {
   projectsHeader: element("projectsHeader"),
   projectTree: element("projectTree"),
   projectTreeHint: element("projectTreeHint"),
-  openFileBtn: button("openFileBtn"),
+  dataFolderBtn: button("dataFolderBtn"),
   fileName: element("fileName"),
   bidsProject: input("bidsProject"),
   bidsSubject: input("bidsSubject"),

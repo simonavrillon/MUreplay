@@ -47,13 +47,14 @@ describe("updateFilter", () => {
   });
 });
 
-describe("openFileDialog", () => {
-  test("waits longer than the server keeps its dialog open", async () => {
-    const { apiJson, calls } = createRecordingApiJson({ path: null });
+describe("chooseDataFolder", () => {
+  test("posts, and waits longer than the server keeps its dialog open", async () => {
+    const { apiJson, calls } = createRecordingApiJson({ data_root: null });
     const client = createApiClient({ apiJson });
-    await client.openFileDialog();
+    await client.chooseDataFolder();
     const call = calls[0];
-    assert.equal(call.url, `${API_BASE}${routes.dialogOpenFile}`);
+    assert.equal(call.url, `${API_BASE}${routes.dialogDataFolder}`);
+    assert.equal(call.options.method, "POST");
     // The server gives up on the dialog after 120 s, then answers 408.
     assert.ok(/** @type {number} */ (call.timeoutMs) > 120000);
   });

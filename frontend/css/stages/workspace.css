@@ -389,7 +389,12 @@
   font-weight: var(--fw-semibold);
 }
 
-#openFileBtn {
+/* The hint names the data folder: a long path wraps instead of widening the rail. */
+#projectTreeHint {
+  overflow-wrap: anywhere;
+}
+
+#dataFolderBtn {
   margin-top: 6px;
 }
 

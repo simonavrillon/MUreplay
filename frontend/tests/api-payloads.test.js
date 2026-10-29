@@ -1,8 +1,10 @@
-// Payload normalisation at the API boundary: loaded sessions, log entries, refit results.
+// Payload normalisation at the API boundary: loaded sessions, log entries, refit results,
+// the picked data folder.
 import { test, describe } from "node:test";
 import assert from "node:assert/strict";
 import {
   buildMuUids,
+  normalizeDataFolder,
   normalizeLogEntry,
   normalizeRefitResult,
   normalizeSessionPayload,
@@ -195,6 +197,17 @@ describe("normalizeRefitResult", () => {
         pulseTrain: [0.5],
       },
     );
+  });
+});
+
+describe("normalizeDataFolder", () => {
+  test("renames the picked folder, null when cancelled", () => {
+    assert.deepEqual(normalizeDataFolder({ data_root: "/lab" }), {
+      dataRoot: "/lab",
+    });
+    assert.deepEqual(normalizeDataFolder({ data_root: null }), {
+      dataRoot: null,
+    });
   });
 });
 

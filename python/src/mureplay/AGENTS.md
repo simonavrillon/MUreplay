@@ -12,7 +12,7 @@ Architecture: [dev/architecture.md](../../../dev/architecture.md). Wire formats:
 - Routes stay thin: parse, call a service, return `success_payload(...)`. Logic goes in
   `api/services/`, or in a domain package when it isn't HTTP work.
 - Routes are plain `def`, so FastAPI runs them in its thread pool: the refit, the loaders and
-  the file dialog block.
+  the folder dialog block.
 - `mureplay/__init__.py` exports only `installed_version()`; import from the sub-package.
 
 ## The MUedit2 mirror

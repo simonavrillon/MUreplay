@@ -9,6 +9,7 @@ from pathlib import Path
 import pytest
 from starlette.testclient import TestClient
 
+from mureplay import paths
 from mureplay.api.app_factory import create_app
 from mureplay.api.routes import include_routers
 
@@ -55,6 +56,14 @@ def muedit2_session() -> Path:
     return require_sample(
         MUEDIT2_ROOT / "data" / "Test" / _SAMPLE_DECOMP / f"{SAMPLE_ENTITY}_edited.npz"
     )
+
+
+@pytest.fixture(autouse=True)
+def config_file(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> Path:
+    """A config file of the test's own, so no test reads or writes the user's."""
+    path = tmp_path / "config" / "config.json"
+    monkeypatch.setattr(paths, "config_file", lambda: path)
+    return path
 
 
 @pytest.fixture

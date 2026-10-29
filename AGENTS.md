@@ -145,6 +145,7 @@ names and JSON keys are snake_case; the frontend writes the same name in camelCa
 | pulse train (IPT) | an MU's source signal, from which discharges are picked | `pulse_trains` |
 | grid | one electrode array; a recording can hold several | `grid_names`, `mu_grid_index` |
 | BIDS dataset | the dataset a session belongs to, holding the raw EMG | `bids_root` |
+| data folder | the folder whose BIDS projects the **Projects** tree lists (a folder of datasets, or one), and the dataset filter steps fall back to | `data_root` (`paths.py`), `dataRoot` |
 | entity label | the BIDS name of a recording, such as `sub-1_ses-1_task-x_run-1` | `entity_label` |
 | uid | an MU's stable id in the edit log, numbered per grid | `mu_uid` (`g<grid>_mu<n>`) |
 | edit log | the `_edited.json` beside a decomposition: MUedit2's history | `edit_history` (its key in the file: `history`) |

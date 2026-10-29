@@ -16,8 +16,8 @@ change these only together with the other side, and with a test.
 
 | Route | Does |
 |---|---|
-| `GET /projects` | the BIDS datasets in `MUREPLAY_DATA_ROOT` (or that folder, when it is one), each a tree of subjects, sessions (`""` when the subject has none) and trials; a trial is an `_edited.json` under the dataset, named by its entities below the session, with its `path` for `/load-paired-from-path`. `data_root` is the folder listed |
-| `GET /dialog/open-file` | the path the user picks in the native file dialog, or `null` when cancelled |
+| `GET /projects` | the BIDS datasets in the data folder (`paths.data_root`) (or that folder, when it is one), each a tree of subjects, sessions (`""` when the subject has none) and trials; a trial is an `_edited.json` under the dataset, named by its entities below the session, with its `path` for `/load-paired-from-path`. `data_root` is the folder listed |
+| `POST /dialog/data-folder` | opens the native folder dialog and saves the pick as the data folder in the per-user config; `data_root` is the folder, or `null` when cancelled. A 400 while `MUREPLAY_DATA_ROOT` is set, since it would override the pick |
 | `POST /load-paired-from-path` | the decomposition and edit log paired with a path ([file-formats.md](../docs/file-formats.md#how-files-are-paired)), complete: `fsamp`, `grid_names` and one `mu_grid_index` entry per MU are filled in when the file has none, and `refit_settings` holds the run's `nbextchan`, `peel_off_win` and `compute_dtype`, with MUedit2's defaults where the file's `parameters` have none. `parameters` holds the run settings the settings rail shows, those the file has as plain values; `sidecar_meta` the participant, placement and hardware fields of the BIDS sidecars (`io/bids.py:read_sidecar_meta`, MUedit2's), empty when they cannot be read |
 | `POST /edit/update-filter` | refits one MU on the BIDS EMG, as a logged `update_filter` step did |
 
@@ -47,7 +47,7 @@ page:
 | `inactive_mus` | the MUs flagged or removed before the step (`inactiveMusBefore`); left out of peel-off |
 | `grid_name` | the decomposition's grid names; picks the bandpass |
 | `artifact_times`, `artifact_regions` | the MU's artifact markers at that step; the file's artifact windows |
-| `bids_root`, `entity_label` | the load response's: the dataset inferred from the file's location (else `MUREPLAY_DATA_ROOT`), and the decomposition's recording |
+| `bids_root`, `entity_label` | the load response's: the dataset inferred from the file's location (else the data folder), and the decomposition's recording |
 | `nbextchan`, `peel_off_win`, `compute_dtype` | the load response's `refit_settings`: the decomposition's saved run `parameters`, as MUedit2's session refits with them |
 
 ## The edit log (MUedit2's format)

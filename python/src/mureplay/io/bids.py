@@ -38,7 +38,7 @@ def _resolve_bids_emg_path(bids_root: Path, entity_label: str) -> Path:
         if candidate.exists():
             return candidate
     raise NotFoundError(
-        f"No EMG recording for {entity_label} in {emg_dir}; set MUREPLAY_DATA_ROOT to the dataset.",
+        f"No EMG recording for {entity_label} in {emg_dir}; choose the dataset as the data folder.",
         field="bids_root",
     )
 

@@ -11,7 +11,9 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 - A **Projects** tree at the top of the settings rail lists the BIDS projects in the data folder,
   down to their participants, sessions and trials; clicking a trial opens it. It replaces the
-  **Load log file** button, whose file dialog moves under the tree as **Open another file…**.
+  **Load log file** button.
+- **Change data folder** under the **Projects** tree points it at another folder of BIDS
+  projects, and MUreplay remembers it for the next launch.
 - `B` and `N` step back and forward through the replay.
 - A settings rail on the left, as in MUedit2, shows the session's fields read-only: the BIDS
   entities, participant, placement and hardware from the dataset's sidecars, and the run's
@@ -33,6 +35,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 - Status messages are plain sentences: a failed load reads "Could not load the session: …", and
   a filter step that could not be recomputed says it was replayed from the edit log instead.
+- The hint shown when the EMG recording cannot be read says to choose the dataset as the data
+  folder, not to set `MUREPLAY_DATA_ROOT`.
 - Errors on the status show in red.
 - The bar under the pulse train also marks the artifact markers the current step added or
   removed, as MUedit2's does.
@@ -44,7 +48,6 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   current MUedit2 sessions saved.
 - Peel-off in a recomputed filter step leaves out the motor units that were flagged or removed
   at that point of the session, as MUedit2 does.
-- The file dialog asks for a decomposition (`.npz`) or its edit log (`.json`).
 - Filter steps are recomputed with the settings the decomposition was run with (channel
   extension, peel-off window and precision), as MUedit2's editor does, rather than with its
   defaults.
@@ -60,8 +63,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   drops `fsamp`.
 - The refit request names its MU `mu`, as MUedit2 does, and takes the grid from
   `mu_grid_index`; it drops `mu_idx` and `grid_index`. The load response falls back to
-  `MUREPLAY_DATA_ROOT` for `bids_root` itself, so `GET /config` is gone, and the file dialog
-  answers with `path` alone.
+  the data folder for `bids_root` itself, so `GET /config` is gone, and the folder dialog
+  answers with `data_root` alone.
 
 ### Removed
 
@@ -76,8 +79,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Fixed
 
-- A file dialog left open for two minutes reports "File dialog timed out" rather than "The
-  server took too long to answer."
+- A folder dialog left open for two minutes reports "Folder dialog timed out" rather than
+  "The server took too long to answer."
 - The current step's window is no longer shaded twice as dark while the plots are zoomed out.
 - The motor unit dropdown shows the flagged, duplicated and removed marks as soon as a session
   opens, and never opens on a removed unit.

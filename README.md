@@ -86,7 +86,7 @@ A session moves through three steps:
 
 1. **Open** — click the folder icon at the top of the rail on the left, unfold a project, a
    participant and a session, and click a trial. MUreplay lists the BIDS projects in its
-   `data/` folder; **Open another file…** picks a session saved anywhere else.
+   `data/` folder; **Change data folder** points it at the folder that holds yours.
 2. **Pick a motor unit** — with the **Grid** and **Motor unit** dropdowns, or `<` and `>`. The
    dropdown also shows the units the editor flagged (`✕`), duplicated (`⊕`) or removed (`⊗`).
 3. **Step through its edits** — the timeline holds every edit made to the unit, in order and

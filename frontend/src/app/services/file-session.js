@@ -1,10 +1,11 @@
 /**
- * File session service: listing the projects in the data folder, and opening a
- * session from one of their trials or from the native dialog. The loaded
+ * File session service: listing the projects in the data folder, choosing
+ * another data folder, and opening a session from one of its trials. The loaded
  * decomposition replaces the shown one through `beginSession`; its log,
  * normalised, then starts the replay.
  */
 import {
+  normalizeDataFolder,
   normalizeProjectList,
   normalizeSessionPayload,
 } from "../../api/payloads.js";
@@ -29,21 +30,22 @@ export function createFileSessionService(app) {
     }
   }
 
-  /** @type {FileSessionService["onOpenDialog"]} */
-  async function onOpenDialog() {
-    let path;
+  /** @type {FileSessionService["onChooseDataFolder"]} */
+  async function onChooseDataFolder() {
+    let dataRoot;
     try {
-      app.setReplayStatus("Opening the file dialog…");
-      ({ path } = await app.api.openFileDialog());
+      app.setReplayStatus("Opening the folder dialog…");
+      ({ dataRoot } = normalizeDataFolder(await app.api.chooseDataFolder()));
     } catch (err) {
-      handleError(err, app.setReplayStatus, "Could not open the file dialog");
+      handleError(err, app.setReplayStatus, "Could not change the data folder");
       return;
     }
-    if (!path) {
-      app.setReplayStatus("No file selected.");
+    if (!dataRoot) {
+      app.setReplayStatus("The data folder is unchanged.");
       return;
     }
-    await loadSession(path);
+    app.setReplayStatus(`The data folder is now ${dataRoot}.`);
+    await loadProjects();
   }
 
   /** @type {FileSessionService["loadSession"]} */
@@ -67,5 +69,5 @@ export function createFileSessionService(app) {
     }
   }
 
-  return { loadProjects, loadSession, onOpenDialog };
+  return { loadProjects, loadSession, onChooseDataFolder };
 }
