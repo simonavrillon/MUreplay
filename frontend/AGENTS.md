@@ -26,9 +26,9 @@ Architecture: [dev/architecture.md](../dev/architecture.md#frontend-shape). Wire
 - Change state only through the setters in `state/actions.js`; read with `state/selectors.js`
   where a selector exists. A newly opened session replaces the old one through
   `state/transitions.js: beginSession`.
-- Every step applied forward pushes a backup, and undoing it restores the backup. Keep that
-  pairing when adding a step type: a replay stepped forward and back must leave the arrays
-  exactly as they were.
+- The server holds the replay; the page holds a window of it. Never fetch or keep a
+  full-length array: the pulse train on screen is `state.pulseView`, fetched for the view and
+  the MU's version (`ensurePulseView`), and a seek's change frame carries only the MUs it moved.
 - Every scripted element has a typed handle in `app/dom.js`, used as `app.els.x`. Element ids
   in `index.html` are referenced by the docs, so rename them with care.
 - Hide elements with the `hidden` attribute (`el.hidden = true`); `css/base.css` makes it win
@@ -43,6 +43,8 @@ Architecture: [dev/architecture.md](../dev/architecture.md#frontend-shape). Wire
 - Paths live only in `api/routes.js`; calls only in `api/client.js`. `tests/test_api_app.py`
   fails if `routes.js` names a path the backend doesn't serve.
 - Backend JSON is `JsonObject` until it is normalised at the boundary (`api/payloads.js`).
+  Arrays arrive as MUB1 frames, decoded in `api/binary-payloads.js` into typed-array views.
+- Every request carries the tab's session id (`api/http.js: apiFetch`).
 - Branch on `ApiError.field` / `.status`, never on message text. Report failures with
   `handleError(err, setReplayStatus, label)` (`app/services/error-service.js`).
 
@@ -68,9 +70,10 @@ Architecture: [dev/architecture.md](../dev/architecture.md#frontend-shape). Wire
 - Tests are type-checked too (`tsconfig.test.json`), so a fake that drifts from what it stands
   in for fails the build.
 
-| Helper    | For                                                                                                                                                  |
-| --------- | ---------------------------------------------------------------------------------------------------------------------------------------------------- |
-| `_dom.js` | `installDom` (window, document, `getComputedStyle` over the real `css/tokens.css`), `fakeElement`, `fakeSelect`, `fakeCanvas` (records its 2D calls) |
+| Helper       | For                                                                                                                                                  |
+| ------------ | ---------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `_dom.js`    | `installDom` (window, document, `getComputedStyle` over the real `css/tokens.css`), `fakeElement`, `fakeSelect`, `fakeCanvas` (records its 2D calls) |
+| `_frames.js` | `encodeFrame`: a MUB1 frame built as the backend's `pack_frame` builds it                                                                            |
 
 Call `installDom()` before running code that reads the page: `config.js` reads the tokens
 through `getComputedStyle`, and the replay service creates `<option>` elements.

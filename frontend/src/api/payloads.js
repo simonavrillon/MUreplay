@@ -1,13 +1,14 @@
 /**
- * Backend JSON normalised at the boundary: a loaded session, its log entries
- * and a refit result become the shapes the state holds. Past this module no
- * code reads a snake_case key. The backend types the decomposition's arrays
- * and its run settings, so only what it passes through from the user's files
- * unchecked is checked here: the log, with its uids and artifact markers.
+ * Backend answers normalised at the boundary: an opened replay session, its
+ * log entries and what a seek changed become the shapes the state holds.
+ * Past this module no code reads a snake_case key. The backend types the
+ * decomposition's fields, its uids and its run settings, so only what it
+ * passes through from the user's files unchecked is checked here: the log.
  */
 
 /** @typedef {import("../app/context.js").JsonObject} JsonObject */
 /** @typedef {import("../state/state.js").EditLogEntry} EditLogEntry */
+/** @typedef {import("./binary-payloads.js").ReplaySessionFrame} ReplaySessionFrame */
 
 /**
  * @param {JsonObject} raw
@@ -28,22 +29,21 @@ export function normalizeDataFolder(raw) {
 }
 
 /**
- * @param {JsonObject} raw
+ * An opened replay session: its fields, and every MU's discharge times.
+ *
+ * @param {ReplaySessionFrame} frame
  */
-export function normalizeSessionPayload(raw) {
-  const muUids =
-    Array.isArray(raw.mu_uids) && raw.mu_uids.length === raw.spike_times.length
-      ? raw.mu_uids.map((v) => String(v))
-      : buildMuUids(raw.mu_grid_index);
-
+export function normalizeSessionPayload({ meta: raw, spikeTimes }) {
+  /** @type {string[]} */
+  const muUids = raw.mu_uids;
   /** @type {EditLogEntry[]} */
-  const editHistory = [];
-  for (const entry of raw.edit_history) {
-    const step = normalizeLogEntry(entry, muUids);
-    if (step) editHistory.push(step);
-  }
+  const editHistory = raw.edit_history.map((/** @type {JsonObject} */ entry) =>
+    normalizeLogEntry(entry, muUids),
+  );
 
   return {
+    /** @type {string} */
+    token: raw.token,
     /** @type {string} */
     sourceFilename: raw.source_filename,
     /** @type {string} */
@@ -52,28 +52,37 @@ export function normalizeSessionPayload(raw) {
     entityLabel: raw.entity_label,
     /** @type {number} */
     fsamp: raw.fsamp,
-    /** @type {number[][]} */
-    pulseTrains: raw.pulse_trains,
-    /** @type {number[][]} */
-    spikeTimes: raw.spike_times,
+    /** @type {number} */
+    totalSamples: raw.total_samples,
+    spikeTimes,
+    /** @type {number[]} */
+    versions: raw.versions,
     /** @type {string[]} */
     gridNames: raw.grid_names,
     /** @type {number[]} */
     muGridIndex: raw.mu_grid_index,
     muUids,
-    artifactTimes: artifactRows(raw.artifact_times, raw.spike_times.length),
-    // No key when the decomposition has no artifact windows.
     /** @type {number[][]} */
-    artifactRegions: raw.artifact_regions ?? [],
-    /** @type {import("../state/state.js").RefitSettings} */
-    refitSettings: {
-      nbextchan: raw.refit_settings.nbextchan,
-      peelOffWin: raw.refit_settings.peel_off_win,
-      computeDtype: raw.refit_settings.compute_dtype,
-    },
+    artifactRegions: raw.artifact_regions,
     parameters: normalizeParameters(raw.parameters ?? {}),
     sidecarMeta: normalizeSidecarMeta(raw.sidecar_meta ?? {}),
     editHistory,
+  };
+}
+
+/**
+ * What a seek changed: the discharges of the MUs it moved, every MU's
+ * version, and the refits that fell back to the logged diff.
+ *
+ * @param {ReplaySessionFrame} frame
+ * @returns {import("../state/state.js").ReplayChange}
+ */
+export function normalizeReplayChange({ meta, spikeTimes }) {
+  return {
+    changed: meta.changed,
+    spikeTimes,
+    versions: meta.versions,
+    refitErrors: meta.refit_errors,
   };
 }
 
@@ -144,42 +153,13 @@ function normalizeSidecarMeta(raw) {
 }
 
 /**
- * The log's artifact markers as one row per MU, empty where it has none.
+ * The backend sends only the log's object entries.
  *
- * @param {unknown} artifactTimes
- * @param {number} nMu
- * @returns {number[][]}
- */
-function artifactRows(artifactTimes, nMu) {
-  return Array.from({ length: nMu }, (_, mu) => {
-    const row = Array.isArray(artifactTimes) ? artifactTimes[mu] : null;
-    return Array.isArray(row) ? row.map(Number) : [];
-  });
-}
-
-/**
- * MU uids as MUedit2 numbers the MUs of a file that has none: per grid, from 0.
- *
- * @param {number[]} muGridIndex
- * @returns {string[]}
- */
-export function buildMuUids(muGridIndex) {
-  /** @type {Record<number, number>} */
-  const counts = {};
-  return muGridIndex.map((grid) => {
-    const n = counts[grid] || 0;
-    counts[grid] = n + 1;
-    return `g${grid}_mu${n}`;
-  });
-}
-
-/**
  * @param {JsonObject} entry
  * @param {string[]} muUids
- * @returns {EditLogEntry | null}
+ * @returns {EditLogEntry}
  */
 export function normalizeLogEntry(entry, muUids) {
-  if (!entry || typeof entry !== "object") return null;
   const muUid = entry.mu_uid ? String(entry.mu_uid) : "";
   return {
     type: String(entry.type || "unknown").toLowerCase(),
@@ -200,16 +180,6 @@ export function normalizeLogEntry(entry, muUids) {
       ? entry.removed_mu_uids.map((v) => String(v))
       : [],
   };
-}
-
-/**
- * An `update_filter` refit's new discharges and pulse train for its MU.
- *
- * @param {JsonObject} raw
- * @returns {{ spikes: number[], pulseTrain: number[] }}
- */
-export function normalizeRefitResult(raw) {
-  return { spikes: raw.spikes, pulseTrain: raw.pulse_train };
 }
 
 /**

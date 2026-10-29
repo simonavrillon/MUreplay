@@ -5,13 +5,9 @@
 
 /** @typedef {import("./state.js").State} State */
 /** @typedef {import("./state.js").MuMark} MuMark */
-/** @typedef {import("./state.js").ReplayBackup} ReplayBackup */
-/** @typedef {import("./state.js").ReplayBase} ReplayBase */
+/** @typedef {import("./state.js").ReplayChange} ReplayChange */
 /** @typedef {import("./state.js").ReplayGroup} ReplayGroup */
 /** @typedef {import("../app/context.js").Span} Span */
-
-/** @param {number[][]} rows */
-const copyRows = (rows) => rows.map((row) => [...row]);
 
 /**
  * @param {State} state
@@ -56,32 +52,26 @@ export function setReplayPosition(state, position) {
 }
 
 /**
- * @param {State} state
- * @param {ReplayBackup} backup
- */
-export function pushReplayBackup(state, backup) {
-  state.replayBackups.push(backup);
-}
-
-/**
- * @param {State} state
- * @returns {ReplayBackup | undefined}
- */
-export function popReplayBackup(state) {
-  return state.replayBackups.pop();
-}
-
-/**
- * Replace one MU's rows; a row left out keeps its value.
+ * What a seek changed: the moved MUs' discharges, and every MU's version.
  *
  * @param {State} state
- * @param {number} mu
- * @param {{ spikes?: number[], pulseTrain?: number[], artifacts?: number[] }} rows
+ * @param {ReplayChange} change
  */
-export function setMuRows(state, mu, { spikes, pulseTrain, artifacts }) {
-  if (spikes) state.spikeTimes[mu] = spikes;
-  if (pulseTrain) state.pulseTrains[mu] = pulseTrain;
-  if (artifacts) state.artifactTimes[mu] = artifacts;
+export function applyReplayChange(state, change) {
+  change.changed.forEach((mu, i) => {
+    state.spikeTimes[mu] = change.spikeTimes[i];
+  });
+  state.versions = change.versions;
+}
+
+/**
+ * The current MU's pulse train window, as it arrived.
+ *
+ * @param {State} state
+ * @param {import("../api/binary-payloads.js").PulseView | null} view
+ */
+export function setPulseView(state, view) {
+  state.pulseView = view;
 }
 
 /**
@@ -107,28 +97,11 @@ export function setTimelineGroups(state, groups) {
 }
 
 /**
- * Keep `base` as the replay's starting point and put a copy of it in view, at step 0.
- *
- * @param {State} state
- * @param {ReplayBase} base
- */
-export function setReplayBase(state, base) {
-  state.replayBaseSpikeTimes = copyRows(base.spikeTimes);
-  state.replayBasePulseTrains = copyRows(base.pulseTrains);
-  state.replayBaseArtifactTimes = copyRows(base.artifactTimes);
-  restoreReplayBase(state);
-}
-
-/**
- * Back to step 0: a fresh copy of the replay base, no backups, the whole recording in view.
+ * Back to step 0, the whole recording in view; the server is asked to follow.
  *
  * @param {State} state
  */
-export function restoreReplayBase(state) {
-  state.replayBackups = [];
+export function resetReplayPosition(state) {
   state.replayPosition = 0;
   state.replayView = null;
-  state.spikeTimes = copyRows(state.replayBaseSpikeTimes);
-  state.pulseTrains = copyRows(state.replayBasePulseTrains);
-  state.artifactTimes = copyRows(state.replayBaseArtifactTimes);
 }

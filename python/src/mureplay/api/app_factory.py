@@ -2,7 +2,8 @@
 
 from __future__ import annotations
 
-from collections.abc import Sequence
+from collections.abc import AsyncIterator, Sequence
+from contextlib import asynccontextmanager
 from pathlib import Path
 from typing import Any
 
@@ -11,7 +12,21 @@ from fastapi.staticfiles import StaticFiles
 from starlette.middleware.trustedhost import TrustedHostMiddleware
 
 from mureplay import installed_version
+from mureplay.api.cache import BUDGET
 from mureplay.api.errors import register_exception_handlers
+from mureplay.storage import purge_stale_sessions
+
+
+@asynccontextmanager
+async def _sweep_caches(_app: FastAPI) -> AsyncIterator[None]:
+    """Sweep idle sessions while the app runs; own no session store after."""
+    purge_stale_sessions()
+    BUDGET.start_sweeper()
+    try:
+        yield
+    finally:
+        BUDGET.stop_sweeper()
+        BUDGET.clear()
 
 
 class _RevalidatedFiles(StaticFiles):
@@ -25,7 +40,9 @@ class _RevalidatedFiles(StaticFiles):
 
 def create_app(allowed_hosts: Sequence[str] | None = None) -> FastAPI:
     """Create the FastAPI app with the host check and canonical error handlers."""
-    app = FastAPI(title="MUreplay API", version=installed_version() or "unknown")
+    app = FastAPI(
+        title="MUreplay API", version=installed_version() or "unknown", lifespan=_sweep_caches
+    )
     if allowed_hosts is not None:
         # DNS rebinding makes a hostile page same-origin, so CORS cannot stop it; the Host header can.
         app.add_middleware(TrustedHostMiddleware, allowed_hosts=list(allowed_hosts))

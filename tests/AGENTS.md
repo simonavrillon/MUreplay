@@ -6,7 +6,7 @@ Tests are linted and type-checked like the package (`uv run ruff check .`, `uv r
 ## Layout
 
 - One file per source module: `test_<package>_<module>.py` (`test_io_bids.py`,
-  `test_replay_artifact_mask.py`, `test_api_editing.py`). Add to the existing file before
+  `test_replay_artifact_mask.py`, `test_api_replay.py`). Add to the existing file before
   creating one.
 - One suite crosses modules and is named for what it checks: `test_muedit2_parity.py`, which
   imports MUedit2 beside MUreplay and requires identical output, up to replaying MUedit2's
@@ -20,8 +20,10 @@ Tests are linted and type-checked like the package (`uv run ruff check .`, `uv r
 
 | Helper | For |
 |---|---|
-| `conftest.py` | `client` (`TestClient`), the sample-data fixtures (`sample_bids_root`, `muedit2_session`), `REPO_ROOT`, `MUEDIT2_ROOT`, `SAMPLE_ENTITY`, and the autouse `config_file` (a config file of the test's own, so no test reads or writes the user's) |
+| `conftest.py` | `client` (`TestClient`), the sample-data fixtures (`sample_bids_root`, `muedit2_session`), `replay_trial` (a synthetic decomposition and edit log with no EMG), `cache_dir` (a per-test cache folder), `REPO_ROOT`, `MUEDIT2_ROOT`, `SAMPLE_ENTITY`, and the autouse `config_file` (a config file of the test's own, so no test reads or writes the user's). Session stores go to a throwaway cache folder for the whole run |
 | `_api.py` | `API` prefix, envelope readers (`ok`, `error`) |
+| `_frames.py` | `unpack_frame`: a MUB1 frame read back as the page reads it |
+| `_platform.py` | `deleted`, `store_files`: what a store leaves on disk, allowing for Windows keeping mapped files |
 
 ## Data
 

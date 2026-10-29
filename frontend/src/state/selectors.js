@@ -41,26 +41,20 @@ export function currentMuStep(state) {
 
 /**
  * @param {State} state
- * @returns {number[]}
+ * @returns {Int32Array}
  */
 export function spikesForCurrentMu(state) {
-  return state.spikeTimes[state.currentMu] ?? [];
+  return state.spikeTimes[state.currentMu] ?? new Int32Array(0);
 }
 
 /**
+ * The current MU's pulse train window on screen, when one has arrived.
+ *
  * @param {State} state
- * @returns {number[]}
  */
-export function pulseTrainForCurrentMu(state) {
-  return state.pulseTrains[state.currentMu] ?? [];
-}
-
-/**
- * @param {State} state
- * @returns {number[]}
- */
-export function artifactsForCurrentMu(state) {
-  return state.artifactTimes[state.currentMu] ?? [];
+export function pulseViewForCurrentMu(state) {
+  const view = state.pulseView;
+  return view && view.mu === state.currentMu ? view : null;
 }
 
 /**

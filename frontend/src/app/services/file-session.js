@@ -1,8 +1,8 @@
 /**
  * File session service: listing the projects in the data folder, choosing
- * another data folder, and opening a session from one of its trials. The loaded
- * decomposition replaces the shown one through `beginSession`; its log,
- * normalised, then starts the replay.
+ * another data folder, and opening a session from one of its trials. The
+ * server opens the trial in a replay session, which replaces the shown one
+ * through `beginSession`; its log, normalised, then starts the replay.
  */
 import {
   normalizeDataFolder,
@@ -53,7 +53,7 @@ export function createFileSessionService(app) {
     try {
       app.setReplayStatus("Loading the session…");
       const payload = normalizeSessionPayload(
-        await app.api.loadPairedFromPath(filePath),
+        await app.api.replayOpen(filePath),
       );
       beginSession(state, payload);
       app.showSessionSettings(payload);

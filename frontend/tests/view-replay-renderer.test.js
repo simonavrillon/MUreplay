@@ -25,8 +25,8 @@ function render(logEntry) {
     fsamp: 1000,
     muUids: ["g0_mu0"],
     muGridIndex: [0],
-    pulseTrains: [new Array(1000).fill(0)],
-    spikeTimes: [[100, 200, 300]],
+    totalSamples: 1000,
+    spikeTimes: [Int32Array.from([100, 200, 300])],
     timelineGroups: [{ indices: [0], type: step.type, displayStep: step }],
     replayPosition: 1,
   };
@@ -80,6 +80,55 @@ describe("the timeline bar", () => {
       tickXs(els.editTimelineCanvas, COLORS.timelineAdded),
       [500],
     );
+  });
+});
+
+describe("the pulse train plot", () => {
+  test("draws the window the server sent, with its discharges at their values", () => {
+    const step = normalizeLogEntry({ type: "flag_mu", mu_uid: "g0_mu0" }, [
+      "g0_mu0",
+    ]);
+    const state = {
+      ...structuredClone(defaultState),
+      fsamp: 1000,
+      token: "t",
+      totalSamples: 1000,
+      muUids: ["g0_mu0"],
+      muGridIndex: [0],
+      spikeTimes: [Int32Array.from([100])],
+      timelineGroups: [{ indices: [0], type: step.type, displayStep: step }],
+      pulseView: {
+        mu: 0,
+        start: 0,
+        end: 1000,
+        bins: 2,
+        version: 1,
+        row: {
+          min: Float32Array.from([0, 0]),
+          max: Float32Array.from([1, 0.5]),
+        },
+        spikes: Int32Array.from([100]),
+        spikeValues: Float32Array.from([1]),
+        artifacts: new Int32Array(0),
+        artifactValues: new Float32Array(0),
+      },
+    };
+    const canvas = fakeCanvas({ width: 346, height: 128 });
+    createReplayRenderer({
+      els: /** @type {any} */ ({
+        editPulseCanvas: canvas,
+        editDrCanvas: fakeCanvas({ width: 346, height: 128 }),
+        editTimelineCanvas: fakeCanvas({ width: 1046, height: 20 }),
+      }),
+      state: /** @type {any} */ (state),
+    }).renderAll();
+    const calls = canvas.ctx.calls;
+    // Each bin is one min-max stroke.
+    assert.equal(calls.filter((c) => c.op === "lineTo").length >= 2, true);
+    const dots = calls.filter(
+      (c) => c.op === "arc" && c.fillStyle === COLORS.discharge,
+    );
+    assert.equal(dots.length, 1);
   });
 });
 

@@ -7,12 +7,15 @@ Architecture: [dev/architecture.md](../../../dev/architecture.md). Wire formats:
 
 ## Layers
 
-- Imports flow one way: `api` → `io` → `replay`, all over `errors` and `paths`. Never import
-  `mureplay.api` from `io` or `replay`; `replay` imports no other first-party package.
-- Routes stay thin: parse, call a service, return `success_payload(...)`. Logic goes in
-  `api/services/`, or in a domain package when it isn't HTTP work.
-- Routes are plain `def`, so FastAPI runs them in its thread pool: the refit, the loaders and
-  the folder dialog block.
+- Imports flow one way: `api` → `io` → `replay`, all over `errors`, `paths`, `models` and
+  `storage`. Never import `mureplay.api` from `io` or `replay`; `replay` imports no other
+  first-party package (it is handed what it reads, as `ReplaySession.bids_grid`).
+- Routes stay thin: parse, call a service, return `success_payload(...)` or
+  `frame_response(...)`. Logic goes in `api/services/`, or in a domain package when it isn't
+  HTTP work.
+- Arrays cross HTTP as MUB1 frames (`api/binary.py`), never as JSON lists.
+- Routes are plain `def`, so FastAPI runs them in its thread pool: a seek's refit, the loaders
+  and the folder dialog block. A replay session serialises its requests on its `lock`.
 - `mureplay/__init__.py` exports only `installed_version()`; import from the sub-package.
 
 ## The MUedit2 mirror
@@ -23,9 +26,24 @@ Architecture: [dev/architecture.md](../../../dev/architecture.md). Wire formats:
   saved result, and `tests/test_muedit2_parity.py` compares them with exact equality.
 - Change it only to follow MUedit2, by porting MUedit2's code as it is. An improvement made
   here alone breaks the replay.
-- `api/services/filter_service.py` stands in for MUedit2's `EditSession.update_filter`: the
-  grid filtered once, whole; peel-off over the grid's other live MUs; the grid's bandpass from
-  `_INTRAMUSCULAR_GRIDS`.
+- `replay/session.py: ReplaySession` stands in for MUedit2's `EditSession`, and keeps its
+  names (`rows`, `arrays`, `versions`, `values`, `values_at`, `prepare_grid`, `_grid_emg`):
+  its `_refit` is `EditSession.update_filter`, with the grid filtered once, whole; peel-off over
+  the grid's other live MUs; the grid's bandpass from `_INTRAMUSCULAR_GRIDS`.
+- `storage.py`, `io/npz.py` (the reading half), `api/memory.py` and `api/binary.py` are
+  MUedit2's modules, trimmed to what the replay uses. Follow MUedit2 there too.
+
+## Arrays and memory
+
+- Full-length arrays go into an `ArrayStore` (`storage.py`): `store.allocate` → fill →
+  `store.seal`, never built whole on the heap. Functions that create them take
+  `store: ArrayStore | None = None` and fall back to `RamStore()`.
+- Read a decomposition through `io/npz.py: NpzArchive`, and map its large members
+  (`memmap`) rather than reading them; `models.resident_nbytes` counts a mapped array as 0.
+- Discharge times are sorted, unique, non-negative int32 sample indices: normalise with
+  `filter_update.spike_array`. Process them vectorised, with no per-spike Python loops.
+- An object that holds arrays in a cache reports its heap bytes as `nbytes`, so the budget
+  can count it.
 
 ## Errors and logging
 

@@ -1,18 +1,17 @@
 /**
  * Replay renderer: draws the current MU's discharge rates, pulse train and
  * timeline from the state it is given, as MUedit2's edit page draws them,
- * with the step in view and the artifact windows over the pulse train.
+ * with the step in view and the artifact windows over the pulse train. The
+ * pulse train is the window the server last sent (`state.pulseView`).
  */
 
 import { COLORS } from "../config.js";
 import {
-  artifactsForCurrentMu,
   clampedReplayView,
   currentMuStep,
-  pulseTrainForCurrentMu,
+  pulseViewForCurrentMu,
   spikesForCurrentMu,
 } from "../state/selectors.js";
-import { traceWindow } from "../signal/series.js";
 import {
   PLOT_PADDING,
   drawTrace,
@@ -41,7 +40,7 @@ export function timelineBarWidth(canvasWidth) {
  * The instantaneous discharge rate between each pair of discharges, placed at
  * their midpoint, as MUedit2 computes it.
  *
- * @param {number[]} spikes
+ * @param {ArrayLike<number>} spikes
  * @param {number} fsamp
  * @param {number} totalSamples
  */
@@ -95,7 +94,7 @@ function stepSelections(step) {
  * Fill a 2 px tick at each sample in `positions`, once per pixel column.
  *
  * @param {CanvasRenderingContext2D} ctx
- * @param {number[]} positions
+ * @param {Iterable<number>} positions
  * @param {number} totalSamples
  * @param {number} barWidth
  */
@@ -122,19 +121,18 @@ export function createReplayRenderer({ els, state }) {
 
   function renderPulseTrain() {
     const canvas = els.editPulseCanvas;
-    const pulseTrain = pulseTrainForCurrentMu(state);
-    const view = clampedReplayView(state, pulseTrain.length);
-    if (!pulseTrain.length) {
+    const view = clampedReplayView(state, state.totalSamples);
+    // Until the MU's first window arrives there is nothing to draw; a stale
+    // window of the MU is drawn where its samples fall until the next one.
+    const shown = pulseViewForCurrentMu(state);
+    if (!state.totalSamples || !shown) {
       drawTrace(canvas, null, view);
       return;
     }
-    const spikes = spikesForCurrentMu(state);
-    const artifacts = artifactsForCurrentMu(state);
     const step = currentMuStep(state);
-    const { plotWidth } = getCanvasPlotMetrics(canvas);
     drawTrace(
       canvas,
-      traceWindow(pulseTrain, view, Math.max(1, Math.round(plotWidth))),
+      { row: shown.row, start: shown.start, end: shown.end },
       view,
       {
         color: COLORS.pulseTrain,
@@ -142,13 +140,13 @@ export function createReplayRenderer({ els, state }) {
         fsamp: state.fsamp,
         markers: [
           {
-            positions: spikes,
-            values: spikes.map((s) => pulseTrain[s] ?? 0),
+            positions: shown.spikes,
+            values: shown.spikeValues,
             color: COLORS.discharge,
           },
           {
-            positions: artifacts,
-            values: artifacts.map((s) => pulseTrain[s] ?? 0),
+            positions: shown.artifacts,
+            values: shown.artifactValues,
             color: COLORS.artifactMarker,
             radius: 4,
             outlined: true,
@@ -159,7 +157,7 @@ export function createReplayRenderer({ els, state }) {
 
     const ctx = canvas.getContext("2d");
     if (!ctx) return;
-    const { padding, plotHeight } = getCanvasPlotMetrics(canvas);
+    const { padding, plotWidth, plotHeight } = getCanvasPlotMetrics(canvas);
     const { toX } = viewScale(view, padding.left, plotWidth);
     const top = padding.top;
 
@@ -209,7 +207,7 @@ export function createReplayRenderer({ els, state }) {
   function renderDischargeRates() {
     const canvas = els.editDrCanvas;
     const spikes = spikesForCurrentMu(state);
-    const totalSamples = pulseTrainForCurrentMu(state).length;
+    const totalSamples = state.totalSamples;
     if (!totalSamples || !spikes.length) {
       drawTrace(canvas, null, { start: 0, end: 0 });
       return;
@@ -235,7 +233,7 @@ export function createReplayRenderer({ els, state }) {
     if (!prepared) return;
     const { ctx, width } = prepared;
 
-    const totalSamples = pulseTrainForCurrentMu(state).length;
+    const totalSamples = state.totalSamples;
     if (!totalSamples) return;
 
     const barWidth = timelineBarWidth(width);

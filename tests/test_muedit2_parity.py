@@ -8,7 +8,6 @@ from __future__ import annotations
 # ../MUedit2 (or MUEDIT2_ROOT); without it the module skips.
 import importlib
 import importlib.util
-import json
 import sys
 import types
 from functools import cache
@@ -18,15 +17,17 @@ from typing import Any
 import numpy as np
 import pytest
 
-from mureplay.api.schemas import UpdateFilterPayload
-from mureplay.api.services.filter_service import _INTRAMUSCULAR_GRIDS, run_update_filter
+from mureplay.io.bids import read_bids_emg_grid
 from mureplay.io.loaders import _load_npz_payload, load_paired_from_path
+from mureplay.models import resident_nbytes
 from mureplay.replay.artifact_mask import build_manual_artifact_mask
 from mureplay.replay.filter_update import (
     emg_filter_inplace,
     subtract_mu_waveforms,
     update_motor_unit_filter_window,
 )
+from mureplay.replay.session import _INTRAMUSCULAR_GRIDS, ReplaySession, initial_mu_uids
+from mureplay.storage import SessionStore
 from tests.conftest import MUEDIT2_ROOT, SAMPLE_ENTITY
 
 MUEDIT2_SRC = MUEDIT2_ROOT / "python" / "src"
@@ -193,7 +194,7 @@ class TestDecompositionFile:
         out_path = tmp_path / "sub-1_task-test_decomp.npz"
         _mu2("muedit.decomp.decomposition_file").save_decomposition_npz(
             out_path,
-            pulse_trains=None,
+            pulse_trains=np.ones((2, 500), dtype=np.float32),
             spike_times=spike_times,
             fsamp=2000.0,
             grid_names=["Grid A", "Grid B"],
@@ -205,7 +206,10 @@ class TestDecompositionFile:
         )
 
         payload = _load_npz_payload(out_path)
-        assert payload["spike_times"] == spike_times
+        assert [row.tolist() for row in payload["spike_times"]] == spike_times
+        # MUedit2 aligns each member so the pulse trains map straight from the file.
+        assert payload["pulse_trains"].shape == (2, 500)
+        assert resident_nbytes(payload["pulse_trains"]) == 0
         assert payload["grid_names"] == ["Grid A", "Grid B"]
         assert payload["mu_grid_index"] == [0, 1]
         assert payload["fsamp"] == 2000.0
@@ -215,71 +219,52 @@ class TestDecompositionFile:
 # ── End to end ──────────────────────────────────────────────────────────────
 
 
-def _apply_diff(row: list[int], entry: dict[str, Any], added: str, removed: str) -> list[int]:
-    """``row`` with a logged step's additions and removals applied."""
-    kept = set(row) - set(entry.get(removed) or [])
-    return sorted(v for v in kept | set(entry.get(added) or []) if v >= 0)
-
-
 class TestSessionReplay:
-    def test_replaying_the_log_reproduces_the_saved_edits(self, muedit2_session: Path) -> None:
-        # From the pre-edit decomposition, every logged step is applied in order as the page
-        # does: logged diffs for most, the filter engine for update_filter. Peel-off leaves
+    def test_uids_are_numbered_as_muedit2_numbers_them(self) -> None:
+        mu_grid_index = [0, 0, 1, 0, 2, 1]
+        theirs = _mu2("muedit.editing.session").initial_mu_uids(mu_grid_index)
+        assert initial_mu_uids(mu_grid_index) == theirs
+
+    def test_replaying_the_log_reproduces_the_saved_edits(
+        self, muedit2_session: Path, tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+    ) -> None:
+        # From the pre-edit decomposition, every logged step is applied in order by the replay
+        # session: logged diffs for most, the refit for update_filter, with peel-off leaving
         # out the MUs flagged or removed at that step.
-        log = json.loads(muedit2_session.with_suffix(".json").read_text(encoding="utf-8"))
+        monkeypatch.setenv("MUREPLAY_CACHE_DIR", str(tmp_path / "cache"))
         payload = load_paired_from_path(muedit2_session)
-        run = payload["refit_settings"]
-        mu_grid_index = payload["mu_grid_index"]
-        state = [list(row) for row in payload["spike_times"]]
-        # The log lists the uids that survived; the page numbers the file's MUs as MUedit2 does.
-        mu_uids = _mu2("muedit.editing.session").initial_mu_uids(mu_grid_index)
-        artifacts: list[list[int]] = [[] for _ in state]
-        flagged: set[int] = set()
-        removed: set[int] = set()
-
-        for entry in log["history"]:
-            kind = entry["type"]
-            if kind in ("remove_flagged", "remove_duplicates"):
-                removed |= {mu_uids.index(uid) for uid in entry.get("removed_mu_uids") or []}
-                continue
-            mu = mu_uids.index(entry["mu_uid"])
-            if kind == "flag_mu":
-                (flagged.add if entry.get("flagged", True) else flagged.discard)(mu)
-                continue
-            flagged.discard(mu)  # any edit to an MU clears its flag
-            if kind == "update_filter":
-                grid = mu_grid_index[mu]
-                resp = run_update_filter(
-                    UpdateFilterPayload.model_validate(
-                        {
-                            "bids_root": str(MUEDIT2_ROOT / "data" / "Test"),
-                            "entity_label": SAMPLE_ENTITY,
-                            "spike_times": state,
-                            "mu": mu,
-                            "grid_name": payload["grid_names"][grid],
-                            "view_start": entry["view_start"],
-                            "view_end": entry["view_end"],
-                            "use_peeloff": bool(entry.get("use_peeloff")),
-                            "lock_spikes": bool(entry.get("lock_spikes")),
-                            "mu_grid_index": mu_grid_index,
-                            "inactive_mus": sorted(flagged | removed),
-                            "artifact_times": artifacts[mu],
-                            "artifact_regions": payload["artifact_regions"],
-                            # MUedit2's session refits with the run's saved settings.
-                            "nbextchan": run["nbextchan"],
-                            "peel_off_win": run["peel_off_win"],
-                            "compute_dtype": run["compute_dtype"],
-                        }
-                    )
-                )
-                state[mu] = resp["spikes"]
-            else:
-                state[mu] = _apply_diff(state[mu], entry, "spikes_added", "spikes_removed")
-                artifacts[mu] = _apply_diff(
-                    artifacts[mu], entry, "artifacts_added", "artifacts_removed"
-                )
-
-        with np.load(muedit2_session) as z:
-            offsets, spikes = z["spike_offsets"], z["spike_times"]
-            saved = [spikes[offsets[i] : offsets[i + 1]].tolist() for i in range(len(offsets) - 1)]
-        assert [state[i] for i in range(len(state)) if i not in removed] == saved
+        bids_root = MUEDIT2_ROOT / "data" / "Test"
+        replay = ReplaySession(
+            store=SessionStore.create("replay"),
+            total_samples=payload["total_samples"],
+            spike_times=payload["spike_times"],
+            pulse_trains=payload["pulse_trains"],
+            mu_grid_index=payload["mu_grid_index"],
+            mu_uids=payload["mu_uids"],
+            grid_names=payload["grid_names"],
+            history=payload["edit_history"],
+            refit_settings=payload["refit_settings"],
+            artifact_times=payload["artifact_times"],
+            artifact_regions=payload["artifact_regions"],
+            bids_grid=lambda grid, store: read_bids_emg_grid(bids_root, SAMPLE_ENTITY, grid, store),
+        )
+        try:
+            change = replay.seek(range(len(payload["edit_history"])))
+            assert change.refit_errors == []
+            removed = {
+                payload["mu_uids"].index(uid)
+                for entry in payload["edit_history"]
+                if entry.get("type") in ("remove_flagged", "remove_duplicates")
+                for uid in entry.get("removed_mu_uids") or []
+            }
+            with np.load(muedit2_session) as z:
+                offsets, spikes = z["spike_offsets"], z["spike_times"]
+                saved = [
+                    spikes[offsets[i] : offsets[i + 1]].tolist() for i in range(len(offsets) - 1)
+                ]
+            replayed = [
+                row.tolist() for i, row in enumerate(replay.spike_times) if i not in removed
+            ]
+            assert replayed == saved
+        finally:
+            replay.close()

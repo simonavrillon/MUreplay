@@ -1,11 +1,26 @@
 /**
- * The HTTP layer under `client.js`: timeouts, the success envelope, and the
- * backend's error envelope as `ApiError`.
+ * The HTTP layer under `client.js`: the tab's session id header, timeouts,
+ * the success envelope, and the backend's error envelope as `ApiError`.
  */
 /** @typedef {import("../app/context.js").JsonObject} JsonObject */
 
+export const SESSION_HEADER = "X-MUreplay-Session";
+
 /** How long a request may take before it is given up, unless it says otherwise. */
 const REQUEST_TIMEOUT_MS = 120000;
+
+/** One id per tab: the backend scopes what it holds to it and frees it when the tab closes. */
+export const SESSION_ID = newSessionId();
+
+function newSessionId() {
+  if (typeof globalThis.crypto?.randomUUID === "function") {
+    return globalThis.crypto.randomUUID();
+  }
+  // randomUUID needs a secure context, which a plain-http LAN address is not.
+  return Array.from({ length: 32 }, () =>
+    Math.floor(Math.random() * 16).toString(16),
+  ).join("");
+}
 
 /**
  * An error response: its message, and what the backend's error envelope says
@@ -44,7 +59,46 @@ async function parseApiError(res) {
 }
 
 /**
- * A success response's `data`: every route wraps its answer in the envelope.
+ * A success response, with the tab's session id sent; an error response
+ * throws as `ApiError`.
+ *
+ * @param {string} url
+ * @param {RequestInit} [options]
+ * @param {number} [timeoutMs]
+ * @returns {Promise<Response>}
+ */
+export async function apiFetch(
+  url,
+  options = {},
+  timeoutMs = REQUEST_TIMEOUT_MS,
+) {
+  const controller = new AbortController();
+  const timeout = setTimeout(() => controller.abort(), timeoutMs);
+  const headers = new Headers(options.headers);
+  headers.set(SESSION_HEADER, SESSION_ID);
+  try {
+    const res = await fetch(url, {
+      ...options,
+      headers,
+      signal: controller.signal,
+    });
+    if (!res.ok) {
+      throw await parseApiError(res);
+    }
+    return res;
+  } catch (err) {
+    if (err instanceof Error && err.name === "AbortError") {
+      // The server may still carry the request out.
+      throw new Error("The server took too long to answer.");
+    }
+    throw err;
+  } finally {
+    clearTimeout(timeout);
+  }
+}
+
+/**
+ * A success response's `data`: every JSON route wraps its answer in the envelope.
  *
  * @param {string} url
  * @param {RequestInit} [options]
@@ -56,21 +110,6 @@ export async function apiJson(
   options = {},
   timeoutMs = REQUEST_TIMEOUT_MS,
 ) {
-  const controller = new AbortController();
-  const timeout = setTimeout(() => controller.abort(), timeoutMs);
-  try {
-    const res = await fetch(url, { ...options, signal: controller.signal });
-    if (!res.ok) {
-      throw await parseApiError(res);
-    }
-    return (await res.json()).data;
-  } catch (err) {
-    if (err instanceof Error && err.name === "AbortError") {
-      // The server may still carry the request out.
-      throw new Error("The server took too long to answer.");
-    }
-    throw err;
-  } finally {
-    clearTimeout(timeout);
-  }
+  const res = await apiFetch(url, options, timeoutMs);
+  return (await res.json()).data;
 }

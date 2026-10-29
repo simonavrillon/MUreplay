@@ -2,39 +2,24 @@
 
 from __future__ import annotations
 
-from pydantic import BaseModel, Field
-
-from mureplay.replay.filter_update import (
-    DEFAULT_COMPUTE_DTYPE,
-    DEFAULT_NBEXTCHAN,
-    DEFAULT_PEEL_OFF_WIN_SEC,
-    ComputeDtype,
-)
+from pydantic import BaseModel
 
 
-class LoadPairedFromPathPayload(BaseModel):
+class ReplayOpenPayload(BaseModel):
     """The decomposition or edit log the user chose."""
 
     file_path: str
 
 
-class UpdateFilterPayload(BaseModel):
-    """A logged ``update_filter`` step, with the replay state it runs on."""
+class ReplaySeekPayload(BaseModel):
+    """The steps of the edit log the replay should have applied, in order."""
 
-    bids_root: str
-    entity_label: str
-    spike_times: list[list[int]]
-    mu: int
-    grid_name: str = ""
-    view_start: int
-    view_end: int
-    nbextchan: int = Field(DEFAULT_NBEXTCHAN, ge=1)
-    pulse_train: list[float] = Field(default_factory=list)
-    use_peeloff: bool = False
-    peel_off_win: float = Field(DEFAULT_PEEL_OFF_WIN_SEC, gt=0)
-    compute_dtype: ComputeDtype = DEFAULT_COMPUTE_DTYPE
-    mu_grid_index: list[int]
-    inactive_mus: list[int] = Field(default_factory=list)
-    artifact_times: list[int] = Field(default_factory=list)
-    lock_spikes: bool = False
-    artifact_regions: list[tuple[int, int]] = Field(default_factory=list)
+    token: str
+    steps: list[int]
+
+
+class ReplayPrepareGridPayload(BaseModel):
+    """The grid whose EMG to filter ahead of its first refit."""
+
+    token: str
+    grid: int

@@ -31,15 +31,18 @@ has its own `AGENTS.md` with its conventions; read it before editing there.
 
 ```text
 python/src/mureplay/   backend
-  api/                 HTTP routes, schemas, services (filter refit, file dialog), app factory
-  io/                  BIDS EMG reader, decomposition + edit-log loading and pairing
-  replay/              the update_filter refit (a mirror of MUedit2's), artifact masks
+  api/                 HTTP routes, schemas, services (replay, pulse windows, file dialog),
+                       MUB1 frames, the session cache and its memory budget, app factory
+  io/                  BIDS EMG reader, decomposition + edit-log loading and pairing, npz reader
+  replay/              the replay session, the update_filter refit (a mirror of MUedit2's),
+                       step operations, artifact masks, viewport envelopes
+  storage.py           session stores: memory-mapped working arrays (MUedit2's)
 frontend/              vanilla JS app (no framework)
   src/app/             context, services (file session, replay, ui), stages
   src/state/           state, actions, selectors, transitions
   src/view/            renderers (plots, replay-renderer)
-  src/api/             client, routes, http, payloads
-  src/replay/          operations: logged diffs and step predicates
+  src/api/             client, routes, http, payloads, binary-payloads (MUB1 frames)
+  src/replay/          operations: step predicates, the diff summary
   src/signal/          series: the range a plot scales to
   index.html           the page
 tests/                 pytest suite (backend), including the parity tests against MUedit2
@@ -151,9 +154,12 @@ names and JSON keys are snake_case; the frontend writes the same name in camelCa
 | edit log | the `_edited.json` beside a decomposition: MUedit2's history | `edit_history` (its key in the file: `history`) |
 | step | one entry of the edit log | `EditLogEntry` |
 | timeline step | what the timeline shows: a step, or a run of spike edits on one MU merged | `ReplayGroup` |
-| refit | replaying an `update_filter` step on the BIDS EMG | `run_update_filter` |
+| refit | replaying an `update_filter` step on the BIDS EMG | `ReplaySession._refit` |
 | refit settings | the run settings a refit repeats (`nbextchan`, `peel_off_win`, `compute_dtype`), from the file's `parameters` | `refit_settings` |
-| replay base | the decomposition the replay starts from, at step 0 | `replayBase*` |
+| replay base | the decomposition the replay starts from, at step 0 | `ReplaySession._rewind` |
+| replay session | the server's replay of one trial, named by its token | `ReplaySession`, `token` |
+| session store | a replay session's folder of memory-mapped working arrays | `SessionStore`, `store` |
+| pulse window | the part of a pulse train the page draws: samples, or a min/max envelope | `pulse_frame`, `pulseView` |
 | artifact window | a time range excluded from the decomposition | `artifact_regions`, `artifact_intervals` |
 | artifact marker | a peak marked as an artifact on one MU | `artifacts`, `artifact_times` |
 

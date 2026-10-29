@@ -26,13 +26,18 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Changed
 
+- The replay runs on the server, as MUedit2's editing does, and the page draws only the window
+  of the pulse train it shows. The pulse trains are memory-mapped from the decomposition file
+  rather than loaded, so long recordings open quickly and use little memory, and each grid's
+  EMG is filtered once per trial instead of at every filter step. Working files go to the
+  per-user cache folder (`MUREPLAY_CACHE_DIR`), with `MUREPLAY_CACHE_BUDGET_MB` and
+  `MUREPLAY_DISK_RESERVE_MB` to bound memory and disk.
 - The page looks like MUedit2's: its font, header, buttons and status, at the top right. The
   two plots are drawn as on MUedit2's edit page, and the pulse train's plot is named
   **Pulse train**.
 - The timeline slider is now a step line: one dot per step, coloured by what it did and drawn
   as in MUedit2's live run, filled up to the current step. Beside it, a GitHub-style summary counts the discharges the
   replayed steps added and removed on the unit: `Step 4 / 7 +22 −23`.
-
 - Status messages are plain sentences: a failed load reads "Could not load the session: …", and
   a filter step that could not be recomputed says it was replayed from the edit log instead.
 - The hint shown when the EMG recording cannot be read says to choose the dataset as the data
@@ -57,14 +62,12 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   the EDF/BDF signals by name, grids need not be named `Grid<n>`, and an `_emg.json` higher in
   the dataset applies too.
 - Sessions open faster: only the parts of the decomposition the replay shows are read.
-- The API names discharge times `spike_times` (one MU's: `spikes`), as MUedit2 does; the load
-  response drops `source_kind`, `paired_files`, `artifact_samples`, `total_samples` and
-  `bids_entity_label`, and its `entity_label` is now the decomposition's; the refit response
-  drops `fsamp`.
-- The refit request names its MU `mu`, as MUedit2 does, and takes the grid from
-  `mu_grid_index`; it drops `mu_idx` and `grid_index`. The load response falls back to
-  the data folder for `bids_root` itself, so `GET /config` is gone, and the folder dialog
-  answers with `data_root` alone.
+- Arrays cross the API as MUB1 binary frames, never as JSON lists: an opened session answers
+  with its fields and every MU's discharge times as a CSR pair (`spikes` with
+  `spike_offsets`). The open response drops `source_kind`, `paired_files`, `artifact_samples`
+  and `bids_entity_label`, and its `entity_label` is the decomposition's.
+- The open response falls back to the data folder for `bids_root` itself, so `GET /config` is
+  gone, and the folder dialog answers with `data_root` alone.
 
 ### Removed
 

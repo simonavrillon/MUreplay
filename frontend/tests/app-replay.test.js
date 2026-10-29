@@ -1,12 +1,9 @@
-// The replay engine: step grouping, seeking, update_filter calls and the timeline controls.
+// The timeline over the server's replay: step grouping, the steps each seek sends, what
+// the page does with the answer, and the pulse window it fetches.
 import { test, after, describe } from "node:test";
 import assert from "node:assert/strict";
 import { createReplayService } from "../src/app/services/replay-service.js";
-import { normalizeLogEntry } from "../src/api/payloads.js";
-import { fakeElement, fakeSelect, installDom } from "./_dom.js";
-
-// What matters most: a step applied forward and then undone leaves the arrays exactly as
-// they were, and each step lands on the MU its log entry names.
+import { fakeCanvas, fakeElement, fakeSelect, installDom } from "./_dom.js";
 
 function fakeEls() {
   return {
@@ -34,9 +31,12 @@ after(() => Object.assign(globalThis, saved));
 function makeState(overrides = {}) {
   const nMu = overrides.spikeTimes?.length ?? 0;
   return {
+    token: "t1",
     fsamp: 2048,
-    pulseTrains: [],
+    totalSamples: 1000,
     spikeTimes: [],
+    versions: Array.from({ length: nMu }, (_, i) => i + 1),
+    pulseView: null,
     gridNames: ["Grid 1"],
     muGridIndex: [],
     muUids: [],
@@ -46,39 +46,24 @@ function makeState(overrides = {}) {
     replayGroups: [],
     timelineGroups: [],
     playTimer: null,
-    replayBaseSpikeTimes: [],
-    replayBasePulseTrains: [],
     replayPosition: 0,
-    replayBackups: [],
     replayView: null,
-    loadedFromDecomp: true,
-    refitSettings: {
-      nbextchan: 1000,
-      peelOffWin: 0.025,
-      computeDtype: "float32",
-    },
     muMarks: {},
     muGhostUids: [],
-    bidsRoot: "/data",
-    entityLabel: "sub-01",
-    // One row per MU, as the loader produces.
-    artifactTimes: Array.from({ length: nMu }, () => []),
-    replayBaseArtifactTimes: [],
     artifactRegions: [],
     ...overrides,
   };
 }
 
 /**
- * MUs `g0_mu<n>` on one grid, with the given discharges and a two-sample pulse train each.
+ * MUs `g0_mu<n>` on one grid, with the given discharges.
  *
  * @param {number[][]} spikeTimes
  * @param {Partial<import("../src/state/state.js").State>} [fields]
  */
 function oneGrid(spikeTimes, fields = {}) {
   return {
-    spikeTimes,
-    pulseTrains: spikeTimes.map(() => [0, 1]),
+    spikeTimes: spikeTimes.map((row) => Int32Array.from(row)),
     muGridIndex: spikeTimes.map(() => 0),
     muUids: spikeTimes.map((_, i) => `g0_mu${i}`),
     ...fields,
@@ -112,30 +97,64 @@ function step(fields) {
 }
 
 /**
+ * A seek frame, decoded: `rows` maps each changed MU to its new discharges.
+ *
+ * @param {import("../src/state/state.js").State} state
+ * @param {Record<number, number[]>} rows
+ * @param {{ step: number, message: string }[]} [refitErrors]
+ */
+function changeFrame(state, rows, refitErrors = []) {
+  const changed = Object.keys(rows).map(Number);
+  return {
+    meta: {
+      changed,
+      versions: state.versions.map((v, mu) =>
+        changed.includes(mu) ? v + 10 : v,
+      ),
+      refit_errors: refitErrors,
+    },
+    spikeTimes: changed.map((mu) => Int32Array.from(rows[mu])),
+  };
+}
+
+/**
  * The service over a fake context, with the replay started as `file-session.js` does.
  *
  * @param {{
  *   state?: Partial<import("../src/state/state.js").State>,
- *   updateFilter?: (payload: any) => Promise<any>,
+ *   seek?: (payload: any, state: any) => Promise<any> | any,
+ *   canvas?: boolean,
  * }} [opts]
  */
 function createHarness(opts = {}) {
   const state = makeState(opts.state);
   /** @type {any[]} */
-  const filterCalls = [];
+  const seekCalls = [];
+  /** @type {any[]} */
+  const pulseCalls = [];
+  /** @type {any[]} */
+  const prepareCalls = [];
+  const els = /** @type {any} */ (fakeEls());
+  if (opts.canvas)
+    els.editPulseCanvas = fakeCanvas({ width: 346, height: 128 });
   const app = /** @type {any} */ ({
     state,
-    els: fakeEls(),
+    els,
     api: {
       /** @param {any} payload */
-      updateFilter: async (payload) => {
-        filterCalls.push(payload);
-        if (opts.updateFilter) return opts.updateFilter(payload);
-        // By default the refit changes nothing.
-        return {
-          spikes: payload.spike_times[payload.mu],
-          pulse_train: payload.pulse_train,
-        };
+      replaySeek: async (payload) => {
+        seekCalls.push(payload);
+        if (opts.seek) return opts.seek(payload, state);
+        return changeFrame(state, {});
+      },
+      /** @param {any} params */
+      fetchPulse: async (params) => {
+        pulseCalls.push(params);
+        return { ...params, version: state.versions[params.mu] };
+      },
+      /** @param {any} payload */
+      replayPrepareGrid: async (payload) => {
+        prepareCalls.push(payload);
       },
     },
     /** @type {string[]} */
@@ -144,21 +163,16 @@ function createHarness(opts = {}) {
     setReplayStatus(text) {
       app.statuses.push(text);
     },
-    renderAll() {},
-    filterCalls,
+    renderAll() {
+      app.ensurePulseView();
+    },
+    seekCalls,
+    pulseCalls,
+    prepareCalls,
   });
   Object.assign(app, createReplayService(app));
   app.startReplay();
   return app;
-}
-
-/** Everything a replay step is allowed to touch. */
-function snapshot(state) {
-  return JSON.stringify({
-    spikeTimes: state.spikeTimes,
-    pulseTrains: state.pulseTrains,
-    artifactTimes: state.artifactTimes,
-  });
 }
 
 /** Settle every promise chain that resolves on its own; one awaiting a stubbed API call stays pending. */
@@ -246,267 +260,226 @@ describe("the timeline groups", () => {
 });
 
 describe("seeking the timeline", () => {
-  test("a step applied then undone restores the arrays exactly", async () => {
-    const app = createHarness({
-      state: oneGrid([[10, 30, 50]], {
-        pulseTrains: [[0.5, 0.25, 0.75]],
-        artifactTimes: [[7]],
-        editHistory: [
-          step({ mu: 0, spikesAdded: [20], spikesRemoved: [30] }),
-          step({ type: "add_artifact", mu: 0, artifactsAdded: [99] }),
-          step({ type: "delete_spikes", mu: 0, spikesRemoved: [50] }),
-        ],
-      }),
-    });
-
-    const before = snapshot(app.state);
-    const total = app.state.timelineGroups.length;
-    assert.equal(total, 3);
-
-    await seekTo(app, total);
-    assert.deepEqual(app.state.spikeTimes[0], [10, 20]);
-    assert.deepEqual(app.state.artifactTimes[0], [7, 99]);
-
-    await seekTo(app, 0);
-    assert.equal(snapshot(app.state), before);
-    assert.equal(app.state.replayPosition, 0);
-    assert.deepEqual(app.state.replayBackups, []);
-  });
-
-  test("stepping forward and back one group at a time round-trips", async () => {
-    const app = createHarness({
-      state: oneGrid([[10, 30, 50]], {
-        pulseTrains: [[0.5, 0.25]],
-        artifactTimes: [[7, 42]],
-        editHistory: [
-          step({ mu: 0, spikesAdded: [20, 40] }),
-          step({ type: "delete_artifact", mu: 0, artifactsRemoved: [7] }),
-          step({ type: "remove_outliers", mu: 0, spikesRemoved: [50] }),
-          step({ type: "add_artifact", mu: 0, artifactsAdded: [77] }),
-        ],
-      }),
-    });
-
-    const before = snapshot(app.state);
-    const total = app.state.timelineGroups.length;
-    for (let pos = 1; pos <= total; pos += 1) await seekTo(app, pos);
-    for (let pos = total - 1; pos >= 0; pos -= 1) await seekTo(app, pos);
-    assert.equal(snapshot(app.state), before);
-  });
-
-  test("artifact steps apply and undo on their own MU's list", async () => {
+  test("asks the server for the current MU's steps up to the playhead", async () => {
     const app = createHarness({
       state: oneGrid([[10], [10]], {
-        artifactTimes: [[100], [200]],
-        currentMu: 1,
         editHistory: [
-          step({ type: "add_artifact", mu: 1, artifactsAdded: [50, 300] }),
+          step({ mu: 0, spikesAdded: [20] }),
+          step({ mu: 1, spikesAdded: [30] }),
+          step({ type: "delete_spikes", mu: 0, spikesRemoved: [10] }),
+          step({ type: "update_filter", mu: 0 }),
         ],
+      }),
+    });
+    // MU 0's groups: [0], [2] (MU 1's step broke the run), then [3].
+    await seekTo(app, 3);
+    await seekTo(app, 1);
+    assert.deepEqual(
+      app.seekCalls.map((c) => [c.token, c.steps]),
+      [
+        ["t1", [0, 2, 3]],
+        ["t1", [0]],
+      ],
+    );
+    assert.equal(app.state.replayPosition, 1);
+  });
+
+  test("shows the discharges and versions the server answers with", async () => {
+    const app = createHarness({
+      seek: (payload, state) =>
+        changeFrame(state, payload.steps.length ? { 1: [10, 30] } : {}),
+      state: oneGrid([[10], [10]], {
+        currentMu: 1,
+        editHistory: [step({ mu: 1, spikesAdded: [30] })],
       }),
     });
     app.onMuChange({ target: { value: "1" } });
-
+    await flush();
     await seekTo(app, 1);
-    assert.deepEqual(app.state.artifactTimes[1], [50, 200, 300]);
-    assert.deepEqual(app.state.artifactTimes[0], [100]);
-
-    await seekTo(app, 0);
-    assert.deepEqual(app.state.artifactTimes[1], [200]);
+    assert.deepEqual([...app.state.spikeTimes[1]], [10, 30]);
+    assert.deepEqual([...app.state.spikeTimes[0]], [10], "MU 0 is untouched");
+    assert.deepEqual(app.state.versions, [1, 12]);
+    assert.equal(
+      app.statuses[app.statuses.length - 1],
+      "Applied step 1 of 1: spike_edits.",
+    );
   });
 
-  test("a step naming no MU at all is skipped, not applied to MU 0", () => {
+  test("changing MU takes the server back to step 0", async () => {
+    const app = createHarness({
+      state: oneGrid([[10], [10]], {
+        editHistory: [step({ mu: 0, spikesAdded: [20] }), step({ mu: 1 })],
+      }),
+    });
+    await seekTo(app, 1);
+    app.onMuChange({ target: { value: "1" } });
+    await flush();
+    assert.deepEqual(
+      app.seekCalls.map((c) => c.steps),
+      [[0], []],
+    );
+    assert.equal(app.state.replayPosition, 0);
+  });
+
+  test("a step naming no MU at all is on no MU's timeline", () => {
     const app = createHarness({
       state: oneGrid([[10]], { editHistory: [step({ spikesAdded: [20] })] }),
     });
-
     assert.equal(app.state.timelineGroups.length, 0);
-    assert.deepEqual(app.state.spikeTimes[0], [10]);
   });
 
   test("a seek requested mid-flight runs once the first one finishes", async () => {
     /** @type {(() => void)[]} */
     const gates = [];
     const app = createHarness({
-      updateFilter: () =>
+      seek: (_payload, state) =>
         new Promise((resolve) => {
-          gates.push(() => resolve({ spikes: [1], pulse_train: [1] }));
+          gates.push(() => resolve(changeFrame(state, {})));
         }),
-      state: oneGrid([[10], [10], [10]], {
+      state: oneGrid([[10]], {
         editHistory: [
           step({ type: "update_filter", mu: 0 }),
-          step({ type: "add_spikes", mu: 0, spikesAdded: [20] }),
+          step({ type: "update_filter", mu: 0 }),
+          step({ type: "update_filter", mu: 0 }),
         ],
       }),
     });
 
     await seekTo(app, 1);
-    assert.equal(app.filterCalls.length, 1);
-    assert.equal(app.state.replayPosition, 0, "still waiting on the backend");
-
-    // Two runs would both read replayPosition 0, apply the same group twice and push two
-    // backups for it.
     await seekTo(app, 2);
+    await seekTo(app, 3);
+    assert.equal(app.seekCalls.length, 1, "one seek at a time");
+
+    gates.shift()?.();
+    await flush();
+    // The newest target only: the one scrubbed past is dropped.
+    assert.deepEqual(
+      app.seekCalls.map((c) => c.steps),
+      [[0], [0, 1, 2]],
+    );
+    gates.shift()?.();
+    await flush();
+    assert.equal(app.state.replayPosition, 3);
+  });
+
+  test("picking another MU mid-seek takes the server back to its step 0", async () => {
+    /** @type {(() => void)[]} */
+    const gates = [];
+    const app = createHarness({
+      seek: (payload, state) =>
+        new Promise((resolve) => {
+          gates.push(() =>
+            resolve(
+              changeFrame(
+                state,
+                payload.steps.length ? { 0: [10, 20] } : { 0: [10] },
+              ),
+            ),
+          );
+        }),
+      state: oneGrid([[10], [10]], {
+        editHistory: [
+          step({ type: "update_filter", mu: 0 }),
+          step({ type: "update_filter", mu: 0 }),
+          step({ mu: 1 }),
+        ],
+      }),
+    });
+    await seekTo(app, 2);
+    app.onMuChange({ target: { value: "1" } });
+    gates.shift()?.();
+    await flush();
+    gates.shift()?.();
+    await flush();
+    assert.deepEqual(
+      app.seekCalls.map((c) => c.steps),
+      [[0, 1], []],
+    );
+    assert.equal(app.state.replayPosition, 0);
+    assert.deepEqual([...app.state.spikeTimes[0]], [10]);
+  });
+
+  test("a refit replayed from the log says so, and why", async () => {
+    const app = createHarness({
+      seek: (_payload, state) =>
+        changeFrame(state, { 0: [10, 20] }, [
+          { step: 0, message: "No EMG recording for sub-1." },
+        ]),
+      state: oneGrid([[10]], {
+        editHistory: [
+          step({ type: "update_filter", mu: 0, spikesAdded: [20] }),
+        ],
+      }),
+    });
+    await seekTo(app, 1);
+    assert.equal(
+      app.statuses[app.statuses.length - 1],
+      "Replayed step 1 of 1 from the edit log: could not recompute the filter. No EMG recording for sub-1.",
+    );
+  });
+
+  test("a failed seek leaves the playhead and says why", async () => {
+    const app = createHarness({
+      seek: () => {
+        throw new Error("This replay is no longer open; open the trial again.");
+      },
+      state: oneGrid([[10]], { editHistory: [step({ mu: 0 })] }),
+    });
+    await seekTo(app, 1);
     assert.equal(app.state.replayPosition, 0);
     assert.equal(
-      app.filterCalls.length,
-      1,
-      "the step must not be applied twice",
+      app.statuses[app.statuses.length - 1],
+      "Could not replay step 1: This replay is no longer open; open the trial again.",
     );
-
-    gates.forEach((release) => release());
-    await flush();
-    assert.equal(app.state.replayPosition, 2);
-    assert.deepEqual(app.state.spikeTimes[0], [1, 20]);
-    assert.equal(app.filterCalls.length, 1);
-    assert.equal(app.state.replayBackups.length, 2, "one backup per step");
-  });
-
-  test("a session without the decomposition rewinds the edit log for its base", () => {
-    // The arrays of an edited file are the end of the session.
-    const app = createHarness({
-      state: oneGrid([[10, 20]], {
-        loadedFromDecomp: false,
-        artifactTimes: [[50]],
-        editHistory: [
-          step({ mu: 0, spikesAdded: [20] }),
-          step({ type: "add_artifact", mu: 0, artifactsAdded: [50] }),
-        ],
-      }),
-    });
-
-    assert.deepEqual(app.state.replayBaseSpikeTimes[0], [10]);
-    assert.deepEqual(app.state.replayBaseArtifactTimes[0], []);
-    assert.deepEqual(app.state.spikeTimes[0], [10]);
-    assert.deepEqual(app.state.artifactTimes[0], []);
-  });
-
-  test("a uid-keyed log replays onto the MUs it names", async () => {
-    // MUedit2's entries name their MU by `mu_uid` alone.
-    const muUids = ["g0_mu0", "g0_mu1", "g0_mu2"];
-    const editHistory = [
-      { type: "add_spikes", mu_uid: "g0_mu2", spikes_added: [20] },
-      { type: "delete_spikes", mu_uid: "g0_mu2", spikes_removed: [10] },
-    ]
-      .map((entry) => normalizeLogEntry(entry, muUids))
-      .filter((entry) => entry !== null);
-
-    const app = createHarness({
-      state: oneGrid([[10], [10], [10]], { editHistory }),
-    });
-    app.onMuChange({ target: { value: "2" } });
-
-    const before = snapshot(app.state);
-    assert.equal(app.state.timelineGroups.length, 1);
-
-    await seekTo(app, 1);
-    assert.deepEqual(app.state.spikeTimes[2], [20]);
-    assert.deepEqual(app.state.spikeTimes[0], [10], "MU 0 must not be touched");
-    assert.deepEqual(app.state.spikeTimes[1], [10]);
-
-    await seekTo(app, 0);
-    assert.equal(snapshot(app.state), before);
   });
 });
 
-describe("update_filter", () => {
-  test("sends the logged window and stores the recomputed arrays", async () => {
+describe("the grid's EMG", () => {
+  test("is filtered ahead once, when the MU's timeline has a refit", async () => {
     const app = createHarness({
-      updateFilter: async () => ({
-        spikes: [10, 25],
-        pulse_train: [0.1, 0.9],
-      }),
-      state: oneGrid([[10, 30]], {
-        pulseTrains: [[0, 1, 0, 1]],
-        artifactTimes: [[5]],
-        artifactRegions: [[1, 2]],
-        entityLabel: "sub-01_task-rest",
-        refitSettings: {
-          nbextchan: 500,
-          peelOffWin: 0.03,
-          computeDtype: "float64",
-        },
-        editHistory: [
-          step({
-            type: "update_filter",
-            mu: 0,
-            viewStart: 100,
-            viewEnd: 400,
-            usePeeloff: true,
-            lockSpikes: true,
-          }),
-        ],
+      state: oneGrid([[10], [10]], {
+        editHistory: [step({ type: "update_filter", mu: 0 }), step({ mu: 1 })],
       }),
     });
-
-    await seekTo(app, 1);
-
-    assert.equal(app.filterCalls.length, 1);
-    const payload = app.filterCalls[0];
-    assert.equal(payload.mu, 0);
-    assert.equal(payload.bids_root, "/data");
-    assert.equal(payload.entity_label, "sub-01_task-rest");
-    assert.equal(payload.view_start, 100);
-    assert.equal(payload.view_end, 400);
-    assert.equal(payload.use_peeloff, true);
-    assert.equal(payload.lock_spikes, true);
-    assert.deepEqual(payload.artifact_times, [5]);
-    assert.deepEqual(payload.artifact_regions, [[1, 2]]);
-    assert.equal(payload.grid_name, "Grid 1");
-    assert.deepEqual(payload.inactive_mus, []);
-    // The run's settings, as MUedit2's session refits with them.
-    assert.equal(payload.nbextchan, 500);
-    assert.equal(payload.peel_off_win, 0.03);
-    assert.equal(payload.compute_dtype, "float64");
-
-    assert.deepEqual(app.state.spikeTimes[0], [10, 25]);
-    assert.deepEqual(app.state.pulseTrains[0], [0.1, 0.9]);
+    app.onMuChange({ target: { value: "1" } });
+    app.onMuChange({ target: { value: "0" } });
+    await flush();
+    assert.deepEqual(app.prepareCalls, [{ token: "t1", grid: 0 }]);
   });
+});
 
-  test("undoing update_filter restores the arrays the API replaced", async () => {
+describe("the pulse window", () => {
+  test("is fetched for the view, and again when the MU's version moves", async () => {
     const app = createHarness({
-      updateFilter: async () => ({ spikes: [999], pulse_train: [0.42] }),
-      state: oneGrid([[10, 30]], {
-        pulseTrains: [[0, 1, 0, 1]],
-        artifactTimes: [[5]],
-        editHistory: [step({ type: "update_filter", mu: 0 })],
+      canvas: true,
+      seek: (_payload, state) => changeFrame(state, { 0: [10, 20] }),
+      state: oneGrid([[10]], {
+        editHistory: [step({ mu: 0, spikesAdded: [20] })],
       }),
     });
-
-    const before = snapshot(app.state);
-    await seekTo(app, 1);
-    assert.deepEqual(app.state.spikeTimes[0], [999]);
-    // A logged diff cannot invert a recomputation; the undo comes from the backup.
-    await seekTo(app, 0);
-    assert.equal(snapshot(app.state), before);
-  });
-
-  test("a failing update_filter falls back to the logged diff and says so", async () => {
-    const app = createHarness({
-      updateFilter: async () => {
-        throw new Error("backend down");
-      },
-      state: oneGrid([[10, 30]], {
-        pulseTrains: [[0, 1, 0, 1]],
-        editHistory: [
-          step({
-            type: "update_filter",
-            mu: 0,
-            spikesAdded: [20],
-            spikesRemoved: [30],
-          }),
-        ],
-      }),
-    });
-
-    const before = snapshot(app.state);
-    await seekTo(app, 1);
-    assert.deepEqual(app.state.spikeTimes[0], [10, 20]);
-    assert.equal(
-      app.statuses[app.statuses.length - 1],
-      "Replayed step 1 of 1 from the edit log: could not recompute the filter. backend down",
+    await flush();
+    assert.equal(app.pulseCalls.length, 1);
+    assert.deepEqual(
+      { ...app.pulseCalls[0], bins: undefined },
+      { token: "t1", mu: 0, start: 0, end: 1000, bins: undefined },
     );
-    await seekTo(app, 0);
-    assert.equal(snapshot(app.state), before);
+    assert.equal(app.state.pulseView.version, 1);
+
+    // Drawing again with nothing moved asks for nothing.
+    app.renderAll();
+    await flush();
+    assert.equal(app.pulseCalls.length, 1);
+
+    await seekTo(app, 1);
+    assert.equal(app.pulseCalls.length, 2);
+    assert.equal(app.state.pulseView.version, 11);
+  });
+
+  test("a window of a session since replaced is dropped", async () => {
+    const app = createHarness({ canvas: true, state: oneGrid([[10]]) });
+    app.state.token = "t2";
+    await flush();
+    assert.equal(app.state.pulseView, null);
   });
 });
 
@@ -579,8 +552,7 @@ describe("startReplay", () => {
   test("opens on the first selectable MU of the first grid", () => {
     const app = createHarness({
       state: {
-        spikeTimes: [[1], [1], [1]],
-        pulseTrains: [[0], [0], [0]],
+        spikeTimes: [[1], [1], [1]].map((row) => Int32Array.from(row)),
         muGridIndex: [1, 1, 0],
         muUids: ["g1_mu0", "g1_mu1", "g0_mu0"],
         gridNames: ["Grid 1", "Grid 2"],
@@ -599,7 +571,7 @@ describe("startReplay", () => {
 describe("adjustReplayView", () => {
   test("zooms around the centre and stays in bounds", () => {
     const app = createHarness({
-      state: oneGrid([[10]], { pulseTrains: [new Array(1000).fill(0)] }),
+      state: oneGrid([[10]], { totalSamples: 1000 }),
     });
 
     app.adjustReplayView("zoom_in");

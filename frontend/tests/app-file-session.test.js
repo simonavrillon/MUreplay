@@ -32,7 +32,7 @@ function createFakeApp(opts = {}) {
     ),
     calls,
     api: {
-      loadPairedFromPath: async (filePath) => {
+      replayOpen: async (filePath) => {
         calls.push(["load", filePath]);
         if (opts.loadError) throw opts.loadError;
         return opts.loadPayload;
@@ -78,23 +78,25 @@ function openTrial(app, filePath = "/recordings/sub-01_edited.json") {
   return createFileSessionService(app).loadSession(filePath);
 }
 
+/** An opened session's frame, decoded, as `api.replayOpen` resolves it. */
 function loadPayload(overrides = {}) {
   return {
-    pulse_trains: [[0, 1, 0, 1]],
-    spike_times: [[100, 300]],
-    fsamp: 2048,
-    grid_names: ["Grid 1"],
-    mu_grid_index: [0],
-    refit_settings: {
-      nbextchan: 1000,
-      peel_off_win: 0.025,
-      compute_dtype: "float32",
+    meta: {
+      token: "t1",
+      fsamp: 2048,
+      total_samples: 4,
+      grid_names: ["Grid 1"],
+      mu_grid_index: [0],
+      mu_uids: ["g0_mu0"],
+      versions: [1],
+      artifact_regions: [],
+      edit_history: [],
+      source_filename: "sub-01_decomp.npz",
+      bids_root: "/data",
+      entity_label: "sub-01_task-rest",
+      ...overrides,
     },
-    edit_history: [],
-    source_filename: "sub-01_edited.json",
-    bids_root: "/data",
-    entity_label: "sub-01_task-rest",
-    ...overrides,
+    spikeTimes: [Int32Array.from([100, 300])],
   };
 }
 
@@ -103,9 +105,12 @@ describe("loading a session", () => {
     const app = createFakeApp({ loadPayload: loadPayload() });
     await openTrial(app);
 
-    assert.equal(app.state.bidsRoot, "/data");
-    assert.equal(app.state.entityLabel, "sub-01_task-rest");
-    assert.deepEqual(app.state.spikeTimes, [[100, 300]]);
+    assert.equal(app.state.token, "t1");
+    assert.deepEqual([...app.state.spikeTimes[0]], [100, 300]);
+    assert.deepEqual(
+      app.calls.find((c) => c[0] === "settings"),
+      ["settings", "sub-01_task-rest"],
+    );
     assert.ok(app.calls.some((c) => c[0] === "startReplay"));
     const statuses = replayStatuses(app);
     assert.equal(
@@ -114,29 +119,11 @@ describe("loading a session", () => {
     );
   });
 
-  test("starts from the decomposition only when the edits started from it", async () => {
-    /** @type {[string, boolean][]} */
-    const cases = [
-      ["sub-01_decomp.npz", true],
-      ["sub-01_run-1_x_decomp.npz", true],
-      // No _decomp.npz beside the log: the edited file stands in, and holds the edits.
-      ["sub-01_edited.npz", false],
-    ];
-    for (const [source, fromDecomp] of cases) {
-      const app = createFakeApp({
-        loadPayload: loadPayload({ source_filename: source }),
-      });
-      await openTrial(app, "/r/sub-01_edited.npz");
-      assert.equal(app.state.loadedFromDecomp, fromDecomp, source);
-    }
-  });
-
   test("imports an embedded edit history", async () => {
     const app = createFakeApp({
       loadPayload: loadPayload({
         edit_history: [
           { type: "add_spikes", mu_uid: "g0_mu0", spikes_added: [150] },
-          "junk-entry",
         ],
       }),
     });

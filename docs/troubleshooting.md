@@ -16,9 +16,20 @@ variables.
 | "Could not load the session: No paired edited JSON found…" | The edit log is missing: the `_edited.json` MUedit2 saved must sit beside the decomposition, with the same name stem. See [how files are paired](file-formats.md#how-files-are-paired). |
 | "Could not load the session: No decomp NPZ found…" | The folder holds the edit log but no decomposition. Keep the `.npz` files MUedit2 saved beside it. |
 | "Replayed step … from the edit log: could not recompute the filter." while stepping | The filter could not be recomputed, usually because the original EMG recording is not where the session's dataset says. The step was replayed from the edit log instead, so the discharges are still right, but the pulse train was not recomputed. Keep the dataset's `sub-*/emg/` folder beside `derivatives/`, or choose the dataset as the data folder (see [where the EMG comes from](file-formats.md#where-the-emg-comes-from)). |
+| "This replay is no longer open; open the trial again." | The server no longer holds the trial you were replaying: it was restarted, or the trial was opened in another tab of the same page. Click the trial in **Projects** again. |
 | The timeline shows no steps | The edit log may be empty, or the motor unit you selected was not edited. Pick another unit: the timeline shows only the selected unit's steps. |
 | A motor unit cannot be selected | It was created as a duplicate or removed during the session (`⊕`, `⊗`); see [motor unit marks](user-guide.md#motor-unit-marks). |
 | A keyboard shortcut does nothing | Shortcuts are ignored while a dropdown has the focus: click the plot, then press the key. |
+
+## Temporary files and cache
+
+While a trial is open, MUreplay keeps its working files in the per-user cache folder (the
+folder `MUREPLAY_CACHE_DIR` points at, or the OS default, see
+[cli.md](cli.md#environment-variables)): one folder per open trial under `sessions/`, holding
+the filtered EMG of the grids replayed and the pulse trains the filter steps recomputed. They
+are memory-mapped, so a long recording never has to fit in memory. The folder is deleted when
+the trial is closed or the tab is closed, and any left by a crash are deleted at the next
+launch. It is safe to delete the whole cache folder while MUreplay is closed.
 
 ## Where errors are reported
 

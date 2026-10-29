@@ -29,14 +29,14 @@ class TestServing:
         assert page.status_code == 200
         assert "<html" in page.text.lower()
         assert page.headers["cache-control"] == "no-cache"
-        missing = client.post(f"{API}/load-paired-from-path", json={"file_path": "/no/such.npz"})
+        missing = client.post(f"{API}/replay/session/open", json={"file_path": "/no/such.npz"})
         error(missing, 404)
 
     def test_a_loopback_server_rejects_other_hosts(self) -> None:
         app = create_app(allowed_hosts=_LOOPBACK_HOSTS)
         include_routers(app)
         client = TestClient(app, base_url="http://127.0.0.1")
-        load = f"{API}/load-paired-from-path"
+        load = f"{API}/replay/session/open"
         body = {"file_path": "/no/such.npz"}
         assert client.post(load, json=body).status_code == 404
         assert client.post(load, json=body, headers={"host": "evil.example"}).status_code == 400
@@ -57,10 +57,7 @@ class TestEnvelopes:
         assert error(client.get(f"{API}/no-such-endpoint"), 404)["message"] == "Not Found"
 
     def test_a_schema_violation_uses_the_validation_envelope(self, client: TestClient) -> None:
-        resp = client.post(
-            f"{API}/edit/update-filter",
-            json={"bids_root": "/bids", "entity_label": "sub-1", "mu": "not-an-int"},
-        )
+        resp = client.post(f"{API}/replay/seek", json={"token": "x", "steps": "not-a-list"})
         error(resp, 422, "validation_error")
 
     def test_a_bug_is_a_generic_500_that_leaks_nothing(self) -> None:

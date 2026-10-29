@@ -1,38 +1,31 @@
-// Payload normalisation at the API boundary: loaded sessions, log entries, refit results,
+// Payload normalisation at the API boundary: opened sessions, log entries, seek changes,
 // the picked data folder.
 import { test, describe } from "node:test";
 import assert from "node:assert/strict";
 import {
-  buildMuUids,
   normalizeDataFolder,
   normalizeLogEntry,
-  normalizeRefitResult,
+  normalizeReplayChange,
   normalizeSessionPayload,
 } from "../src/api/payloads.js";
 
 /**
- * `normalizeLogEntry`, asserted non-null.
  * @param {Record<string, any>} entry
  * @param {string[]} [muUids]
  */
-function normalized(entry, muUids = []) {
-  const result = normalizeLogEntry(entry, muUids);
-  assert.ok(result, "expected a normalized entry");
-  return result;
-}
+const normalized = (entry, muUids = []) => normalizeLogEntry(entry, muUids);
 
-function minimalPayload() {
+/** The meta of an opened session's frame, as the server sends it. */
+function minimalMeta() {
   return {
-    pulse_trains: [[0, 1, 0, 1]],
-    spike_times: [[100, 300]],
+    token: "t",
     fsamp: 2048,
+    total_samples: 4,
     grid_names: ["Grid 1"],
     mu_grid_index: [0],
-    refit_settings: {
-      nbextchan: 1000,
-      peel_off_win: 0.025,
-      compute_dtype: "float32",
-    },
+    mu_uids: ["g0_mu0"],
+    versions: [1],
+    artifact_regions: [],
     edit_history: [],
     source_filename: "sub-01_decomp.npz",
     bids_root: "/data",
@@ -41,60 +34,20 @@ function minimalPayload() {
 }
 
 describe("normalizeSessionPayload", () => {
-  test("reads the run's refit settings", () => {
-    const run = normalizeSessionPayload({
-      ...minimalPayload(),
-      refit_settings: {
-        nbextchan: 640,
-        peel_off_win: 0.02,
-        compute_dtype: "float64",
-      },
-    });
-    assert.deepEqual(run.refitSettings, {
-      nbextchan: 640,
-      peelOffWin: 0.02,
-      computeDtype: "float64",
-    });
-  });
-
-  test("fills the uids and artifact rows a file leaves out", () => {
-    const normalized = normalizeSessionPayload(minimalPayload());
-    assert.deepEqual(normalized.muUids, ["g0_mu0"]);
-    assert.deepEqual(normalized.artifactTimes, [[]]);
-    assert.deepEqual(normalized.artifactRegions, []);
-  });
-
-  test("keeps the log's mu uids only when it has one per MU", () => {
-    const kept = normalizeSessionPayload({
-      ...minimalPayload(),
-      mu_uids: ["custom-uid"],
-    });
-    assert.deepEqual(kept.muUids, ["custom-uid"]);
-    const built = normalizeSessionPayload({
-      ...minimalPayload(),
-      mu_grid_index: [1],
-      mu_uids: ["a", "b"],
-    });
-    assert.deepEqual(built.muUids, ["g1_mu0"]);
-  });
-
-  test("reads artifact times as one row per MU", () => {
-    const normalized = normalizeSessionPayload({
-      ...minimalPayload(),
-      spike_times: [[1], [2], [3], [4]],
-      mu_grid_index: [0, 0, 0, 0],
-      artifact_times: [[1, "2"], "bad", [3]],
-    });
-    assert.deepEqual(normalized.artifactTimes, [[1, 2], [], [3], []]);
-  });
-
   test("reads the file fields and normalises the log against the session's uids", () => {
+    const spikeTimes = [Int32Array.from([100, 300])];
     const session = normalizeSessionPayload({
-      ...minimalPayload(),
-      mu_uids: ["g0_mu7"],
-      artifact_regions: [[10, 20]],
-      edit_history: [{ type: "add_spikes", mu_uid: "g0_mu7" }, "junk"],
+      meta: {
+        ...minimalMeta(),
+        mu_uids: ["g0_mu7"],
+        artifact_regions: [[10, 20]],
+        edit_history: [{ type: "add_spikes", mu_uid: "g0_mu7" }],
+      },
+      spikeTimes,
     });
+    assert.equal(session.token, "t");
+    assert.equal(session.totalSamples, 4);
+    assert.equal(session.spikeTimes, spikeTimes);
     assert.equal(session.sourceFilename, "sub-01_decomp.npz");
     assert.equal(session.bidsRoot, "/data");
     assert.equal(session.entityLabel, "sub-01");
@@ -104,11 +57,31 @@ describe("normalizeSessionPayload", () => {
   });
 });
 
+describe("normalizeReplayChange", () => {
+  test("renames what a seek changed", () => {
+    const spikeTimes = [Int32Array.from([5])];
+    assert.deepEqual(
+      normalizeReplayChange({
+        meta: {
+          changed: [2],
+          versions: [1, 1, 4],
+          refit_errors: [{ step: 3, message: "No EMG recording." }],
+        },
+        spikeTimes,
+      }),
+      {
+        changed: [2],
+        spikeTimes,
+        versions: [1, 1, 4],
+        refitErrors: [{ step: 3, message: "No EMG recording." }],
+      },
+    );
+  });
+});
+
 describe("normalizeLogEntry", () => {
-  test("drops rows that are not objects and fills missing fields", () => {
-    // The backend passes the user's log through unchecked.
-    assert.equal(normalizeLogEntry(/** @type {any} */ (null), []), null);
-    assert.equal(normalizeLogEntry(/** @type {any} */ ("step"), []), null);
+  test("fills missing fields", () => {
+    // The backend passes the user's log entries through unchecked.
     const entry = normalized({}, []);
     assert.equal(entry.type, "unknown");
     assert.equal(entry.muUid, "");
@@ -188,18 +161,6 @@ describe("normalizeLogEntry", () => {
   });
 });
 
-describe("normalizeRefitResult", () => {
-  test("renames the refit's discharges and pulse train", () => {
-    assert.deepEqual(
-      normalizeRefitResult({ spikes: [5], pulse_train: [0.5] }),
-      {
-        spikes: [5],
-        pulseTrain: [0.5],
-      },
-    );
-  });
-});
-
 describe("normalizeDataFolder", () => {
   test("renames the picked folder, null when cancelled", () => {
     assert.deepEqual(normalizeDataFolder({ data_root: "/lab" }), {
@@ -208,12 +169,5 @@ describe("normalizeDataFolder", () => {
     assert.deepEqual(normalizeDataFolder({ data_root: null }), {
       dataRoot: null,
     });
-  });
-});
-
-describe("buildMuUids", () => {
-  test("numbers MUs per grid, in file order", () => {
-    const uids = buildMuUids([2, 0, 2, 2, 0]);
-    assert.deepEqual(uids, ["g2_mu0", "g0_mu0", "g2_mu1", "g2_mu2", "g0_mu1"]);
   });
 });

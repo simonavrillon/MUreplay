@@ -3,7 +3,7 @@
  * server that serves this page also answers the API, so it is already up.
  */
 import { createApiClient } from "../api/client.js";
-import { apiJson } from "../api/http.js";
+import { SESSION_ID, apiFetch, apiJson } from "../api/http.js";
 import { state } from "../state/state.js";
 import { createReplayRenderer } from "../view/replay-renderer.js";
 import { createApp } from "./create-app.js";
@@ -16,9 +16,18 @@ export function initializeApp() {
   const app = createApp({
     state,
     els,
-    api: createApiClient({ apiJson }),
+    api: createApiClient({ apiFetch, apiJson, sessionId: SESSION_ID }),
   });
-  app.renderAll = createReplayRenderer({ els, state }).renderAll;
+  const renderer = createReplayRenderer({ els, state });
+  app.renderAll = () => {
+    renderer.renderAll();
+    // The window drawn follows the view, the MU's steps and the plot's width.
+    app.ensurePulseView();
+  };
+  window.addEventListener("pagehide", (event) => {
+    // A page kept in the back-forward cache can come back with its token.
+    if (!event.persisted) app.api.closeSession();
+  });
 
   setupImportEvents(app);
   setupReplayEvents(app);

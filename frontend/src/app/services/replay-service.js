@@ -1,31 +1,28 @@
 /**
- * Replay service: the replay engine.
+ * Replay service: the timeline over the server's replay.
  *
- * Groups the log into timeline steps, applies and undoes them on the current
- * MU's rows, and asks the backend to refit `update_filter` steps on the BIDS
- * EMG. Every step applied forward pushes a backup, so undoing it restores the
- * rows exactly; a refit that fails falls back to the step's logged diff.
+ * Groups the log into timeline steps and asks the server to move its replay
+ * session to the current MU's steps up to the playhead; the server applies
+ * and undoes them (and refits `update_filter` steps on the BIDS EMG), and
+ * answers with what changed. The pulse train on screen is a window the
+ * server sends, fetched again whenever the view or the MU's version moves.
  */
-import { normalizeRefitResult } from "../../api/payloads.js";
+import { normalizeReplayChange } from "../../api/payloads.js";
 import {
-  applyDiff,
   clamp,
   diffSquares,
   dischargeDiff,
-  inactiveMusBefore,
   isArtifactStep,
   isSpikeEditStep,
   shiftViewInside,
 } from "../../replay/operations.js";
 import {
-  popReplayBackup,
-  pushReplayBackup,
-  restoreReplayBase,
+  applyReplayChange,
+  resetReplayPosition,
   setCurrentGrid,
   setCurrentMu,
-  setMuRows,
   setPlayTimer,
-  setReplayBase,
+  setPulseView,
   setReplayGroups,
   setReplayPosition,
   setReplayView,
@@ -35,12 +32,14 @@ import {
   currentStep,
   clampedReplayView,
   musForGrid,
-  pulseTrainForCurrentMu,
 } from "../../state/selectors.js";
-import { errorMessage, handleError } from "./error-service.js";
+import { getCanvasPlotMetrics } from "../../view/plots.js";
+import { handleError } from "./error-service.js";
+import { createViewFetcher } from "./view-fetcher.js";
 
 /** @typedef {import("../../state/state.js").EditLogEntry} EditLogEntry */
 /** @typedef {import("../../state/state.js").MuMark} MuMark */
+/** @typedef {import("../../state/state.js").ReplayChange} ReplayChange */
 /** @typedef {import("../../state/state.js").ReplayGroup} ReplayGroup */
 /** @typedef {import("../context.js").ReplayService} ReplayService */
 
@@ -67,7 +66,6 @@ export function createReplayService(app) {
       Number(/** @type {HTMLSelectElement} */ (event.target).value) || 0,
     );
     fillMuSelect();
-    rebuildTimelineGroups();
     resetReplayForCurrentMu();
   }
 
@@ -77,7 +75,6 @@ export function createReplayService(app) {
       state,
       Number(/** @type {HTMLSelectElement} */ (event.target).value) || 0,
     );
-    rebuildTimelineGroups();
     resetReplayForCurrentMu();
   }
 
@@ -99,13 +96,12 @@ export function createReplayService(app) {
     if (next === current) return;
     setCurrentMu(state, next);
     fillMuSelect(next);
-    rebuildTimelineGroups();
     resetReplayForCurrentMu();
   }
 
   /** @type {ReplayService["adjustReplayView"]} */
   function adjustReplayView(action) {
-    const totalSamples = pulseTrainForCurrentMu(state).length;
+    const totalSamples = state.totalSamples;
     if (!totalSamples) return;
     const view = clampedReplayView(state, totalSamples);
     const span = Math.max(1, view.end - view.start);
@@ -185,12 +181,11 @@ export function createReplayService(app) {
    * Move the replay to `targetPos`, one seek at a time.
    *
    * An `update_filter` step refits on the server, which takes over a second,
-   * while the play timer and a slider drag fire faster than that. Two
-   * overlapping runs would apply the same group twice and leave the backup
-   * stack out of step with the timeline, so a request that arrives mid-seek
-   * parks its target here and the run in flight picks up the newest one when
-   * it finishes. Parking only the newest keeps a drag cheap: the steps
-   * scrubbed past are dropped, not queued.
+   * while the play timer and a slider drag fire faster than that. A request
+   * that arrives mid-seek parks its target here and the run in flight picks
+   * up the newest one when it finishes, so the server sees one seek at a
+   * time. Parking only the newest keeps a drag cheap: the steps scrubbed
+   * past are dropped, not queued.
    *
    * @param {number} targetPos
    */
@@ -216,33 +211,64 @@ export function createReplayService(app) {
   }
 
   /**
-   * Apply or undo groups until the replay sits at `targetPos`.
+   * Ask the server to hold the current MU's steps up to `targetPos`, and show what changed.
    *
    * @param {number} targetPos
-   * @returns {Promise<boolean>} `false` when a step failed, so the caller stops
+   * @returns {Promise<boolean>} `false` when the seek failed, so the caller stops
    *   instead of running whatever was queued behind it.
    */
   async function runSeek(targetPos) {
-    const target = clamp(targetPos, 0, state.timelineGroups.length);
+    const { token } = state;
+    const groups = state.timelineGroups;
+    const target = clamp(targetPos, 0, groups.length);
+    const steps = groups.slice(0, target).flatMap((group) => group.indices);
     try {
-      while (state.replayPosition < target) {
-        await applyGroupForward(state.replayPosition);
-        setReplayPosition(state, state.replayPosition + 1);
-      }
-      while (state.replayPosition > target) {
-        undoGroupBackward(state.replayPosition - 1);
-        setReplayPosition(state, state.replayPosition - 1);
-      }
+      const change = normalizeReplayChange(
+        await api.replaySeek({ token, steps }),
+      );
+      // Another trial was opened meanwhile: this answer is not about it.
+      if (state.token !== token) return true;
+      applyReplayChange(state, change);
+      // Another MU was picked meanwhile: the server moved as asked, but the
+      // playhead belongs to the new timeline and the seek parked behind this one.
+      if (state.timelineGroups !== groups) return true;
+      const from = state.replayPosition;
+      setReplayPosition(state, target);
+      reportSeek(groups, from, target, change);
       applyTimelineStep();
       return true;
     } catch (err) {
-      handleError(
-        err,
-        app.setReplayStatus,
-        `Could not replay step ${state.replayPosition + 1}`,
-      );
+      handleError(err, app.setReplayStatus, `Could not replay step ${target}`);
       stopPlay();
       return false;
+    }
+  }
+
+  /**
+   * Say what a seek from `from` to `target` did: the step it applied or
+   * undid, or the refit it replayed from the log instead, and why.
+   *
+   * @param {ReplayGroup[]} groups The timeline the seek moved along.
+   * @param {number} from
+   * @param {number} target
+   * @param {ReplayChange} change
+   */
+  function reportSeek(groups, from, target, change) {
+    const failed = change.refitErrors[change.refitErrors.length - 1];
+    if (failed) {
+      const idx = groups.findIndex((g) => g.indices.includes(failed.step));
+      app.setReplayStatus(
+        `Replayed step ${idx + 1} of ${groups.length} from the edit log: could not recompute the filter. ${failed.message}`,
+        "error",
+      );
+    } else if (target > from) {
+      app.setReplayStatus(
+        `Applied step ${target} of ${groups.length}: ${groups[target - 1].type}.`,
+      );
+    } else if (target < from) {
+      app.setReplayStatus(
+        `Undid step ${target + 1} of ${groups.length}: ${groups[target].type}.`,
+      );
     }
   }
 
@@ -263,145 +289,6 @@ export function createReplayService(app) {
     setCurrentGrid(state, state.muGridIndex[mu]);
     fillGridSelect();
     fillMuSelect(mu);
-  }
-
-  // A timeline group's steps are all on the current MU, so every step applied
-  // forward pushes a backup and every step undone pops its own.
-
-  /** @param {number} groupIdx */
-  async function applyGroupForward(groupIdx) {
-    const group = state.timelineGroups[groupIdx];
-    let refitError = "";
-    for (const stepIdx of group.indices) {
-      refitError = (await applyStepForward(stepIdx)) || refitError;
-    }
-    const where = `step ${groupIdx + 1} of ${state.timelineGroups.length}`;
-    if (refitError) {
-      app.setReplayStatus(
-        `Replayed ${where} from the edit log: could not recompute the filter. ${refitError}`,
-        "error",
-      );
-    } else {
-      app.setReplayStatus(`Applied ${where}: ${group.type}.`);
-    }
-  }
-
-  /** @param {number} groupIdx */
-  function undoGroupBackward(groupIdx) {
-    const group = state.timelineGroups[groupIdx];
-    for (let i = group.indices.length - 1; i >= 0; i -= 1) {
-      undoStepBackward();
-    }
-    app.setReplayStatus(
-      `Undid step ${groupIdx + 1} of ${state.timelineGroups.length}: ${group.type}.`,
-    );
-  }
-
-  /**
-   * @param {number} stepIdx
-   * @returns {Promise<string>} Why a refit fell back to the logged diff; empty when none did.
-   */
-  async function applyStepForward(stepIdx) {
-    const step = state.editHistory[stepIdx];
-    const { mu } = step;
-    let refitError = "";
-    pushReplayBackup(state, {
-      mu,
-      spikes: [...state.spikeTimes[mu]],
-      pulseTrain: [...state.pulseTrains[mu]],
-      artifacts: [...state.artifactTimes[mu]],
-    });
-    if (step.type === "update_filter") {
-      refitError = await refitStep(stepIdx, step);
-    } else {
-      applyLoggedDiff(step);
-    }
-    showMu(mu);
-    return refitError;
-  }
-
-  /**
-   * Apply `step`'s logged diff to its MU's artifact markers or discharges.
-   *
-   * @param {EditLogEntry} step
-   */
-  function applyLoggedDiff(step) {
-    const { mu } = step;
-    if (isArtifactStep(step)) {
-      setMuRows(state, mu, {
-        artifacts: applyDiff(
-          state.artifactTimes[mu],
-          step.artifactsAdded,
-          step.artifactsRemoved,
-        ),
-      });
-    } else {
-      setMuRows(state, mu, {
-        spikes: applyDiff(
-          state.spikeTimes[mu],
-          step.spikesAdded,
-          step.spikesRemoved,
-        ),
-      });
-    }
-  }
-
-  /**
-   * Refit the step's MU as the logged `update_filter` step did; on failure, apply the step's diff.
-   *
-   * @param {number} stepIdx
-   * @param {EditLogEntry} step
-   * @returns {Promise<string>} Why the refit failed; empty when it succeeded.
-   */
-  async function refitStep(stepIdx, step) {
-    const { mu } = step;
-    const pulseTrain = state.pulseTrains[mu];
-    const grid = state.muGridIndex[mu];
-    try {
-      const refit = normalizeRefitResult(
-        await api.updateFilter({
-          mu,
-          spike_times: state.spikeTimes,
-          pulse_train: pulseTrain,
-          bids_root: state.bidsRoot,
-          entity_label: state.entityLabel,
-          grid_name: state.gridNames[grid] || "",
-          mu_grid_index: state.muGridIndex,
-          inactive_mus: inactiveMusBefore(
-            state.editHistory,
-            stepIdx,
-            state.muUids,
-          ),
-          view_start: step.viewStart ?? 0,
-          view_end: step.viewEnd ?? pulseTrain.length,
-          nbextchan: state.refitSettings.nbextchan,
-          peel_off_win: state.refitSettings.peelOffWin,
-          compute_dtype: state.refitSettings.computeDtype,
-          use_peeloff: step.usePeeloff,
-          lock_spikes: step.lockSpikes,
-          artifact_times: state.artifactTimes[mu],
-          artifact_regions: state.artifactRegions,
-        }),
-      );
-      setMuRows(state, mu, refit);
-      return "";
-    } catch (err) {
-      applyLoggedDiff(step);
-      return errorMessage(err);
-    }
-  }
-
-  /** Restore the rows the newest backup holds. */
-  function undoStepBackward() {
-    const backup = /** @type {import("../../state/state.js").ReplayBackup} */ (
-      popReplayBackup(state)
-    );
-    setMuRows(state, backup.mu, {
-      spikes: backup.spikes,
-      pulseTrain: backup.pulseTrain,
-      artifacts: backup.artifacts,
-    });
-    showMu(backup.mu);
   }
 
   /**
@@ -512,44 +399,6 @@ export function createReplayService(app) {
     );
   }
 
-  /**
-   * The rows the replay starts from: the loaded decomposition, or, for a file
-   * saved after the edits, the edits undone in reverse.
-   *
-   * @returns {import("../../state/state.js").ReplayBase}
-   */
-  function replayBase() {
-    const base = {
-      spikeTimes: state.spikeTimes,
-      pulseTrains: state.pulseTrains,
-      artifactTimes: state.artifactTimes,
-    };
-    if (state.loadedFromDecomp) return base;
-    // `setReplayBase` copies the rows and the rewind only replaces them, so
-    // copying the outer arrays is enough to leave the state's untouched.
-    base.spikeTimes = [...state.spikeTimes];
-    base.artifactTimes = [...state.artifactTimes];
-    for (let i = state.editHistory.length - 1; i >= 0; i -= 1) {
-      const step = state.editHistory[i];
-      const { mu } = step;
-      if (mu < 0) continue;
-      if (!isArtifactStep(step)) {
-        base.spikeTimes[mu] = applyDiff(
-          base.spikeTimes[mu],
-          step.spikesRemoved,
-          step.spikesAdded,
-        );
-      } else {
-        base.artifactTimes[mu] = applyDiff(
-          base.artifactTimes[mu],
-          step.artifactsRemoved,
-          step.artifactsAdded,
-        );
-      }
-    }
-    return base;
-  }
-
   /** @type {ReplayService["startReplay"]} */
   function startReplay() {
     stopPlay();
@@ -561,14 +410,91 @@ export function createReplayService(app) {
     fillGridSelect();
     fillMuSelect();
     rebuildTimelineGroups();
-    setReplayBase(state, replayBase());
+    // A session opens at step 0 on the server too.
+    resetReplayPosition(state);
+    prepareGridForCurrentMu();
     applyTimelineStep();
   }
 
-  /** Back to step 0 of the current MU's timeline. */
+  /** The current MU's timeline at step 0, here and on the server. */
   function resetReplayForCurrentMu() {
-    restoreReplayBase(state);
+    rebuildTimelineGroups();
+    resetReplayPosition(state);
+    prepareGridForCurrentMu();
     applyTimelineStep();
+    void seekReplayPosition(0);
+  }
+
+  /**
+   * Grids the server was asked to filter, as `token:grid`.
+   * @type {Set<string>}
+   */
+  const preparedGrids = new Set();
+
+  /**
+   * Ask the server to filter the current MU's grid while the user looks, when
+   * its timeline has a refit: the first `update_filter` step then needn't wait.
+   */
+  function prepareGridForCurrentMu() {
+    const grid = state.muGridIndex[state.currentMu];
+    const key = `${state.token}:${grid}`;
+    if (!state.token || grid == null || preparedGrids.has(key)) return;
+    if (!state.timelineGroups.some((g) => g.type === "update_filter")) return;
+    preparedGrids.add(key);
+    // A grid that cannot be filtered is reported by the refit that needs it.
+    api.replayPrepareGrid({ token: state.token, grid }).catch(() => {
+      preparedGrids.delete(key);
+    });
+  }
+
+  const pulseFetcher = createViewFetcher(
+    async (
+      /** @type {{ token: string, mu: number, start: number, end: number, bins: number }} */ params,
+    ) => ({ token: params.token, view: await api.fetchPulse(params) }),
+    ({ token, view }) => {
+      // A window of a session since replaced is dropped.
+      if (token !== state.token) return;
+      setPulseView(state, view);
+      app.renderAll();
+    },
+    (err) =>
+      handleError(err, app.setReplayStatus, "Could not draw the pulse train"),
+  );
+
+  /** @type {ReplayService["ensurePulseView"]} */
+  function ensurePulseView() {
+    const canvas = els.editPulseCanvas;
+    const total = state.totalSamples;
+    const mu = state.currentMu;
+    if (!state.token || !canvas || !total || state.spikeTimes[mu] === undefined)
+      return;
+    const { start, end } = clampedReplayView(state, total);
+    const bins = Math.max(
+      1,
+      Math.round(getCanvasPlotMetrics(canvas).plotWidth),
+    );
+    const version = state.versions[mu] ?? 0;
+    const shown = state.pulseView;
+    if (
+      shown &&
+      shown.mu === mu &&
+      shown.version === version &&
+      shown.start === start &&
+      shown.end === end &&
+      shown.bins === bins
+    ) {
+      return;
+    }
+    pulseFetcher.want(
+      `${state.token}:${mu}:${version}:${start}:${end}:${bins}`,
+      {
+        token: state.token,
+        mu,
+        start,
+        end,
+        bins,
+      },
+    );
   }
 
   /**
@@ -733,5 +659,6 @@ export function createReplayService(app) {
     togglePlay,
     startReplay,
     updateTimelineUi,
+    ensurePulseView,
   };
 }

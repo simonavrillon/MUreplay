@@ -1,21 +1,23 @@
-// Viewport series: their range, and a window binned to the plot's width.
+// Viewport series: the range a plot scales to.
 import { test, describe } from "node:test";
 import assert from "node:assert/strict";
-import { traceRange, traceWindow } from "../src/signal/series.js";
+import { traceRange } from "../src/signal/series.js";
 
-describe("traceWindow", () => {
-  test("keeps every sample when the plot has a pixel for each", () => {
-    const trace = traceWindow([9, 3, -2, 7, 0], { start: 1, end: 4 }, 10);
-    assert.deepEqual([.../** @type {any} */ (trace.row)], [3, -2, 7]);
+describe("traceRange", () => {
+  test("spans the samples of a window", () => {
+    const trace = { row: Float32Array.from([3, -2, 7]), start: 1, end: 4 };
     assert.deepEqual(traceRange(trace), { min: -2, max: 7 });
   });
 
-  test("bins more samples than pixels into each bin's min and max", () => {
-    const trace = traceWindow([1, 5, -3, 2, 8, 0], { start: 0, end: 6 }, 2);
-    const row = /** @type {any} */ (trace.row);
-    assert.deepEqual([...row.min], [-3, 0]);
-    assert.deepEqual([...row.max], [5, 8]);
-    assert.deepEqual(traceRange(trace), { min: -3, max: 8 });
+  test("spans every bin's min and max of an envelope", () => {
+    const row = {
+      min: Float32Array.from([-3, 0]),
+      max: Float32Array.from([5, 8]),
+    };
+    assert.deepEqual(traceRange({ row, start: 0, end: 6 }), {
+      min: -3,
+      max: 8,
+    });
   });
 
   test("a window without samples has the range 0 to 0", () => {

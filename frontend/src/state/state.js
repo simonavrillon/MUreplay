@@ -22,11 +22,13 @@
  */
 
 /**
- * @typedef {object} ReplayBackup
- * @property {number} mu
- * @property {number[]} spikes
- * @property {number[]} pulseTrain
- * @property {number[]} artifacts
+ * What a seek changed on the server.
+ *
+ * @typedef {object} ReplayChange
+ * @property {number[]} changed The MUs whose rows moved.
+ * @property {Int32Array[]} spikeTimes The discharges of each changed MU, in `changed`'s order.
+ * @property {number[]} versions Every MU's version: a new one means its pulse train must be fetched again.
+ * @property {{ step: number, message: string }[]} refitErrors Refits replayed from the log instead, and why.
  */
 
 /**
@@ -36,32 +38,19 @@
  * @property {EditLogEntry} displayStep
  */
 
-/**
- * The decomposition a replay starts from, one row per MU.
- *
- * @typedef {object} ReplayBase
- * @property {number[][]} spikeTimes
- * @property {number[][]} pulseTrains
- * @property {number[][]} artifactTimes
- */
-
 /** @typedef {"flagged" | "duplicate" | "removed"} MuMark */
 
 /**
- * How the decomposition was run, which a filter refit repeats; the backend
- * fills MUedit2's defaults where the file has none.
+ * The replay as the page holds it: the server holds the pulse trains, and
+ * `pulseView` the window of the current MU on screen.
  *
- * @typedef {object} RefitSettings
- * @property {number} nbextchan
- * @property {number} peelOffWin Seconds.
- * @property {"float32" | "float64"} computeDtype
- */
-
-/**
  * @typedef {object} State
+ * @property {string} token The server's replay session; empty before one is open.
  * @property {number} fsamp
- * @property {number[][]} pulseTrains
- * @property {number[][]} spikeTimes
+ * @property {number} totalSamples
+ * @property {Int32Array[]} spikeTimes The discharges at the replay's position, one row per MU.
+ * @property {number[]} versions Per MU; changes whenever a step moves it.
+ * @property {import("../api/binary-payloads.js").PulseView | null} pulseView
  * @property {string[]} gridNames
  * @property {number[]} muGridIndex
  * @property {string[]} muUids
@@ -71,27 +60,21 @@
  * @property {ReplayGroup[]} replayGroups
  * @property {ReplayGroup[]} timelineGroups The replay groups that touch the current MU.
  * @property {number | null} playTimer
- * @property {number[][]} replayBaseSpikeTimes
- * @property {number[][]} replayBasePulseTrains
  * @property {number} replayPosition
- * @property {ReplayBackup[]} replayBackups
  * @property {Span | null} replayView
- * @property {boolean} loadedFromDecomp Whether the decomposition is the one the edits started from (`_decomp.npz`).
- * @property {RefitSettings} refitSettings
  * @property {Record<string, MuMark>} muMarks
  * @property {string[]} muGhostUids Uids the log marks but the loaded file no longer has.
- * @property {string} bidsRoot The session's BIDS dataset: the file's location, else the server's data root.
- * @property {string} entityLabel The BIDS entity label of the session's recording.
- * @property {number[][]} artifactTimes One row per MU, like `spikeTimes`.
- * @property {number[][]} replayBaseArtifactTimes
  * @property {number[][]} artifactRegions
  */
 
 /** @type {State} */
 export const state = {
+  token: "",
   fsamp: 2048,
-  pulseTrains: [],
+  totalSamples: 0,
   spikeTimes: [],
+  versions: [],
+  pulseView: null,
   gridNames: [],
   muGridIndex: [],
   muUids: [],
@@ -101,18 +84,9 @@ export const state = {
   replayGroups: [],
   timelineGroups: [],
   playTimer: null,
-  replayBaseSpikeTimes: [],
-  replayBasePulseTrains: [],
   replayPosition: 0,
-  replayBackups: [],
   replayView: null,
-  loadedFromDecomp: false,
-  refitSettings: { nbextchan: 0, peelOffWin: 0, computeDtype: "float32" },
   muMarks: {},
   muGhostUids: [],
-  bidsRoot: "",
-  entityLabel: "",
-  artifactTimes: [],
-  replayBaseArtifactTimes: [],
   artifactRegions: [],
 };

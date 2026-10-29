@@ -5,44 +5,44 @@ from __future__ import annotations
 import csv
 import json
 import re
+from collections.abc import Sequence
 from itertools import pairwise
 from pathlib import Path
-from typing import Any, BinaryIO
+from typing import Any
 
 import numpy as np
-from numpy.lib.npyio import NpzFile
+from numpy.typing import ArrayLike, DTypeLike
 
 from mureplay.errors import MureplayError, NotFoundError
 from mureplay.io.bids import read_sidecar_meta
+from mureplay.io.npz import NpzArchive
+from mureplay.models import IntArray
 from mureplay.paths import data_root
 from mureplay.replay.artifact_mask import mask_to_intervals
 from mureplay.replay.filter_update import (
     DEFAULT_COMPUTE_DTYPE,
     DEFAULT_NBEXTCHAN,
     DEFAULT_PEEL_OFF_WIN_SEC,
+    spike_array,
 )
+from mureplay.replay.session import initial_mu_uids
 
 #: Member MUedit2 writes to mark a schema v2 decomposition file; absent in v1.
 _SCHEMA_KEY = "schema_version"
 
 
-def _build_pulse_trains_from_spike_times(
-    spike_times: list[list[int]], total_samples: int
-) -> np.ndarray:
-    """Binary pulse trains, 1 at each discharge, for files saved without pulse trains."""
-    pulses = np.zeros((len(spike_times), total_samples), dtype=float)
-    for i, spikes in enumerate(spike_times):
-        if not spikes:
-            continue
-        t = np.asarray(spikes, dtype=int)
-        t = t[(t >= 0) & (t < total_samples)]
-        pulses[i, t] = 1.0
-    return pulses
+def pack_csr(rows: Sequence[ArrayLike], dtype: DTypeLike) -> tuple[np.ndarray, np.ndarray]:
+    """``(values, offsets)``: row ``i`` is ``values[offsets[i]:offsets[i + 1]]``."""
+    parts = [np.asarray(row, dtype=dtype).reshape(-1) for row in rows]
+    offsets = np.zeros(len(parts) + 1, dtype=np.int64)
+    np.cumsum([len(part) for part in parts], out=offsets[1:])
+    values = np.concatenate(parts) if parts else np.zeros(0, dtype=dtype)
+    return values, offsets
 
 
-def _unpack_csr(values: np.ndarray, offsets: np.ndarray) -> list[list[int]]:
-    """The per-MU rows of a CSR pair such as ``spike_times``/``spike_offsets``."""
-    return [values[int(a) : int(b)].astype(int).tolist() for a, b in pairwise(offsets)]
+def unpack_csr(values: np.ndarray, offsets: np.ndarray) -> list[np.ndarray]:
+    """The rows ``pack_csr`` packed, as views of ``values``."""
+    return [values[int(a) : int(b)] for a, b in pairwise(offsets)]
 
 
 def _unwrap_parameters(raw: Any) -> dict[str, Any]:
@@ -54,22 +54,32 @@ def _unwrap_parameters(raw: Any) -> dict[str, Any]:
     return {str(k): v.item() if isinstance(v, np.generic) else v for k, v in raw.items()}
 
 
-def _json_member(npz: NpzFile, key: str, default: Any) -> Any:
+def _json_member(npz: NpzArchive, key: str, default: Any) -> Any:
     """A schema v2 member stored as JSON in one string."""
     raw = npz.get(key)
     return json.loads(str(raw)) if raw is not None else default
 
 
-def _npz_v2(npz: NpzFile) -> dict[str, Any]:
-    """The decomposition fields of a schema v2 file."""
+def _mapped_member(npz: NpzArchive, key: str) -> np.ndarray | None:
+    """A member memory-mapped in place when it is stored uncompressed, else read."""
+    if key not in npz:
+        return None
+    mapped = npz.memmap(key)
+    return mapped if mapped is not None else npz.get(key)
+
+
+def _npz_v2(npz: NpzArchive) -> dict[str, Any]:
+    """The decomposition fields of a schema v2 file; the pulse trains stay memory-mapped."""
     spikes, offsets = npz.get("spike_times"), npz.get("spike_offsets")
     intervals = npz.get("artifact_intervals")
     parameters = _json_member(npz, "parameters", {})
     return {
         "spike_times": (
-            _unpack_csr(spikes, offsets) if spikes is not None and offsets is not None else []
+            [spike_array(row) for row in unpack_csr(spikes, offsets)]
+            if spikes is not None and offsets is not None
+            else []
         ),
-        "pulse_trains": npz.get("pulse_trains"),
+        "pulse_trains": _mapped_member(npz, "pulse_trains"),
         "fsamp": npz.get("fsamp"),
         "total_samples": npz.get("total_samples"),
         "grid_names": [str(g) for g in _json_member(npz, "grid_names", [])],
@@ -81,18 +91,18 @@ def _npz_v2(npz: NpzFile) -> dict[str, Any]:
     }
 
 
-def _npz_v1(npz: NpzFile) -> dict[str, Any]:
+def _npz_v1(npz: NpzArchive) -> dict[str, Any]:
     """The decomposition fields of a schema v1 file (object arrays, a pickled dict)."""
     raw_spikes = npz.get("discharge_times")
     grid_names = npz.get("grid_names")
     mask = npz.get("artifact_mask")
     return {
         "spike_times": (
-            [np.asarray(row, dtype=int).reshape(-1).tolist() for row in raw_spikes]
+            [spike_array(np.asarray(row).reshape(-1)) for row in raw_spikes]
             if raw_spikes is not None
             else []
         ),
-        "pulse_trains": npz.get("pulse_trains"),
+        "pulse_trains": _mapped_member(npz, "pulse_trains"),
         "fsamp": npz.get("fsamp"),
         "total_samples": npz.get("total_samples"),
         "grid_names": [str(g) for g in grid_names.tolist()] if grid_names is not None else [],
@@ -147,19 +157,26 @@ def _shown_parameters(parameters: dict[str, Any]) -> dict[str, Any]:
     }
 
 
-def _load_npz_payload(source: Path | BinaryIO) -> dict[str, Any]:
-    """The JSON-ready decomposition of a MUedit2 ``.npz``, in either schema."""
-    # np.load reads a member only when it is accessed, so an embedded EMG is never read.
-    with np.load(source, allow_pickle=True) as npz:
+def _total_samples(stored: Any, pulse_trains: np.ndarray | None, spikes: list[IntArray]) -> int:
+    """The recording length the file records, else its pulse trains', else past its last discharge."""
+    if stored is not None and int(stored) > 0:
+        return int(stored)
+    if pulse_trains is not None and pulse_trains.ndim == 2:
+        return int(pulse_trains.shape[1])
+    return max((int(s[-1]) + 1 for s in spikes if s.size), default=0)
+
+
+def _load_npz_payload(path: Path) -> dict[str, Any]:
+    """A MUedit2 ``.npz``, in either schema: its fields JSON-ready, its discharges and pulse trains as arrays."""
+    with NpzArchive(path) as npz:
         fields = _npz_v2(npz) if _SCHEMA_KEY in npz else _npz_v1(npz)
 
-    spike_times = fields["spike_times"]
-    total_samples = int(fields["total_samples"]) if fields["total_samples"] is not None else 0
+    spike_times: list[IntArray] = fields["spike_times"]
     pulse_trains = fields["pulse_trains"]
-    if pulse_trains is None:
-        # Spikes-only file: MUedit2's loader draws binary trains from the
-        # discharge times, so the replay payload does the same.
-        pulse_trains = _build_pulse_trains_from_spike_times(spike_times, total_samples)
+    total_samples = _total_samples(fields["total_samples"], pulse_trains, spike_times)
+    if pulse_trains is not None and pulse_trains.shape != (len(spike_times), total_samples):
+        # MUedit2's loader then draws binary trains from the discharge times; so does the replay.
+        pulse_trains = None
     raw_grid_index = fields["mu_grid_index"]
     mu_grid_index = (
         np.asarray(raw_grid_index).astype(int).tolist() if raw_grid_index is not None else []
@@ -167,18 +184,17 @@ def _load_npz_payload(source: Path | BinaryIO) -> dict[str, Any]:
     if len(mu_grid_index) != len(spike_times):
         mu_grid_index = [0] * len(spike_times)
 
-    payload: dict[str, Any] = {
+    return {
         "fsamp": float(fields["fsamp"]) if fields["fsamp"] is not None else 2048.0,
-        "pulse_trains": np.asarray(pulse_trains).tolist(),
+        "total_samples": total_samples,
+        "pulse_trains": pulse_trains,
         "spike_times": spike_times,
         "grid_names": fields["grid_names"] or ["Grid 1"],
         "mu_grid_index": mu_grid_index,
         "refit_settings": _refit_settings(fields["parameters"]),
         "parameters": _shown_parameters(fields["parameters"]),
+        "artifact_regions": fields["artifact_regions"] or [],
     }
-    if fields["artifact_regions"] is not None:
-        payload["artifact_regions"] = fields["artifact_regions"]
-    return payload
 
 
 def _entity_label_from_filename(name: str) -> str:
@@ -214,14 +230,24 @@ def _merge_edit_log(payload: dict[str, Any], edit_log_path: Path) -> None:
             field="file_path",
         ) from exc
 
-    history = []
+    history: list[dict[str, Any]] = []
+    mu_uids: list[str] = []
+    artifact_times: list[Any] = []
     if isinstance(edit_log, dict):
         if isinstance(edit_log.get("history"), list):
-            history = edit_log["history"]
-        if isinstance(edit_log.get("mu_uids"), list) and edit_log["mu_uids"]:
-            payload["mu_uids"] = edit_log["mu_uids"]
+            history = [entry for entry in edit_log["history"] if isinstance(entry, dict)]
+        if isinstance(edit_log.get("mu_uids"), list):
+            mu_uids = [str(uid) for uid in edit_log["mu_uids"]]
         if isinstance(edit_log.get("artifact_times"), list):
-            payload["artifact_times"] = edit_log["artifact_times"]
+            artifact_times = edit_log["artifact_times"]
+    # When MUs were removed before the save the uids no longer match the decomposition: number
+    # its MUs as MUedit2 did when the session opened.
+    payload["mu_uids"] = (
+        mu_uids
+        if len(mu_uids) == len(payload["spike_times"])
+        else initial_mu_uids(payload["mu_grid_index"])
+    )
+    payload["artifact_times"] = artifact_times
     payload["edit_history"] = history
 
 
@@ -240,7 +266,7 @@ def _find_decomposition(directory: Path, entity_label: str) -> Path | None:
 
 
 def load_paired_from_path(file_path: Path) -> dict[str, Any]:
-    """Resolve and load a paired decomp/log set from a selected file path."""
+    """The decomposition and edit log paired with ``file_path``; the pulse trains stay memory-mapped."""
     if not file_path.name:
         raise MureplayError("Choose a file to open.", field="file_path")
     if not file_path.exists():

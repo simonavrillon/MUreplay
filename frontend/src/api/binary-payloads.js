@@ -1,0 +1,191 @@
+/**
+ * Codecs for the binary transport the API uses for arrays (pulse windows,
+ * discharge times), as MUedit2's.
+ *
+ * MUB1, mirroring `pack_frame` / `unpack_frame` in `api/binary.py`:
+ *
+ *   "MUB1" | uint32 headerLen | header JSON {meta, arrays} | pad to 8 |
+ *   array data, each array at an 8-byte-aligned offset from the data start
+ *
+ * Little-endian. The alignment lets every array be read as a typed-array view
+ * without copying.
+ */
+/** @typedef {import("../app/context.js").JsonObject} JsonObject */
+
+const textDecoder = new TextDecoder();
+
+const FRAME_ALIGN = 8;
+
+const FRAME_TYPES = {
+  f4: Float32Array,
+  i4: Int32Array,
+  i8: BigInt64Array,
+};
+
+/**
+ * @typedef {keyof typeof FRAME_TYPES} FrameDtype
+ * @typedef {Float32Array | Int32Array | BigInt64Array} FrameData
+ * @typedef {{ dtype: FrameDtype, shape: number[], data: FrameData }} FrameArray
+ */
+
+/** @param {number} n */
+function frameAligned(n) {
+  return n + ((FRAME_ALIGN - (n % FRAME_ALIGN)) % FRAME_ALIGN);
+}
+
+/** @param {number[]} shape */
+function frameCount(shape) {
+  return shape.reduce((n, d) => n * d, 1);
+}
+
+/**
+ * Decode a MUB1 frame; arrays are views into `buffer`, not copies.
+ *
+ * @param {ArrayBuffer} buffer
+ * @returns {{ meta: JsonObject, arrays: Record<string, FrameArray> }}
+ */
+function decodeFrame(buffer) {
+  if (
+    !buffer ||
+    buffer.byteLength < 8 ||
+    textDecoder.decode(new Uint8Array(buffer, 0, 4)) !== "MUB1"
+  ) {
+    throw new Error("Invalid MUB1 frame");
+  }
+  const headerLen = new DataView(buffer).getUint32(4, true);
+  if (8 + headerLen > buffer.byteLength) {
+    throw new Error("Invalid MUB1 frame: header runs past the end");
+  }
+  const header = JSON.parse(
+    textDecoder.decode(new Uint8Array(buffer, 8, headerLen)),
+  );
+  const dataStart = frameAligned(8 + headerLen);
+  /** @type {Record<string, FrameArray>} */
+  const arrays = {};
+  for (const spec of header.arrays || []) {
+    const Typed = FRAME_TYPES[/** @type {FrameDtype} */ (spec.dtype)];
+    if (!Typed) throw new Error(`Unsupported MUB1 dtype: ${spec.dtype}`);
+    const count = frameCount(spec.shape);
+    const offset = dataStart + spec.offset;
+    if (offset + count * Typed.BYTES_PER_ELEMENT > buffer.byteLength) {
+      throw new Error(`MUB1 array ${spec.name} runs past the end`);
+    }
+    arrays[spec.name] = {
+      dtype: spec.dtype,
+      shape: spec.shape,
+      data: new Typed(buffer, offset, count),
+    };
+  }
+  return { meta: header.meta || {}, arrays };
+}
+
+/**
+ * Rows of a CSR pair as views into the frame: row `i` is
+ * `values[offsets[i]:offsets[i + 1]]`. Each MU's discharge times arrive this way.
+ *
+ * @param {FrameArray | undefined} values
+ * @param {FrameArray | undefined} offsets
+ * @returns {Int32Array[]}
+ */
+function csrRows(values, offsets) {
+  if (!values || !offsets) return [];
+  const data = /** @type {Int32Array} */ (values.data);
+  const ends = /** @type {BigInt64Array} */ (offsets.data);
+  const rows = [];
+  for (let i = 0; i + 1 < ends.length; i++) {
+    rows.push(data.subarray(Number(ends[i]), Number(ends[i + 1])));
+  }
+  return rows;
+}
+
+/**
+ * @typedef {object} ReplaySessionFrame What the replay session sends: its fields, and per-MU discharge times.
+ * @property {JsonObject} meta
+ * @property {Int32Array[]} spikeTimes Discharge times of every MU (open) or of the changed ones (a seek).
+ */
+
+/**
+ * @param {ArrayBuffer} buffer
+ * @returns {ReplaySessionFrame}
+ */
+export function decodeReplaySessionFrame(buffer) {
+  const { meta, arrays } = decodeFrame(buffer);
+  return {
+    meta,
+    spikeTimes: csrRows(arrays.spikes, arrays.spike_offsets),
+  };
+}
+
+/**
+ * @typedef {{ min: Float32Array, max: Float32Array }} Envelope
+ * @typedef {Envelope | Float32Array} SeriesRow One row of a viewport: min/max per bin, or the samples.
+ */
+
+/**
+ * @param {FrameArray | undefined} arr
+ * @returns {Float32Array[]}
+ */
+function frameRowViews(arr) {
+  if (!arr || arr.shape.length !== 2) return [];
+  const [n, cols] = arr.shape;
+  const data = /** @type {Float32Array} */ (arr.data);
+  return Array.from({ length: n }, (_, r) =>
+    data.subarray(r * cols, (r + 1) * cols),
+  );
+}
+
+/**
+ * A viewport's rows: the samples, or min/max per bin.
+ *
+ * @param {JsonObject} meta
+ * @param {Record<string, FrameArray>} arrays
+ * @returns {SeriesRow[]}
+ */
+function seriesRows(meta, arrays) {
+  if (meta.kind === "samples") return frameRowViews(arrays.samples);
+  const maxs = frameRowViews(arrays.max);
+  return frameRowViews(arrays.min).map((min, r) => ({ min, max: maxs[r] }));
+}
+
+/**
+ * One MU's pulse train over `[start, end)` as drawn, with the discharges and
+ * artifacts in that window and the train's value at each.
+ *
+ * @typedef {object} PulseView
+ * @property {number} mu
+ * @property {number} start
+ * @property {number} end
+ * @property {number} bins
+ * @property {number} version Changes whenever a step moves the MU.
+ * @property {SeriesRow} row
+ * @property {Int32Array} spikes
+ * @property {Float32Array} spikeValues
+ * @property {Int32Array} artifacts
+ * @property {Float32Array} artifactValues
+ */
+
+/**
+ * Decode a `/series/pulse` frame; every array is a view into `buffer`.
+ *
+ * @param {ArrayBuffer} buffer
+ * @returns {PulseView}
+ */
+export function decodePulseFrame(buffer) {
+  const { meta, arrays } = decodeFrame(buffer);
+  const ints = (/** @type {string} */ name) =>
+    /** @type {Int32Array} */ (arrays[name]?.data ?? new Int32Array(0));
+  const floats = (/** @type {string} */ name) =>
+    /** @type {Float32Array} */ (arrays[name]?.data ?? new Float32Array(0));
+  return {
+    mu: Number(meta.mu),
+    start: Number(meta.start),
+    end: Number(meta.end),
+    bins: Number(meta.bins),
+    version: Number(meta.version),
+    row: seriesRows(meta, arrays)[0],
+    spikes: ints("spikes"),
+    spikeValues: floats("spike_values"),
+    artifacts: ints("artifacts"),
+    artifactValues: floats("artifact_values"),
+  };
+}

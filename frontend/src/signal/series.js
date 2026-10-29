@@ -1,7 +1,6 @@
 /**
  * Viewport series, as MUedit2's plots draw them: a row is the samples of a
- * window, or their min/max per bin (an envelope). MUedit2's server bins the
- * window it sends; the replay holds the whole pulse train, so it bins here.
+ * window, or their min/max per bin (an envelope), as the server sends it.
  */
 
 /** @typedef {import("../app/context.js").Span} Span */
@@ -85,41 +84,4 @@ export function traceRange(trace) {
   return Number.isFinite(min) && Number.isFinite(max)
     ? { min, max }
     : { min: 0, max: 0 };
-}
-
-/**
- * The samples of `series` in `view`, or their min/max in `bins` bins when
- * there are more samples than that, as MUedit2's server sends a window.
- *
- * @param {ArrayLike<number>} series
- * @param {Span} view
- * @param {number} bins The plot's width in pixels.
- * @returns {TraceWindow}
- */
-export function traceWindow(series, view, bins) {
-  const { start, end } = view;
-  const n = end - start;
-  if (n <= bins) {
-    return {
-      row: Float32Array.from({ length: n }, (_, i) => series[start + i]),
-      start,
-      end,
-    };
-  }
-  const min = new Float32Array(bins);
-  const max = new Float32Array(bins);
-  for (let b = 0; b < bins; b++) {
-    const first = start + Math.floor((b * n) / bins);
-    const next = start + Math.floor(((b + 1) * n) / bins);
-    let lo = series[first];
-    let hi = lo;
-    for (let i = first + 1; i < next; i++) {
-      const v = series[i];
-      if (v < lo) lo = v;
-      else if (v > hi) hi = v;
-    }
-    min[b] = lo;
-    max[b] = hi;
-  }
-  return { row: { min, max }, start, end };
 }

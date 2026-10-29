@@ -1,7 +1,12 @@
 // The fetch seam: error messages, envelopes and timeouts.
 import { test, describe } from "node:test";
 import assert from "node:assert/strict";
-import { ApiError, apiJson } from "../src/api/http.js";
+import {
+  ApiError,
+  SESSION_HEADER,
+  SESSION_ID,
+  apiJson,
+} from "../src/api/http.js";
 
 /** What a stubbed fetch hands back: a Response stand-in, a promise for one, or a rejection. @typedef {any} StubResult */
 
@@ -52,6 +57,14 @@ describe("apiJson", () => {
     assert.equal(recorded[0].url, "http://api/load");
     // The request carries the abort signal of the internal timeout.
     assert.ok(recorded[0].init.signal instanceof AbortSignal);
+  });
+
+  test("sends the tab's session id with every request", async () => {
+    stubBehavior = () => fakeResponse({ data: {} });
+    await apiJson("http://api/x", { headers: { Accept: "application/json" } });
+    const headers = recorded[0].init.headers;
+    assert.equal(headers.get(SESSION_HEADER), SESSION_ID);
+    assert.equal(headers.get("Accept"), "application/json");
   });
 
   test("throws the backend error message", async () => {

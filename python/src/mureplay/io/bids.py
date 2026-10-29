@@ -12,6 +12,7 @@ import numpy as np
 import pyedflib
 
 from mureplay.errors import MureplayError, NotFoundError
+from mureplay.storage import ArrayStore, RamStore
 
 _GRID_LABEL = re.compile(r"^grid\s*(\d+)$", re.IGNORECASE)
 
@@ -140,9 +141,10 @@ def _signal_index(edf_reader: Any, rows: list[dict[str, str]]) -> list[int]:
 
 
 def read_bids_emg_grid(
-    bids_root: Path, entity_label: str, grid: int
+    bids_root: Path, entity_label: str, grid: int, store: ArrayStore | None = None
 ) -> tuple[np.ndarray, float, np.ndarray]:
-    """One grid over the whole recording as float32 rows, with its sampling rate and discard mask."""
+    """One grid over the whole recording as writable float32 rows of ``store``, with its fsamp and discard mask."""
+    store = store if store is not None else RamStore()
     emg_path = _resolve_bids_emg_path(bids_root, entity_label)
     channels_tsv = _resolve_bids_channels_tsv(emg_path, entity_label)
     rows = _read_tsv(channels_tsv)
@@ -161,7 +163,7 @@ def read_bids_emg_grid(
         n = min(int(reader.getNSamples()[ch]) for ch in channels)
         declared = _declared_sample_count(_read_sidecar(bids_root, emg_path, entity_label), fsamp)
         n = n if declared is None else min(n, declared)
-        data = np.empty((len(channels), n), dtype=np.float32)
+        data = store.allocate("bids-grid", (len(channels), n), np.float32)
         for row, ch in enumerate(channels):
             data[row] = reader.readSignal(ch, start=0, n=n)
     finally:

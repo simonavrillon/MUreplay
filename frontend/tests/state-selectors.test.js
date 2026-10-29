@@ -2,12 +2,11 @@
 import { test, describe } from "node:test";
 import assert from "node:assert/strict";
 import {
-  artifactsForCurrentMu,
   currentMuStep,
   currentStep,
   clampedReplayView,
   musForGrid,
-  pulseTrainForCurrentMu,
+  pulseViewForCurrentMu,
   spikesForCurrentMu,
 } from "../src/state/selectors.js";
 
@@ -21,8 +20,7 @@ function stateWith(fields) {
   return /** @type {any} */ ({
     muGridIndex: [],
     spikeTimes: [],
-    pulseTrains: [],
-    artifactTimes: [],
+    pulseView: null,
     timelineGroups: [],
     replayPosition: 0,
     replayView: null,
@@ -67,18 +65,18 @@ describe("currentStep and currentMuStep", () => {
 
 describe("the current MU's rows", () => {
   test("are its own, or empty when no MU is loaded", () => {
-    const state = stateWith({
-      spikeTimes: [[2, 5]],
-      pulseTrains: [[0, 0, 1]],
-      artifactTimes: [[4]],
-    });
-    assert.deepEqual(spikesForCurrentMu(state), [2, 5]);
-    assert.deepEqual(pulseTrainForCurrentMu(state), [0, 0, 1]);
-    assert.deepEqual(artifactsForCurrentMu(state), [4]);
-    const empty = stateWith({});
-    assert.deepEqual(spikesForCurrentMu(empty), []);
-    assert.deepEqual(pulseTrainForCurrentMu(empty), []);
-    assert.deepEqual(artifactsForCurrentMu(empty), []);
+    const state = stateWith({ spikeTimes: [Int32Array.from([2, 5])] });
+    assert.deepEqual([...spikesForCurrentMu(state)], [2, 5]);
+    assert.deepEqual([...spikesForCurrentMu(stateWith({}))], []);
+  });
+
+  test("the pulse window shown is the current MU's, or none", () => {
+    const view = /** @type {any} */ ({ mu: 1 });
+    assert.equal(
+      pulseViewForCurrentMu(stateWith({ pulseView: view, currentMu: 1 })),
+      view,
+    );
+    assert.equal(pulseViewForCurrentMu(stateWith({ pulseView: view })), null);
   });
 });
 

@@ -5,8 +5,11 @@
 export const API_BASE = "/api/v1";
 
 export const routes = {
-  loadPairedFromPath: "/load-paired-from-path",
-  editUpdateFilter: "/edit/update-filter",
+  replaySessionOpen: "/replay/session/open",
+  replaySeek: "/replay/seek",
+  replayPrepareGrid: "/replay/session/prepare-grid",
+  seriesPulse: "/series/pulse",
+  sessionClose: "/session/close",
   dialogDataFolder: "/dialog/data-folder",
   projects: "/projects",
 };

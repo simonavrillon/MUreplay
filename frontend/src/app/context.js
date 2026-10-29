@@ -60,11 +60,12 @@
  * @property {() => void} togglePlay
  * @property {() => void} startReplay Open the loaded session's timeline at step 0 of its first MU.
  * @property {() => void} updateTimelineUi
+ * @property {() => void} ensurePulseView Fetch the current MU's pulse train window when the one shown is not the one in view.
  */
 
 /**
  * @typedef {object} Renderer
- * @property {() => void} renderAll
+ * @property {() => void} renderAll Draw the plots, then fetch the pulse train window they need.
  */
 
 /** @typedef {Core & UiService & FileSessionService & ReplayService & Renderer} App */

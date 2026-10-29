@@ -4,35 +4,32 @@ import assert from "node:assert/strict";
 import { beginSession } from "../src/state/transitions.js";
 
 describe("beginSession", () => {
-  test("replaces the file and the previous session's log", () => {
-    const state = /** @type {any} */ ({ editHistory: [{}] });
+  test("replaces the token, the decomposition and the previous session's log", () => {
+    const state = /** @type {any} */ ({ editHistory: [{}], pulseView: {} });
     const editHistory = /** @type {any[]} */ ([]);
+    const spikeTimes = [Int32Array.from([1])];
     beginSession(state, {
+      token: "t2",
       sourceFilename: "b_edited.npz",
       bidsRoot: "/b",
       entityLabel: "b",
       fsamp: 2000,
-      pulseTrains: [[0]],
-      spikeTimes: [[1]],
+      totalSamples: 10,
+      spikeTimes,
+      versions: [1],
       gridNames: ["G"],
       muGridIndex: [0],
       muUids: ["g0_mu0"],
-      artifactTimes: [],
       artifactRegions: [],
-      refitSettings: {
-        nbextchan: 1000,
-        peelOffWin: 0.025,
-        computeDtype: "float32",
-      },
       // Shown in the settings panel only; the state does not keep them.
       parameters: /** @type {any} */ ({}),
       sidecarMeta: /** @type {any} */ ({}),
       editHistory,
     });
-    assert.equal(state.bidsRoot, "/b");
-    assert.deepEqual(state.spikeTimes, [[1]]);
+    assert.equal(state.token, "t2");
+    assert.equal(state.spikeTimes, spikeTimes);
     assert.equal(state.editHistory, editHistory);
-    // A plain file name: not the decomposition the edits started from.
-    assert.equal(state.loadedFromDecomp, false);
+    // The previous session's window is not this one's.
+    assert.equal(state.pulseView, null);
   });
 });

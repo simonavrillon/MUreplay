@@ -1,4 +1,4 @@
-"""Where MUreplay finds the frontend it serves, its config, and the BIDS data folder."""
+"""Where MUreplay finds the frontend it serves, its config and cache folders, and the BIDS data folder."""
 
 from __future__ import annotations
 
@@ -10,6 +10,7 @@ from pathlib import Path
 #: The repository checkout this package runs from, when it is not installed.
 _CHECKOUT = Path(__file__).resolve().parents[3]
 DATA_ROOT_ENV = "MUREPLAY_DATA_ROOT"
+CACHE_DIR_ENV = "MUREPLAY_CACHE_DIR"
 
 
 def _repo_root() -> Path | None:
@@ -33,6 +34,21 @@ def config_file() -> Path:
     else:
         base = Path(os.environ.get("XDG_CONFIG_HOME") or Path.home() / ".config") / "mureplay"
     return base / "config.json"
+
+
+def cache_dir() -> Path:
+    """``MUREPLAY_CACHE_DIR``, else the platform's per-user cache folder for MUreplay."""
+    override = os.environ.get(CACHE_DIR_ENV, "").strip()
+    if override:
+        return Path(override)
+    if sys.platform == "darwin":
+        folder = Path.home() / "Library" / "Caches" / "MUreplay"
+    elif sys.platform == "win32":
+        local = os.environ.get("LOCALAPPDATA") or Path.home() / "AppData" / "Local"
+        folder = Path(local) / "MUreplay" / "Cache"
+    else:
+        folder = Path(os.environ.get("XDG_CACHE_HOME") or Path.home() / ".cache") / "mureplay"
+    return folder
 
 
 def _read_config() -> dict[str, object]:

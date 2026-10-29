@@ -4,10 +4,7 @@
  */
 import { clamp, shiftViewInside } from "../../replay/operations.js";
 import { setReplayView } from "../../state/actions.js";
-import {
-  clampedReplayView,
-  pulseTrainForCurrentMu,
-} from "../../state/selectors.js";
+import { clampedReplayView } from "../../state/selectors.js";
 import { PLOT_PADDING } from "../../view/plots.js";
 import { timelineBarWidth } from "../../view/replay-renderer.js";
 
@@ -82,7 +79,7 @@ function bindTimelineBar(app) {
   };
 
   canvas.addEventListener("mousedown", (e) => {
-    const totalSamples = pulseTrainForCurrentMu(state).length;
+    const totalSamples = state.totalSamples;
     if (!totalSamples) return;
     dragging = true;
     didMove = false;
@@ -94,7 +91,7 @@ function bindTimelineBar(app) {
     if (!dragging) return;
     if (Math.abs(e.clientX - startClientX) > DRAG_THRESHOLD_PX) didMove = true;
     if (!didMove) return;
-    const totalSamples = pulseTrainForCurrentMu(state).length;
+    const totalSamples = state.totalSamples;
     if (!totalSamples) return;
     const rect = canvas.getBoundingClientRect();
     const delta = Math.round(
@@ -110,7 +107,7 @@ function bindTimelineBar(app) {
     if (!dragging) return;
     dragging = false;
     if (didMove) return;
-    const totalSamples = pulseTrainForCurrentMu(state).length;
+    const totalSamples = state.totalSamples;
     if (!totalSamples) return;
     const view = clampedReplayView(state, totalSamples);
     const span = view.end - view.start;
